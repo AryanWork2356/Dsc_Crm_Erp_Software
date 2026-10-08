@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.env
+.pgdata
+uploads
+.pgdata-dev
+.test-uploads
+!.env.example
+.pgdata-perf

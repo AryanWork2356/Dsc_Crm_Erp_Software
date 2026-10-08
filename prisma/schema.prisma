@@ -1,0 +1,1487 @@
+// DSC Interior ERP + CRM — multi-tenant (companyId on every business table)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── ENUMS ─────────────────────────
+enum RoleKey {
+  OWNER
+  MANAGEMENT
+  ADMIN
+  SALES
+  PROJECT_MANAGER
+  DESIGNER
+  PROCUREMENT
+  ACCOUNTS
+  HR
+  STORE
+  SITE_ENGINEER
+  SITE_SUPERVISOR
+  WORKER
+  VENDOR
+  CLIENT
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  SITE_VISIT_SCHEDULED
+  SITE_VISIT_COMPLETED
+  PROPOSAL_IN_PROGRESS
+  QUOTATION_SENT
+  NEGOTIATION
+  WON
+  LOST
+  ON_HOLD
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SegmentType {
+  RESIDENTIAL
+  COMMERCIAL
+  RETAIL
+  CORPORATE
+  HOTEL
+}
+
+enum QuotationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  VIEWED
+  NEGOTIATION
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum BoqStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REVISED
+}
+
+enum BoqCategory {
+  CIVIL
+  CARPENTRY
+  ELECTRICAL
+  PLUMBING
+  PAINTING
+  FALSE_CEILING
+  FLOORING
+  FURNITURE
+  GLASS
+  HARDWARE
+  LIGHTING
+  HVAC
+  FABRICATION
+  DECOR
+  FIXTURES
+  OTHER
+}
+
+enum ProjectStatus {
+  PLANNING
+  DESIGN
+  QUOTATION
+  APPROVED
+  PROCUREMENT
+  EXECUTION
+  QUALITY_CHECK
+  SNAGGING
+  HANDOVER
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+}
+
+enum PurchaseRequestStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  ORDERED
+}
+
+enum PoStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT_TO_VENDOR
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum InventoryTxnType {
+  INWARD
+  OUTWARD
+  TRANSFER
+  RETURN
+  ADJUSTMENT
+  DAMAGED
+  CONSUMED
+}
+
+enum LocationType {
+  WAREHOUSE
+  SITE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING_APPROVAL
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  UPI
+  CHEQUE
+  CARD
+  OTHER
+}
+
+enum ExpenseCategory {
+  PROJECT
+  OFFICE
+  TRAVEL
+  PETTY_CASH
+  MATERIAL
+  LABOUR
+  VENDOR
+  MISC
+}
+
+enum VendorBillStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LEAVE
+  OVERTIME
+}
+
+enum AttendanceMethod {
+  MANUAL
+  MOBILE
+  QR
+  LOCATION
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalType {
+  QUOTATION
+  BOQ
+  PURCHASE_REQUEST
+  PURCHASE_ORDER
+  EXPENSE
+  VENDOR_PAYMENT
+  CLIENT_DISCOUNT
+  PROJECT_BUDGET
+  INVOICE
+  LEAVE
+  PAYROLL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum NotificationType {
+  FOLLOW_UP
+  APPROVAL_PENDING
+  PO_PENDING
+  MATERIAL_RECEIVED
+  LOW_STOCK
+  PAYMENT_DUE
+  INVOICE_OVERDUE
+  PROJECT_DEADLINE
+  TASK_DEADLINE
+  LEAVE_REQUEST
+  ATTENDANCE_ISSUE
+  SUPPORT_TICKET
+  DOCUMENT_EXPIRY
+  GENERAL
+}
+
+enum DocumentType {
+  CONTRACT
+  DRAWING
+  FLOOR_PLAN
+  SITE_PHOTO
+  INVOICE
+  BILL
+  GST
+  PAN
+  ID_PROOF
+  PURCHASE
+  VENDOR_DOC
+  PROJECT_REPORT
+  WARRANTY
+  OTHER
+}
+
+enum WorkerTrade {
+  CARPENTER
+  ELECTRICIAN
+  PLUMBER
+  PAINTER
+  CIVIL
+  FABRICATOR
+  HELPER
+  INSTALLER
+  FALSE_CEILING
+  OTHER
+}
+
+enum WageType {
+  DAILY
+  MONTHLY
+  CONTRACT
+}
+
+enum WhatsAppDirection {
+  INBOUND
+  OUTBOUND
+  NOTE
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  EXITED
+}
+
+// ───────────────────────── TENANT / AUTH ─────────────────────────
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings CompanySettings?
+  users    User[]
+}
+
+model CompanySettings {
+  id                String   @id @default(cuid())
+  companyId         String   @unique
+  company           Company  @relation(fields: [companyId], references: [id])
+  legalName         String?
+  logoUrl           String?
+  address           String?
+  phone             String?
+  email             String?
+  website           String?
+  gstin             String?
+  pan               String?
+  bankName          String?
+  bankAccountNo     String?
+  bankIfsc          String?
+  bankBranch        String?
+  invoicePrefix     String   @default("INV")
+  quotationPrefix   String   @default("QT")
+  poPrefix          String   @default("PO")
+  defaultTaxPercent Decimal  @default(18) @db.Decimal(5, 2)
+  // approval thresholds in INR: below L1 -> PM, up to L2 -> Management, above -> Owner
+  approvalLevel1    Decimal  @default(25000) @db.Decimal(14, 2)
+  approvalLevel2    Decimal  @default(100000) @db.Decimal(14, 2)
+  payrollConfig     Json?
+  notificationPrefs Json?
+  whatsappConfig    Json?
+  updatedAt         DateTime @updatedAt
+}
+
+model Sequence {
+  id        String @id @default(cuid())
+  companyId String
+  key       String // e.g. "QT", "PO", "INV", "PRJ"
+  value     Int    @default(0)
+
+  @@unique([companyId, key])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique // e.g. "quotation:approve"
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  companyId    String
+  role         RoleKey
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([companyId, role, permissionId])
+  @@index([companyId, role])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id])
+  email        String
+  name         String
+  phone        String?
+  passwordHash String
+  role         RoleKey
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  // portal links
+  clientId     String?
+  vendorId     String?
+  workerId     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  employee      Employee?
+  notifications Notification[]
+
+  @@unique([companyId, email])
+  @@index([companyId, role])
+}
+
+// ───────────────────────── PEOPLE ─────────────────────────
+model Employee {
+  id               String           @id @default(cuid())
+  companyId        String
+  userId           String?          @unique
+  user             User?            @relation(fields: [userId], references: [id])
+  code             String
+  name             String
+  email            String?
+  phone            String?
+  designation      String?
+  department       String?
+  joiningDate      DateTime?
+  managerId        String?
+  workLocation     String?
+  emergencyContact String?
+  status           EmploymentStatus @default(ACTIVE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  salaryStructure SalaryStructure?
+  payslips        Payslip[]
+  leaves          Leave[]
+
+  @@unique([companyId, code])
+  @@index([companyId, name])
+}
+
+model SalaryStructure {
+  id         String   @id @default(cuid())
+  companyId  String
+  employeeId String   @unique
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  basic      Decimal  @default(0) @db.Decimal(12, 2)
+  hra        Decimal  @default(0) @db.Decimal(12, 2)
+  allowances Decimal  @default(0) @db.Decimal(12, 2)
+  deductions Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt  DateTime @updatedAt
+}
+
+model Payslip {
+  id             String   @id @default(cuid())
+  companyId      String
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id])
+  month          Int
+  year           Int
+  workingDays    Int      @default(0)
+  presentDays    Decimal  @default(0) @db.Decimal(5, 1)
+  basic          Decimal  @default(0) @db.Decimal(12, 2)
+  hra            Decimal  @default(0) @db.Decimal(12, 2)
+  allowances     Decimal  @default(0) @db.Decimal(12, 2)
+  overtime       Decimal  @default(0) @db.Decimal(12, 2)
+  incentives     Decimal  @default(0) @db.Decimal(12, 2)
+  bonus          Decimal  @default(0) @db.Decimal(12, 2)
+  deductions     Decimal  @default(0) @db.Decimal(12, 2)
+  leaveDeduction Decimal  @default(0) @db.Decimal(12, 2)
+  netSalary      Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
+
+  @@unique([employeeId, month, year])
+  @@index([companyId, year, month])
+}
+
+model Leave {
+  id           String      @id @default(cuid())
+  companyId    String
+  employeeId   String
+  employee     Employee    @relation(fields: [employeeId], references: [id])
+  fromDate     DateTime
+  toDate       DateTime
+  days         Decimal     @db.Decimal(4, 1)
+  reason       String?
+  paid         Boolean     @default(true)
+  status       LeaveStatus @default(PENDING)
+  decidedById  String?
+  decisionNote String?
+  createdAt    DateTime    @default(now())
+
+  @@index([companyId, status])
+  @@index([employeeId, fromDate])
+}
+
+model Contractor {
+  id            String    @id @default(cuid())
+  companyId     String
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  gstin         String?
+  rating        Int?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  workers    Worker[]
+  workOrders WorkOrder[]
+  payments   ContractorPayment[]
+
+  @@index([companyId, name])
+}
+
+model WorkOrder {
+  id           String     @id @default(cuid())
+  companyId    String
+  number       String
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id])
+  projectId    String?
+  title        String
+  scope        String?
+  rateNote     String?
+  amount       Decimal    @default(0) @db.Decimal(14, 2)
+  status       String     @default("OPEN") // OPEN, COMPLETED, CANCELLED
+  startDate    DateTime?
+  endDate      DateTime?
+  createdAt    DateTime   @default(now())
+
+  payments ContractorPayment[]
+
+  @@unique([companyId, number])
+  @@index([companyId, contractorId])
+  @@index([companyId, projectId])
+}
+
+model ContractorPayment {
+  id           String        @id @default(cuid())
+  companyId    String
+  contractorId String
+  contractor   Contractor    @relation(fields: [contractorId], references: [id])
+  workOrderId  String?
+  workOrder    WorkOrder?    @relation(fields: [workOrderId], references: [id])
+  projectId    String?
+  date         DateTime      @default(now())
+  amount       Decimal       @db.Decimal(14, 2)
+  method       PaymentMethod @default(BANK_TRANSFER)
+  reference    String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+
+  @@index([companyId, date])
+  @@index([companyId, projectId])
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  companyId   String
+  title       String
+  body        String
+  pinned      Boolean   @default(false)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+
+  @@index([companyId, createdAt])
+}
+
+model Worker {
+  id               String      @id @default(cuid())
+  companyId        String
+  code             String
+  name             String
+  phone            String?
+  trade            WorkerTrade @default(HELPER)
+  skill            String?
+  contractorId     String?
+  contractor       Contractor? @relation(fields: [contractorId], references: [id])
+  currentProjectId String?
+  wageType         WageType    @default(DAILY)
+  dailyWage        Decimal     @default(0) @db.Decimal(10, 2)
+  monthlyWage      Decimal     @default(0) @db.Decimal(12, 2)
+  joiningDate      DateTime?
+  emergencyContact String?
+  isActive         Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  deletedAt        DateTime?
+
+  attendance Attendance[]
+
+  @@unique([companyId, code])
+  @@index([companyId, trade])
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  companyId   String
+  date        DateTime         @db.Date
+  workerId    String?
+  worker      Worker?          @relation(fields: [workerId], references: [id])
+  employeeId  String?
+  projectId   String?
+  status      AttendanceStatus @default(PRESENT)
+  method      AttendanceMethod @default(MANUAL)
+  hours       Decimal?         @db.Decimal(4, 1)
+  overtimeHrs Decimal?         @db.Decimal(4, 1)
+  // wage snapshot so labour cost stays correct if wage changes later
+  wageCost    Decimal          @default(0) @db.Decimal(10, 2)
+  latitude    Float?
+  longitude   Float?
+  markedById  String?
+  createdAt   DateTime         @default(now())
+
+  @@unique([workerId, date])
+  @@unique([employeeId, date])
+  @@index([companyId, date])
+  @@index([companyId, projectId, date])
+  @@index([employeeId, date])
+}
+
+// ───────────────────────── CRM ─────────────────────────
+model Client {
+  id               String    @id @default(cuid())
+  companyId        String
+  code             String
+  name             String
+  companyName      String?
+  phone            String?
+  email            String?
+  address          String?
+  billingAddress   String?
+  gstin            String?
+  pan              String?
+  projectManagerId String?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  leads      Lead[]
+  projects   Project[]
+  quotations Quotation[]
+  invoices   Invoice[]
+  tickets    SupportTicket[]
+  siteVisits SiteVisit[]
+
+  @@unique([companyId, code])
+  @@index([companyId, name])
+}
+
+model Lead {
+  id             String      @id @default(cuid())
+  companyId      String
+  code           String
+  name           String
+  companyName    String?
+  phone          String?
+  whatsapp       String?
+  email          String?
+  source         String?
+  segment        SegmentType @default(RESIDENTIAL)
+  projectType    String?
+  location       String?
+  estimatedValue Decimal?    @db.Decimal(14, 2)
+  requirement    String?
+  assignedToId   String?
+  stage          LeadStage   @default(NEW)
+  priority       Priority    @default(MEDIUM)
+  nextFollowUp   DateTime?
+  lostReason     String?
+  notes          String?
+  clientId       String?
+  client         Client?     @relation(fields: [clientId], references: [id])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  activities LeadActivity[]
+  siteVisits SiteVisit[]
+  quotations Quotation[]
+
+  @@unique([companyId, code])
+  @@index([companyId, stage])
+  @@index([companyId, nextFollowUp])
+  @@index([companyId, assignedToId])
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  companyId String
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  kind      String // NOTE, CALL, WHATSAPP, EMAIL, STAGE_CHANGE, FOLLOW_UP
+  body      String?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model SiteVisit {
+  id            String    @id @default(cuid())
+  companyId     String
+  leadId        String?
+  lead          Lead?     @relation(fields: [leadId], references: [id])
+  clientId      String?
+  client        Client?   @relation(fields: [clientId], references: [id])
+  projectId     String?
+  siteAddress   String
+  visitDate     DateTime
+  visitTime     String?
+  assignedToId  String?
+  siteCondition String?
+  measurements  String?
+  requirements  String?
+  estimatedArea Decimal?  @db.Decimal(10, 2)
+  notes         String?
+  followUpDate  DateTime?
+  completed     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([companyId, visitDate])
+}
+
+// ───────────────────────── SALES: QUOTATION / BOQ ─────────────────────────
+model Quotation {
+  id             String          @id @default(cuid())
+  companyId      String
+  number         String
+  revision       Int             @default(1)
+  clientId       String
+  client         Client          @relation(fields: [clientId], references: [id])
+  leadId         String?
+  lead           Lead?           @relation(fields: [leadId], references: [id])
+  projectId      String?
+  boqId          String?
+  title          String?
+  date           DateTime        @default(now())
+  validUntil     DateTime?
+  preparedById   String?
+  status         QuotationStatus @default(DRAFT)
+  subtotal       Decimal         @default(0) @db.Decimal(14, 2)
+  discountPct    Decimal         @default(0) @db.Decimal(5, 2)
+  discountAmount Decimal         @default(0) @db.Decimal(14, 2)
+  taxAmount      Decimal         @default(0) @db.Decimal(14, 2)
+  total          Decimal         @default(0) @db.Decimal(14, 2)
+  terms          String?
+  paymentTerms   String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  items     QuotationItem[]
+  revisions QuotationRevision[]
+  invoices  Invoice[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([companyId, clientId])
+}
+
+model QuotationItem {
+  id          String      @id @default(cuid())
+  quotationId String
+  quotation   Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  sortOrder   Int         @default(0)
+  category    BoqCategory @default(OTHER)
+  description String
+  unit        String      @default("nos")
+  quantity    Decimal     @db.Decimal(12, 3)
+  rate        Decimal     @db.Decimal(12, 2)
+  taxPercent  Decimal     @default(18) @db.Decimal(5, 2)
+  amount      Decimal     @db.Decimal(14, 2)
+}
+
+model QuotationRevision {
+  id          String    @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  revision    Int
+  total       Decimal   @db.Decimal(14, 2)
+  snapshot    Json
+  reason      String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([quotationId, revision])
+}
+
+model Boq {
+  id          String    @id @default(cuid())
+  companyId   String
+  number      String
+  revision    Int       @default(1)
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id])
+  quotationId String?
+  title       String
+  status      BoqStatus @default(DRAFT)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  items BoqItem[]
+
+  @@unique([companyId, number])
+  @@index([companyId, projectId])
+}
+
+model BoqItem {
+  id            String      @id @default(cuid())
+  boqId         String
+  boq           Boq         @relation(fields: [boqId], references: [id], onDelete: Cascade)
+  sortOrder     Int         @default(0)
+  category      BoqCategory @default(OTHER)
+  subcategory   String?
+  item          String
+  description   String?
+  specification String?
+  unit          String      @default("nos")
+  quantity      Decimal     @db.Decimal(12, 3)
+  // internal cost split (never exposed to clients)
+  materialCost  Decimal     @default(0) @db.Decimal(12, 2) // per unit
+  labourCost    Decimal     @default(0) @db.Decimal(12, 2) // per unit
+  otherCost     Decimal     @default(0) @db.Decimal(12, 2) // per unit
+  sellingRate   Decimal     @default(0) @db.Decimal(12, 2) // per unit
+  materialId    String?
+  material      Material?   @relation(fields: [materialId], references: [id])
+  supplierId    String?
+  // computed/stored for fast reporting
+  estimatedCost Decimal     @default(0) @db.Decimal(14, 2)
+  total         Decimal     @default(0) @db.Decimal(14, 2)
+
+  @@index([boqId])
+  @@index([materialId])
+}
+
+// ───────────────────────── PROJECTS ─────────────────────────
+model Project {
+  id               String        @id @default(cuid())
+  companyId        String
+  code             String
+  name             String
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id])
+  segment          SegmentType   @default(RESIDENTIAL)
+  siteAddress      String?
+  startDate        DateTime?
+  plannedEndDate   DateTime?
+  actualEndDate    DateTime?
+  projectManagerId String?
+  designerId       String?
+  siteEngineerId   String?
+  supervisorId     String?
+  contractValue    Decimal       @default(0) @db.Decimal(14, 2)
+  budget           Decimal       @default(0) @db.Decimal(14, 2)
+  status           ProjectStatus @default(PLANNING)
+  progress         Int           @default(0)
+  quotationId      String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  tasks            ProjectTask[]
+  milestones       ProjectMilestone[]
+  boqs             Boq[]
+  purchaseRequests PurchaseRequest[]
+  purchaseOrders   PurchaseOrder[]
+  expenses         Expense[]
+  invoices         Invoice[]
+  materialIssues   MaterialIssue[]
+  members          ProjectMember[]
+  tickets          SupportTicket[]
+
+  @@unique([companyId, code])
+  @@index([companyId, status])
+  @@index([companyId, clientId])
+}
+
+model ProjectMember {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  roleLabel String?
+
+  @@unique([projectId, userId])
+}
+
+model ProjectTask {
+  id           String     @id @default(cuid())
+  companyId    String
+  code         String
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  assignedToId String? // User id
+  workerId     String?
+  priority     Priority   @default(MEDIUM)
+  startDate    DateTime?
+  dueDate      DateTime?
+  status       TaskStatus @default(TODO)
+  progress     Int        @default(0)
+  dependsOnId  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  comments TaskComment[]
+
+  @@unique([companyId, code])
+  @@index([companyId, projectId])
+  @@index([companyId, assignedToId, status])
+  @@index([companyId, dueDate])
+}
+
+model TaskComment {
+  id        String      @id @default(cuid())
+  taskId    String
+  task      ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  body      String
+  createdAt DateTime    @default(now())
+}
+
+model ProjectMilestone {
+  id             String    @id @default(cuid())
+  companyId      String
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  dueDate        DateTime?
+  completedAt    DateTime?
+  // % of contract value to be billed at this milestone
+  billingPct     Decimal   @default(0) @db.Decimal(5, 2)
+  clientApproved Boolean   @default(false)
+
+  @@index([projectId])
+}
+
+// ───────────────────────── PROCUREMENT ─────────────────────────
+model Vendor {
+  id            String    @id @default(cuid())
+  companyId     String
+  code          String
+  name          String
+  contactPerson String?
+  phone         String?
+  whatsapp      String?
+  email         String?
+  address       String?
+  gstin         String?
+  pan           String?
+  bankDetails   String?
+  categories    String?
+  rating        Int?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  purchaseOrders PurchaseOrder[]
+  bills          VendorBill[]
+  payments       VendorPayment[]
+  materials      Material[]
+
+  @@unique([companyId, code])
+  @@index([companyId, name])
+}
+
+model Material {
+  id           String      @id @default(cuid())
+  companyId    String
+  sku          String
+  name         String
+  category     BoqCategory @default(OTHER)
+  unit         String      @default("nos")
+  minStock     Decimal     @default(0) @db.Decimal(12, 3)
+  reorderLevel Decimal     @default(0) @db.Decimal(12, 3)
+  purchaseCost Decimal     @default(0) @db.Decimal(12, 2)
+  vendorId     String?
+  vendor       Vendor?     @relation(fields: [vendorId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+
+  stock        StockBalance[]
+  transactions InventoryTransaction[]
+  boqItems     BoqItem[]
+
+  @@unique([companyId, sku])
+  @@index([companyId, name])
+}
+
+model Warehouse {
+  id        String       @id @default(cuid())
+  companyId String
+  name      String
+  type      LocationType @default(WAREHOUSE)
+  projectId String? // for SITE locations
+  address   String?
+  isActive  Boolean      @default(true)
+
+  stock StockBalance[]
+
+  @@index([companyId, type])
+}
+
+// Current quantity per material per location. Always changed via InventoryTransaction.
+model StockBalance {
+  id         String    @id @default(cuid())
+  companyId  String
+  materialId String
+  material   Material  @relation(fields: [materialId], references: [id])
+  locationId String
+  location   Warehouse @relation(fields: [locationId], references: [id])
+  quantity   Decimal   @default(0) @db.Decimal(14, 3)
+  reserved   Decimal   @default(0) @db.Decimal(14, 3)
+  avgCost    Decimal   @default(0) @db.Decimal(12, 2)
+
+  @@unique([materialId, locationId])
+  @@index([companyId, locationId])
+}
+
+model InventoryTransaction {
+  id             String           @id @default(cuid())
+  companyId      String
+  type           InventoryTxnType
+  materialId     String
+  material       Material         @relation(fields: [materialId], references: [id])
+  fromLocationId String?
+  toLocationId   String?
+  quantity       Decimal          @db.Decimal(14, 3)
+  unitCost       Decimal          @default(0) @db.Decimal(12, 2)
+  projectId      String?
+  refType        String? // MATERIAL_RECEIPT, MATERIAL_ISSUE, MANUAL
+  refId          String?
+  note           String?
+  createdById    String?
+  createdAt      DateTime         @default(now())
+
+  @@index([companyId, materialId, createdAt])
+  @@index([companyId, projectId])
+  @@index([companyId, createdAt])
+}
+
+model PurchaseRequest {
+  id            String                @id @default(cuid())
+  companyId     String
+  number        String
+  projectId     String?
+  project       Project?              @relation(fields: [projectId], references: [id])
+  requestedById String
+  requiredDate  DateTime?
+  reason        String?
+  priority      Priority              @default(MEDIUM)
+  status        PurchaseRequestStatus @default(DRAFT)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  items PurchaseRequestItem[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+}
+
+model PurchaseRequestItem {
+  id          String          @id @default(cuid())
+  requestId   String
+  request     PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  materialId  String?
+  description String
+  unit        String          @default("nos")
+  quantity    Decimal         @db.Decimal(12, 3)
+  boqItemId   String?
+}
+
+model PurchaseOrder {
+  id             String    @id @default(cuid())
+  companyId      String
+  number         String
+  vendorId       String
+  vendor         Vendor    @relation(fields: [vendorId], references: [id])
+  projectId      String?
+  project        Project?  @relation(fields: [projectId], references: [id])
+  requestId      String?
+  status         PoStatus  @default(DRAFT)
+  orderDate      DateTime  @default(now())
+  deliveryDate   DateTime?
+  paymentTerms   String?
+  subtotal       Decimal   @default(0) @db.Decimal(14, 2)
+  discountAmount Decimal   @default(0) @db.Decimal(14, 2)
+  taxAmount      Decimal   @default(0) @db.Decimal(14, 2)
+  total          Decimal   @default(0) @db.Decimal(14, 2)
+  notes          String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  items    PurchaseOrderItem[]
+  receipts MaterialReceipt[]
+  bills    VendorBill[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([companyId, vendorId])
+}
+
+model PurchaseOrderItem {
+  id          String        @id @default(cuid())
+  poId        String
+  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  materialId  String?
+  description String
+  unit        String        @default("nos")
+  quantity    Decimal       @db.Decimal(12, 3)
+  receivedQty Decimal       @default(0) @db.Decimal(12, 3)
+  rate        Decimal       @db.Decimal(12, 2)
+  taxPercent  Decimal       @default(18) @db.Decimal(5, 2)
+  amount      Decimal       @db.Decimal(14, 2)
+  boqItemId   String?
+}
+
+model MaterialReceipt {
+  id           String        @id @default(cuid())
+  companyId    String
+  number       String
+  poId         String
+  po           PurchaseOrder @relation(fields: [poId], references: [id])
+  locationId   String
+  deliveryDate DateTime      @default(now())
+  challanNo    String?
+  vehicleNo    String?
+  remarks      String?
+  receivedById String?
+  createdAt    DateTime      @default(now())
+
+  items MaterialReceiptItem[]
+
+  @@unique([companyId, number])
+}
+
+model MaterialReceiptItem {
+  id          String          @id @default(cuid())
+  receiptId   String
+  receipt     MaterialReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  poItemId    String
+  materialId  String?
+  orderedQty  Decimal         @db.Decimal(12, 3)
+  receivedQty Decimal         @db.Decimal(12, 3)
+  damagedQty  Decimal         @default(0) @db.Decimal(12, 3)
+  rejectedQty Decimal         @default(0) @db.Decimal(12, 3)
+  acceptedQty Decimal         @db.Decimal(12, 3)
+}
+
+model MaterialIssue {
+  id             String   @id @default(cuid())
+  companyId      String
+  number         String
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id])
+  fromLocationId String
+  toLocationId   String
+  issuedById     String?
+  receivedBy     String?
+  purpose        String?
+  date           DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  items MaterialIssueItem[]
+
+  @@unique([companyId, number])
+  @@index([companyId, projectId])
+}
+
+model MaterialIssueItem {
+  id         String        @id @default(cuid())
+  issueId    String
+  issue      MaterialIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  materialId String
+  quantity   Decimal       @db.Decimal(12, 3)
+  unitCost   Decimal       @default(0) @db.Decimal(12, 2)
+}
+
+// ───────────────────────── FINANCE ─────────────────────────
+model Invoice {
+  id           String        @id @default(cuid())
+  companyId    String
+  number       String
+  clientId     String
+  client       Client        @relation(fields: [clientId], references: [id])
+  projectId    String?
+  project      Project?      @relation(fields: [projectId], references: [id])
+  quotationId  String?
+  quotation    Quotation?    @relation(fields: [quotationId], references: [id])
+  issueDate    DateTime      @default(now())
+  dueDate      DateTime?
+  status       InvoiceStatus @default(DRAFT)
+  subtotal     Decimal       @default(0) @db.Decimal(14, 2)
+  discount     Decimal       @default(0) @db.Decimal(14, 2)
+  taxAmount    Decimal       @default(0) @db.Decimal(14, 2)
+  total        Decimal       @default(0) @db.Decimal(14, 2)
+  paid         Decimal       @default(0) @db.Decimal(14, 2)
+  paymentTerms String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([companyId, dueDate])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  unit        String  @default("nos")
+  quantity    Decimal @db.Decimal(12, 3)
+  rate        Decimal @db.Decimal(12, 2)
+  taxPercent  Decimal @default(18) @db.Decimal(5, 2)
+  amount      Decimal @db.Decimal(14, 2)
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  companyId String
+  invoiceId String
+  invoice   Invoice       @relation(fields: [invoiceId], references: [id])
+  date      DateTime      @default(now())
+  amount    Decimal       @db.Decimal(14, 2)
+  method    PaymentMethod @default(BANK_TRANSFER)
+  reference String?
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  @@index([companyId, date])
+}
+
+model VendorBill {
+  id        String           @id @default(cuid())
+  companyId String
+  number    String
+  vendorId  String
+  vendor    Vendor           @relation(fields: [vendorId], references: [id])
+  poId      String?
+  po        PurchaseOrder?   @relation(fields: [poId], references: [id])
+  projectId String?
+  billDate  DateTime         @default(now())
+  dueDate   DateTime?
+  amount    Decimal          @db.Decimal(14, 2)
+  paid      Decimal          @default(0) @db.Decimal(14, 2)
+  status    VendorBillStatus @default(UNPAID)
+  notes     String?
+  createdAt DateTime         @default(now())
+
+  payments VendorPayment[]
+
+  @@index([companyId, status])
+  @@index([companyId, vendorId])
+}
+
+model VendorPayment {
+  id        String        @id @default(cuid())
+  companyId String
+  vendorId  String
+  vendor    Vendor        @relation(fields: [vendorId], references: [id])
+  billId    String?
+  bill      VendorBill?   @relation(fields: [billId], references: [id])
+  date      DateTime      @default(now())
+  amount    Decimal       @db.Decimal(14, 2)
+  method    PaymentMethod @default(BANK_TRANSFER)
+  reference String?
+  createdAt DateTime      @default(now())
+
+  @@index([companyId, date])
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  companyId   String
+  date        DateTime        @default(now())
+  category    ExpenseCategory @default(MISC)
+  description String
+  amount      Decimal         @db.Decimal(14, 2)
+  projectId   String?
+  project     Project?        @relation(fields: [projectId], references: [id])
+  paidBy      String?
+  reference   String?
+  approved    Boolean         @default(true)
+  rejectedAt  DateTime?
+  createdById String?
+  createdAt   DateTime        @default(now())
+
+  @@index([companyId, date])
+  @@index([companyId, projectId])
+}
+
+// ───────────────────────── PLATFORM ─────────────────────────
+model Approval {
+  id            String         @id @default(cuid())
+  companyId     String
+  type          ApprovalType
+  entityType    String
+  entityId      String
+  title         String
+  amount        Decimal?       @db.Decimal(14, 2)
+  status        ApprovalStatus @default(PENDING)
+  requestedById String
+  // role required for the current step, derived from amount thresholds
+  requiredRole  RoleKey
+  decidedById   String?
+  decidedAt     DateTime?
+  remarks       String?
+  createdAt     DateTime       @default(now())
+
+  steps ApprovalStep[]
+
+  @@index([companyId, status])
+  @@index([companyId, entityType, entityId])
+}
+
+model ApprovalStep {
+  id         String         @id @default(cuid())
+  approvalId String
+  approval   Approval       @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  stepNo     Int
+  role       RoleKey
+  status     ApprovalStatus @default(PENDING)
+  userId     String?
+  decidedAt  DateTime?
+  remarks    String?
+}
+
+model Document {
+  id              String       @id @default(cuid())
+  companyId       String
+  name            String
+  type            DocumentType @default(OTHER)
+  folder          String?
+  tags            String?
+  entityType      String? // CLIENT, LEAD, PROJECT, EMPLOYEE, VENDOR, QUOTATION, PO, INVOICE, BOQ
+  entityId        String?
+  storageKey      String
+  mimeType        String
+  size            Int
+  version         Int          @default(1)
+  expiresAt       DateTime?
+  uploadedById    String?
+  // role-based visibility; CLIENT/VENDOR portal shows only isPortalVisible docs
+  isPortalVisible Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  deletedAt       DateTime?
+
+  @@index([companyId, entityType, entityId])
+  @@index([companyId, name])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  companyId String
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(GENERAL)
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  // de-duplication for scheduled rules
+  dedupeKey String?
+  createdAt DateTime         @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt])
+}
+
+model WhatsAppConversation {
+  id            String   @id @default(cuid())
+  companyId     String
+  contactName   String
+  phone         String
+  leadId        String?
+  clientId      String?
+  assignedToId  String?
+  unread        Int      @default(0)
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  messages WhatsAppMessage[]
+
+  @@unique([companyId, phone])
+  @@index([companyId, lastMessageAt])
+}
+
+model WhatsAppMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      WhatsAppDirection
+  body           String
+  template       String?
+  status         String               @default("QUEUED") // QUEUED, SENT, DELIVERED, READ, FAILED
+  externalId     String?
+  sentById       String?
+  createdAt      DateTime             @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model SupportTicket {
+  id           String       @id @default(cuid())
+  companyId    String
+  number       String
+  clientId     String
+  client       Client       @relation(fields: [clientId], references: [id])
+  projectId    String?
+  project      Project?     @relation(fields: [projectId], references: [id])
+  subject      String
+  description  String?
+  priority     Priority     @default(MEDIUM)
+  isWarranty   Boolean      @default(false)
+  assignedToId String?
+  status       TicketStatus @default(OPEN)
+  resolution   String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  claims WarrantyClaim[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+}
+
+model WarrantyClaim {
+  id        String        @id @default(cuid())
+  companyId String
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  item      String
+  approved  Boolean?
+  notes     String?
+  createdAt DateTime      @default(now())
+}
+
+model MarketingCampaign {
+  id        String    @id @default(cuid())
+  companyId String
+  name      String
+  channel   String // Instagram, Facebook, Google, Referral...
+  startDate DateTime?
+  endDate   DateTime?
+  spend     Decimal   @default(0) @db.Decimal(12, 2)
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([companyId, channel])
+}
+
+model TermsAndConditions {
+  id        String  @id @default(cuid())
+  companyId String
+  name      String
+  kind      String // QUOTATION, PO, INVOICE
+  body      String
+  isDefault Boolean @default(false)
+
+  @@index([companyId, kind])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  userId     String?
+  userName   String?
+  action     String // CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, ...
+  entityType String
+  entityId   String?
+  summary    String
+  oldValue   Json?
+  newValue   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([companyId, entityType, entityId])
+}
