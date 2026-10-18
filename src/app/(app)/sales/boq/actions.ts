@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import ExcelJS from "exceljs";
-import { BoqCategory } from "@prisma/client";
+import { BoqCategory, type Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { assertPerm, type Ctx } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -13,6 +13,17 @@ import { boqItemTotals, boqSummary } from "@/lib/money";
 import { formToObject, zOptStr, zReqStr } from "@/lib/form";
 import { BOQ_CATEGORIES } from "@/lib/enums";
 import { num } from "@/lib/utils";
+import { finalQty, lineProblem, type MeasureLine } from "@/lib/measure";
+
+const measureLine = z.object({
+  desc: z.string().trim().max(120).optional(),
+  lenFt: z.coerce.number().min(0).max(100000).default(0),
+  lenIn: z.coerce.number().min(0).max(1000).default(0),
+  widFt: z.coerce.number().min(0).max(100000).default(0),
+  widIn: z.coerce.number().min(0).max(1000).default(0),
+  qty: z.coerce.number().min(0).max(1000000).default(1),
+  less: z.boolean().default(false),
+});
 
 const itemSchema = z.object({
   id: z.string().optional(),
@@ -28,6 +39,7 @@ const itemSchema = z.object({
   otherCost: z.coerce.number().min(0).default(0),
   sellingRate: z.coerce.number().min(0).default(0),
   materialId: z.string().optional().nullable(),
+  measurements: z.object({ lines: z.array(measureLine).max(200, "Too many measurement lines on one item (max 200)") }).nullish(),
 });
 export type BoqItemInput = z.infer<typeof itemSchema>;
 
@@ -39,6 +51,19 @@ async function load(c: Ctx, id: string) {
   return b;
 }
 
+/** Items with a measurement sheet get their quantity from it (the server never trusts a typed quantity then). */
+function applyMeasurements(items: BoqItemInput[]): BoqItemInput[] {
+  return items.map((i, idx) => {
+    const lines = (i.measurements?.lines ?? []) as MeasureLine[];
+    if (!lines.length) return { ...i, measurements: null };
+    for (const l of lines) {
+      const p = lineProblem(l, i.unit);
+      if (p) throw new UserError(`Row ${idx + 1} (${i.item}): ${p}`);
+    }
+    return { ...i, quantity: finalQty(lines, i.unit) };
+  });
+}
+
 function itemRows(items: BoqItemInput[]) {
   return items.map((i, idx) => {
     const t = boqItemTotals({ quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost, otherCost: i.otherCost, sellingRate: i.sellingRate });
@@ -46,6 +71,7 @@ function itemRows(items: BoqItemInput[]) {
       sortOrder: idx, category: i.category, subcategory: i.subcategory || null, item: i.item, description: i.description || null,
       specification: i.specification || null, unit: i.unit, quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost,
       otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId || null, estimatedCost: t.estimatedCost, total: t.total,
+      measurements: (i.measurements?.lines.length ? { lines: i.measurements.lines } : undefined) as Prisma.InputJsonValue | undefined,
     };
   });
 }
@@ -85,7 +111,7 @@ export async function saveBoqItems(id: string, itemsJson: string) {
     }
     const parsed = z.array(itemSchema).max(2000, "Too many rows (max 2000)").safeParse(raw);
     if (!parsed.success) throw new UserError(parsed.error.issues[0].message);
-    let items = parsed.data;
+    let items = applyMeasurements(parsed.data);
 
     if (!c.can("margins:view")) {
       const old = new Map(b.items.map((i) => [i.id, i]));
@@ -144,7 +170,7 @@ export async function reviseBoq(id: string) {
       const x = await tx.boq.create({
         data: {
           companyId: c.companyId, number, revision: rev, projectId: b.projectId, quotationId: b.quotationId, title: b.title, notes: b.notes,
-          items: { create: b.items.map((i) => ({ sortOrder: i.sortOrder, category: i.category, subcategory: i.subcategory, item: i.item, description: i.description, specification: i.specification, unit: i.unit, quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost, otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId, supplierId: i.supplierId, estimatedCost: i.estimatedCost, total: i.total })) },
+          items: { create: b.items.map((i) => ({ sortOrder: i.sortOrder, category: i.category, subcategory: i.subcategory, item: i.item, description: i.description, specification: i.specification, unit: i.unit, quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost, otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId, supplierId: i.supplierId, estimatedCost: i.estimatedCost, total: i.total, measurements: (i.measurements ?? undefined) as Prisma.InputJsonValue | undefined })) },
         },
       });
       await tx.boq.update({ where: { id }, data: { status: "REVISED" } });

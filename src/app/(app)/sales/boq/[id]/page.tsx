@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { createQuotationFromBoq } from "../../quotations/actions";
+import { parseMeasurements } from "@/lib/measure";
 import { deleteBoq, importBoqItems, reviseBoq, saveBoqItems, submitBoq } from "../actions";
-import { BoqEditor, toEditorItem } from "./boq-editor";
+import { BoqEditor } from "./boq-editor";
 
 export default async function BoqDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -91,9 +92,10 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
         canCosts={canCosts}
         save={saveBoqItems.bind(null, id)}
         catalog={materials.map((m) => ({ id: m.id, name: m.name, unit: m.unit, cost: num(m.purchaseCost) }))}
-        initial={b.items.map((i) => toEditorItem({
+        initial={b.items.map((i) => ({
           id: i.id, category: i.category, item: i.item, specification: i.specification ?? "", unit: i.unit, quantity: num(i.quantity),
           materialCost: num(i.materialCost), labourCost: num(i.labourCost), otherCost: num(i.otherCost), sellingRate: num(i.sellingRate), materialId: i.materialId,
+          lines: parseMeasurements(i.measurements),
         }))}
       />
     </>

@@ -15,7 +15,7 @@ export const MODULES = [
   "purchase_requests", "purchase_orders", "vendors", "materials", "inventory", "workers",
   "contractors", "attendance", "employees", "leaves", "payroll", "invoices", "payments",
   "expenses", "vendor_bills", "approvals", "documents", "whatsapp", "support", "marketing",
-  "reports", "settings", "team", "notifications",
+  "reports", "settings", "team", "notifications", "site_reports", "transfers", "bill_certification", "extra_work", "closure", "scorecards",
 ] as const;
 export type Module = (typeof MODULES)[number];
 
@@ -60,7 +60,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     modules: {
       dashboard: R, clients: R, sitevisits: RW, quotations: R, boq: RWX, projects: ["view", "edit", "export"],
       tasks: ALL, purchase_requests: RW, purchase_orders: R, vendors: R, materials: R, inventory: R,
-      workers: R, contractors: R, attendance: RW, expenses: RW, documents: RW, approvals: ["view", "approve"],
+      workers: R, contractors: R, attendance: RW, site_reports: RWX, transfers: ["view", "create", "approve"], bill_certification: ["view", "approve"], extra_work: RWX, closure: ["view", "edit"], scorecards: ["view", "edit"], expenses: RW, documents: RW, approvals: ["view", "approve"],
       support: RW, whatsapp: R, reports: R, notifications: R, leaves: ["view", "create"],
     },
     special: ["margins:view"],
@@ -77,14 +77,14 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
       dashboard: R, projects: R, boq: R, purchase_requests: ALL.filter((a) => a !== "delete"),
       purchase_orders: ALL.filter((a) => a !== "delete"), vendors: ["view", "create", "edit", "export"],
       materials: RWX, inventory: ["view", "create", "export"], vendor_bills: RW, documents: RW,
-      approvals: R, reports: R, notifications: R, whatsapp: R,
+      approvals: R, site_reports: R, transfers: R, reports: R, notifications: R, whatsapp: R,
     },
     special: [],
   },
   ACCOUNTS: {
     modules: { leaves: ["view", "create"],
       dashboard: R, clients: R, projects: R, quotations: R, boq: R, invoices: ALL, payments: ALL,
-      expenses: ALL, vendor_bills: ALL, vendors: R, purchase_orders: R, workers: R, attendance: R,
+      expenses: ALL, vendor_bills: ALL, vendors: R, purchase_orders: R, workers: R, attendance: R, transfers: R, extra_work: R, closure: R,
       payroll: R, documents: RW, approvals: ["view", "approve"], reports: ["view", "export"],
       notifications: R,
     },
@@ -93,6 +93,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
   HR: {
     modules: {
       dashboard: R, employees: ALL, leaves: ALL, payroll: ALL, attendance: ALL, workers: ALL,
+      closure: ["view", "create", "edit"], scorecards: R,
       contractors: RW, documents: RW, approvals: ["view", "approve"], team: ["view", "manage"],
       notifications: R, reports: ["view", "export"],
     },
@@ -100,21 +101,21 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
   },
   STORE: {
     modules: { leaves: ["view", "create"],
-      dashboard: R, materials: RWX, inventory: ALL.filter((a) => a !== "delete"), purchase_orders: R,
+      dashboard: R, materials: RWX, inventory: ALL.filter((a) => a !== "delete"), purchase_orders: R, site_reports: R, transfers: ["view", "create"],
       projects: R, documents: R, notifications: R, reports: R,
     },
     special: [],
   },
   SITE_ENGINEER: {
     modules: { expenses: ["view", "create"], leaves: ["view", "create"],
-      dashboard: R, projects: R, tasks: RW, boq: R, attendance: RW, workers: R, inventory: ["view", "create"],
+      dashboard: R, projects: R, tasks: RW, boq: R, attendance: RW, site_reports: RW, transfers: ["view", "create"], extra_work: ["view", "create"], scorecards: R, workers: R, inventory: ["view", "create"],
       materials: R, purchase_requests: RW, sitevisits: RW, documents: RW, support: RW, notifications: R,
     },
     special: [],
   },
   SITE_SUPERVISOR: {
     modules: { expenses: ["view", "create"], leaves: ["view", "create"],
-      dashboard: R, projects: R, tasks: RW, attendance: RW, workers: R, inventory: ["view", "create"],
+      dashboard: R, projects: R, tasks: RW, attendance: RW, site_reports: RW, transfers: ["view", "create"], extra_work: ["view", "create"], scorecards: R, workers: R, inventory: ["view", "create"],
       purchase_requests: RW, documents: RW, notifications: R,
     },
     special: [],

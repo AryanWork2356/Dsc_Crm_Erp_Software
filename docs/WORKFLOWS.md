@@ -99,3 +99,48 @@ Runs by itself each day (first dashboard visit, or a scheduler): expire quotatio
 - **Client:** sees only their own projects, progress, stages (can **approve a completed stage**), site photos and documents *shared with them*, sent quotations (**accept / request changes**), invoices and payments, raises support requests. Never sees costs or margins.
 - **Vendor:** sees only their own POs, delivery status, bills and payments; confirms/updates delivery dates; messages procurement.
 - **Worker (phone):** today's site and supervisor, one big *Mark attendance* button, own tasks (*Start / Done / Stuck*), *Need material* (becomes a purchase request for the project manager), *Report problem* (alerts supervisor and PM).
+
+## 14. Daily site reports
+1. Every live site (Execution → Handover) sends a **morning update** (people on site, today's plan, blockers) and an **evening report** (work done, photos, how much of the site is finished, material status, tomorrow's plan).
+2. Deadlines (settings): morning **10:00** (outstation sites **9:30**), evening **19:00**, India time. Sending again the same day updates the report; a report sent after the deadline is marked **late**.
+3. Photos are shrunk on the phone before upload and saved as the project's site photos. The evening report needs at least one.
+4. **Material status** – *all here / shortage soon / work stopped*. Anything other than "all here", or any problem text, alerts the project manager at once; a shortage also alerts Procurement.
+5. If a report is missing: the site team is reminded at the deadline, the **project manager after 1 hour**, **Owner/Management after 3 hours** – each once.
+6. Directors see a **reporting discipline** table (sent / on time / missing per site over the last 6 working days).
+
+## 15. Time limits
+Every waiting step has a limit taken from the SOPs (editable in Settings → Time Limits): approvals 24 h · approved request → PO 24 h · approved PO → sent to vendor 24 h · site visit → quotation 24 h · invoice → first payment follow-up 72 h · expense claim verification 24 h · snag closure 168 h · client complaint taken up 24 h · task past due date 24 h.
+The **Time Limits** page lists what is *due soon* (75% used) and *overdue*, with who it is waiting on. Escalation, once each: the owner when the limit passes → their manager (project manager, else Management) after half a limit (min 12 h) → Owner/Management after a full limit (min 48 h).
+
+## 16. Measurement sheet and quotation terms
+1. On any BOQ row, **Measure** opens the site measurement sheet (as on DSC's M-Sheet): description, length (ft + in), width (ft + in), qty, and a **Less** tick for deductions (openings, stairs, areas in another finish).
+2. Area items (sqft / sqm) use length × width × qty; running items (rft / rmt) use length × qty; piece items use qty only. Inches must be under 12. The result can never be negative.
+3. When a row has a sheet, its **quantity is calculated from it** – the server recomputes and ignores any typed number – and the row's total follows. Removing the sheet returns to a hand-typed quantity. Revisions keep the sheets.
+4. A quotation created from a BOQ gets the company's **default payment terms** (Settings → Company; default *50% advance, 40% before handover, 10% within 15 days of final bill*). On any quotation, one click fills 50/40/10 (interiors), 50/50 (fixtures) or 40/30/20/10 (stage-wise), and the text stays editable.
+5. The quotation PDF prints a **Summary of work** (amount per category, before GST) above the totals, then GST, grand total, payment terms and terms & conditions.
+
+## 17. Material requests, challans and transfers between projects
+1. **Notice rule** – material must be requested at least **2 days** ahead (setting; the SOP says 2–3). A request needed sooner can still be sent, but only with a **reason**; it is flagged *short notice*, raised to at least High priority, and the project manager and Procurement are told.
+2. **Delivery challan photo** – when a delivery is recorded the store takes a photo of the challan; it is saved against the purchase order (compressed on the phone).
+3. **Transfers** – material or workers moving to another project need the approval of the **project they leave** (its PM, or Management/Owner). A transfer raised by that PM or by Management is approved at once. Approval moves the stock between the two site stores **and the cost with it** (credit to the first project, charge to the second, at the same rate); workers are re-assigned. Both PMs, Procurement and Accounts are told. A requester can never approve their own transfer (except the Owner). "Emergency" lets Management approve and informs the PM.
+
+## 18. Extra work and vendor-bill certification
+1. **Extra work** (outside the agreed scope) is raised as a draft, priced by the PM and **sent to the client**. The client approves in their portal, or staff **record the client's written approval with proof** (signed letter, e-mail or message screenshot). **It cannot start until approved** – *Start work* refuses with "Client approval is missing". Completing it tells Accounts to bill it.
+2. **Vendor bills must be certified before payment.** The project manager of the bill's project (or Management, for bills with no project) ticks that the supporting documents were checked and certifies it; only then can Accounts pay. Bills recorded before this rule existed are exempt. A bill waiting more than 2 days appears on the Time Limits board.
+
+## 19. Project closure
+At **Handover** a closure checklist of 15 items starts automatically (HR is told). Four are checked by the system – all vendor bills certified, site photos exist, no expense waiting for verification, lessons learned written. The rest need the document (handover letter, snag certificate, final-bill documents, measurements, warranties, test reports, launch photos, material reconciliation, final checklist) or the owner's confirmation. When all 15 are done HR sends the **closure report** (PDF: profitability, collection, vendor outstanding, checklist, lessons) to the directors; Management/Owner **approve and close** the project. Past 15 days an unfinished checklist is escalated.
+
+## 20. Performance scorecards
+Each project is scored out of 100: completed on time 25 · reporting discipline 15 · quality 15 · material 10 · within budget 10 · client satisfaction 10 · documents 10 · labour & safety 5. Facts come from records (dates, reports sent and on time, deliveries, budget, closure checklist); the PM records the judgement items (rework, snags, client rating, labour, wastage, safety). A delay outside the team's control is not held against them. Without a review the score is *provisional*. The page also averages scores per project manager and supervisor, and prints the evaluation form as a PDF.
+
+## 21. Director reports
+**Weekly** (announced every Monday 08:00): money to collect and to pay (overdue and due this week, client- and vendor-wise), 7-day cash forecast, 6-month cash flow, critical vendor payments (over 30 days overdue), high-risk outstanding (over 60 days late), bills awaiting certification, and what is running late by department. **Monthly**: turnover and collections, project margins (best and lowest), vendor performance and new vendors, projects closed. PDF for both.
+
+## 22. HR rules
+- **Leave policy** – regular leave (1–3 days) needs **15 days'** notice; more than 3 days is **long leave** needing **3 months'** notice and Management approval; medical/emergency leave needs no notice but a reason, reported within 7 days; beyond **30 days a year** the request needs the Owner's approval. All numbers are settings.
+- **Advances** – recorded with a monthly recovery; payroll deducts it automatically, never twice for a month, and closes the advance when repaid. Management/Owner can write one off with a reason.
+- **Keka** – the employee list can be imported straight from a Keka export (its column names, employee numbers and `03-Jun-2024` dates are understood).
+
+## 23. GST
+A document's tax is split into **CGST + SGST** (supplier and place of supply in the same state) or **IGST** (different states), per tax rate. Place of supply is chosen on the document, else taken from the client's GSTIN, else assumed to be DSC's own state (set DSC's GSTIN in Settings → Company). Printed on invoices, quotations and purchase orders, and listed in the **GST sales register** report (taxable value, CGST, SGST, IGST per invoice) for the CA.

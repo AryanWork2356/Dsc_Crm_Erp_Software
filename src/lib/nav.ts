@@ -9,6 +9,7 @@ export type NavGroup = { label?: string; icon: string; items: NavItem[]; href?: 
  */
 export const NAV: NavGroup[] = [
   { label: "Dashboard", icon: "layout-dashboard", href: "/dashboard", items: [], perm: "dashboard:view" },
+  { label: "Time Limits", icon: "timer", href: "/time-limits", items: [], perm: "dashboard:view" },
   {
     label: "CRM",
     icon: "users",
@@ -32,6 +33,12 @@ export const NAV: NavGroup[] = [
     icon: "folder-kanban",
     items: [
       { label: "All Projects", href: "/projects", perm: "projects:view" },
+      { label: "Daily Site Reports", href: "/site-reports", perm: "site_reports:view" },
+      { label: "Transfers", href: "/transfers", perm: "transfers:view" },
+      { label: "Extra Work", href: "/extra-work", perm: "extra_work:view" },
+      { label: "Project Closure", href: "/closure", perm: "closure:view" },
+      { label: "Scorecards", href: "/scorecards", perm: "scorecards:view" },
+      { label: "Bills to Certify", href: "/bills-to-certify", perm: "bill_certification:view" },
       { label: "Tasks", href: "/projects/tasks", perm: "tasks:view" },
     ],
   },
@@ -74,6 +81,7 @@ export const NAV: NavGroup[] = [
       { label: "Employees", href: "/hr/employees", perm: "employees:view" },
       { label: "Leave", href: "/hr/leaves", perm: "leaves:view" },
       { label: "Payroll", href: "/hr/payroll", perm: "salary:view" },
+      { label: "Advances", href: "/hr/advances", perm: "salary:view" },
       { label: "My Payslips", href: "/hr/payslips", perm: "leaves:view" },
       { label: "Announcements", href: "/hr/announcements", perm: "notifications:view" },
     ],
@@ -83,6 +91,7 @@ export const NAV: NavGroup[] = [
     icon: "wallet",
     items: [
       { label: "Overview", href: "/finance", perm: "finance:view" },
+      { label: "Director Reports", href: "/director-reports", perm: "finance:view" },
       { label: "Invoices", href: "/finance/invoices", perm: "invoices:view" },
       { label: "Payments Received", href: "/finance/payments", perm: "payments:view" },
       { label: "Receivables", href: "/finance/receivables", perm: "invoices:view" },
@@ -108,6 +117,7 @@ export const NAV: NavGroup[] = [
       { label: "Import Data", href: "/settings/import", perm: "settings:view" },
       { label: "Terms Templates", href: "/settings/terms", perm: "settings:view" },
       { label: "WhatsApp Connection", href: "/settings/whatsapp", perm: "settings:manage" },
+      { label: "Time Limits", href: "/settings/time-limits", perm: "settings:manage" },
       { label: "Automation", href: "/settings/automation", perm: "settings:manage" },
       { label: "Audit Log", href: "/settings/audit", perm: "audit:view" },
     ],

@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { ActionResult } from "@/lib/action";
 import type { Opt } from "@/lib/enums";
+import { compressImage } from "@/lib/image-compress";
 
 type Item = { id: string; description: string; unit: string; ordered: number; received: number; stockable: boolean };
 
@@ -27,6 +28,8 @@ export function ReceiptForm({ poId, poNumber, items, locations, defaultLocation,
     fd.set("items", JSON.stringify(items.map((i) => ({ poItemId: i.id, receivedQty: rows[i.id].rec, damagedQty: rows[i.id].dam, rejectedQty: rows[i.id].rej }))));
     setErrors({});
     start(async () => {
+      const photo = fd.get("challanPhoto");
+      if (photo instanceof File && photo.size > 0) fd.set("challanPhoto", await compressImage(photo));
       const r = await action(fd);
       if (r.ok) {
         toast.success(r.message ?? "Recorded");
@@ -48,6 +51,7 @@ export function ReceiptForm({ poId, poNumber, items, locations, defaultLocation,
           <Field label="Delivered to" required error={errors.locationId}><Select name="locationId" defaultValue={defaultLocation ?? ""} required><option value="">Select location…</option>{locations.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</Select></Field>
           <Field label="Delivery date" required error={errors.deliveryDate}><Input name="deliveryDate" type="date" defaultValue={today} required /></Field>
           <Field label="Challan / invoice no."><Input name="challanNo" /></Field>
+          <Field label="Photo of the challan" hint="Take a photo of the delivery challan – it is saved with this delivery."><Input name="challanPhoto" type="file" accept="image/*" capture="environment" className="h-auto py-1.5" /></Field>
           <Field label="Vehicle no."><Input name="vehicleNo" /></Field>
         </CardBody>
       </Card>

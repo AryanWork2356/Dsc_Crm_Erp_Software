@@ -74,7 +74,7 @@ Time-based rules (expire quotations, overdue invoices, follow-ups, late deliveri
 
 ## 5. Testing
 
-- `tests/*.test.ts` – 177 tests on money maths, payroll, ageing, approvals, every module's workflow, concurrency (simultaneous issues/payments), permissions, portal isolation, webhook security, reports and dashboard consistency.
+- `tests/*.test.ts` – 276 tests on money maths, payroll, ageing, approvals, every module's workflow, concurrency (simultaneous issues/payments), permissions, portal isolation, webhook security, reports and dashboard consistency.
 - `scripts/smoke.ts` – ~300 checks of real pages, redirects, PDFs, Excel and downloads for different roles against a running server.
 - Global test setup builds a fresh `dsc_erp_test` database from the migrations and seed every run.
 

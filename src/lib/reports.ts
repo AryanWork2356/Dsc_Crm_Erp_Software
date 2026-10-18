@@ -6,6 +6,7 @@ import { leadScope, projectScope } from "./scope";
 import { projectFinancials } from "./project-finance";
 import { receivables, payables } from "./finance-stats";
 import { num, round2, humanize } from "./utils";
+import { placeLabel, splitTax } from "./gst";
 
 export type ColType = "text" | "money" | "number" | "date" | "pct";
 export type Column = { key: string; label: string; type?: ColType };
@@ -22,6 +23,24 @@ async function visibleProjects(c: Ctx, f: Filters) {
 }
 
 export const REPORTS: Report[] = [
+  {
+    key: "gst-sales", title: "GST sales register", group: "Finance", description: "Every invoice issued in the period with taxable value and CGST / SGST / IGST – for your CA's GST return.", perm: "invoices:view", extra: "finance:view", filters: ["period", "client"],
+    run: async (c, f) => {
+      const [inv, settings] = await Promise.all([
+        db.invoice.findMany({ where: { companyId: c.companyId, deletedAt: null, status: { in: ["SENT", "PARTIALLY_PAID", "PAID", "OVERDUE"] }, issueDate: { gte: f.from, lt: f.to }, ...(f.clientId ? { clientId: f.clientId } : {}) }, include: { client: { select: { name: true, gstin: true } }, items: true }, orderBy: { issueDate: "asc" } }),
+        db.companySettings.findUnique({ where: { companyId: c.companyId }, select: { gstin: true } }),
+      ]);
+      const rows = inv.map((i) => {
+        const g = splitTax(i.items.map((x) => ({ amount: num(x.amount), taxPercent: num(x.taxPercent) })), { companyGstin: settings?.gstin, partyGstin: i.client.gstin, placeOfSupply: i.placeOfSupply, discount: num(i.discount), storedTax: num(i.taxAmount) });
+        return { number: i.number, date: i.issueDate, client: i.client.name, gstin: i.client.gstin ?? "", place: placeLabel(g.supplyState), taxable: g.taxable, cgst: g.cgst, sgst: g.sgst, igst: g.igst, total: num(i.total) };
+      });
+      return {
+        columns: [{ key: "number", label: "Invoice" }, { key: "date", label: "Date", type: "date" }, { key: "client", label: "Client" }, { key: "gstin", label: "Client GSTIN" }, { key: "place", label: "Place of supply" }, { key: "taxable", label: "Taxable value", type: "money" }, { key: "cgst", label: "CGST", type: "money" }, { key: "sgst", label: "SGST", type: "money" }, { key: "igst", label: "IGST", type: "money" }, { key: "total", label: "Invoice total", type: "money" }],
+        rows, totals: { number: "Total", taxable: sum(rows, "taxable"), cgst: sum(rows, "cgst"), sgst: sum(rows, "sgst"), igst: sum(rows, "igst"), total: sum(rows, "total") },
+        note: "Taxable value is after discount. Set DSC's GSTIN in Settings → Company so CGST/SGST vs IGST is worked out correctly.",
+      };
+    },
+  },
   {
     key: "sales", title: "Sales report", group: "Sales", description: "Quotations raised, approved and won in the period.", perm: "quotations:view", filters: ["period", "client"],
     run: async (c, f) => {

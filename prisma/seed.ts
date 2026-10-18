@@ -13,6 +13,7 @@ import { seedProcurement } from "./seed/procurement";
 import { seedWorkforce } from "./seed/workforce";
 import { seedFinance } from "./seed/finance";
 import { seedExtras, seedPortal } from "./seed/extras";
+import { seedSiteReports } from "./seed/site-reports";
 
 export const prisma = new PrismaClient();
 export const DEMO_PASSWORD = "Demo@1234";
@@ -28,6 +29,7 @@ async function main() {
   await seedFinance(prisma, core, proj);
   await seedExtras(prisma, core, crm, proj);
   await seedPortal(prisma, core, crm, proj, passwordHash);
+  await seedSiteReports(prisma);
   console.log("\nSeed complete. Demo logins (password: " + DEMO_PASSWORD + "):");
   for (const u of core.users) console.log(`  ${u.role.padEnd(16)} ${u.email}`);
 }

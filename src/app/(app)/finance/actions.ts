@@ -7,6 +7,7 @@ import { assertPerm, type Ctx } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { run, UserError } from "@/lib/action";
 import { nextDocNumber } from "@/lib/sequence";
+import { notifyRoles } from "@/lib/notify";
 import { canDecide, requestApproval, requiredRoleFor } from "@/lib/workflow";
 import { settleInvoice } from "@/lib/invoice-settle";
 import { computeTotals } from "@/lib/money";
@@ -34,6 +35,7 @@ const invoiceSchema = z.object({
   issueDate: zDate("Pick the invoice date"),
   dueDate: zOptDate,
   paymentTerms: zOptStr,
+  placeOfSupply: zOptStr,
   notes: zOptStr,
   discountPct: z.coerce.number().min(0).max(100).default(0),
 });
@@ -76,7 +78,7 @@ export async function createInvoice(fd: FormData) {
     const inv = await db.$transaction(async (tx) => {
       const number = await nextDocNumber(tx, c.companyId, "invoice");
       const x = await tx.invoice.create({
-        data: { companyId: c.companyId, number, clientId: d.clientId, projectId: d.projectId ?? null, quotationId: d.quotationId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } },
+        data: { companyId: c.companyId, number, clientId: d.clientId, projectId: d.projectId ?? null, quotationId: d.quotationId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, placeOfSupply: d.placeOfSupply ?? null, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } },
       });
       await audit(c, { action: "CREATE", entityType: "Invoice", entityId: x.id, summary: `Created invoice ${number} for ${client.name} – ₹${t.total.toLocaleString("en-IN")}` }, tx);
       return x;
@@ -99,7 +101,7 @@ export async function updateInvoice(id: string, fd: FormData) {
     const { t, rows } = await invoiceRows(items, d.discountPct);
     await db.$transaction(async (tx) => {
       await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
-      await tx.invoice.update({ where: { id }, data: { clientId: d.clientId, projectId: d.projectId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } } });
+      await tx.invoice.update({ where: { id }, data: { clientId: d.clientId, projectId: d.projectId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, placeOfSupply: d.placeOfSupply ?? null, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } } });
       await audit(c, { action: "UPDATE", entityType: "Invoice", entityId: id, summary: num(old.total) !== t.total ? `${c.name} changed invoice ${old.number} from ₹${num(old.total).toLocaleString("en-IN")} to ₹${t.total.toLocaleString("en-IN")}` : `Updated invoice ${old.number}`, oldValue: { total: num(old.total) }, newValue: { total: t.total } }, tx);
     });
     refresh();
@@ -317,6 +319,8 @@ export async function payVendorBill(fd: FormData) {
       if (!rows.length) throw new UserError("Bill not found.");
       const b = await tx.vendorBill.findUniqueOrThrow({ where: { id: d.billId }, include: { vendor: true } });
       if (b.status === "CANCELLED") throw new UserError("This bill is cancelled.");
+      // SOP: no bill is processed without the project manager's certification and supporting documents
+      if (b.certRequired && !b.certifiedAt) throw new UserError(`Bill ${b.number} has not been certified yet. The project manager (or Management) must certify it with the supporting documents before it can be paid.`);
       const balance = round2(num(b.amount) - num(b.paid));
       if (d.amount > balance + 0.005) throw new UserError(`The balance on bill ${b.number} is ₹${balance.toLocaleString("en-IN")}.`);
       // Large vendor payments follow the approval thresholds: Accounts can pay up to the Management limit,
@@ -330,6 +334,34 @@ export async function payVendorBill(fd: FormData) {
     });
     refresh();
     return { message: "Vendor payment recorded" };
+  });
+}
+
+/**
+ * The project manager of the bill's project (or Management / Owner / Admin) certifies a vendor bill after checking the
+ * supporting documents (challan, measurements, invoice). Bills with no project are certified by Management.
+ */
+export async function certifyVendorBill(id: string, fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("bill_certification:approve");
+    if (!fd.get("docsChecked") || fd.get("docsChecked") === "off") throw new UserError("Tick the box to confirm you have checked the supporting documents.");
+    const note = String(fd.get("note") ?? "").trim() || null;
+    const b = await db.vendorBill.findFirst({ where: { id, companyId: c.companyId }, include: { vendor: true } });
+    if (!b) throw new UserError("Bill not found.");
+    if (b.status === "CANCELLED") throw new UserError("This bill is cancelled.");
+    if (b.certifiedAt) throw new UserError("This bill is already certified.");
+    const wide = ["OWNER", "MANAGEMENT", "ADMIN"].includes(c.role);
+    if (!wide) {
+      const p = b.projectId ? await db.project.findFirst({ where: { id: b.projectId, companyId: c.companyId }, select: { projectManagerId: true } }) : null;
+      if (!p || p.projectManagerId !== c.userId) throw new UserError("Only the project manager of this bill's project, or Management, can certify it.");
+    }
+    await db.$transaction(async (tx) => {
+      await tx.vendorBill.update({ where: { id }, data: { certifiedById: c.userId, certifiedAt: new Date(), certNote: note } });
+      await audit(c, { action: "APPROVE", entityType: "VendorBill", entityId: id, summary: `Certified vendor bill ${b.number} from ${b.vendor.name} (documents checked)${note ? `: ${note}` : ""}` }, tx);
+      await notifyRoles(c.companyId, ["ACCOUNTS"], { type: "PAYMENT_DUE", title: `Bill ${b.number} certified – ready to pay`, body: `${b.vendor.name} · ₹${num(b.amount).toLocaleString("en-IN")}`, link: "/finance/bills", dedupeKey: `bill-cert:${id}` }, tx);
+    });
+    refresh();
+    return { message: "Bill certified" };
   });
 }
 

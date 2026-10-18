@@ -1,0 +1,27 @@
+name: Check iPhone app builds
+
+# Proves the iPhone project compiles on a cloud Mac (no Mac or iPhone needed). It is unsigned, so it is not installable;
+# publishing to TestFlight / the App Store additionally needs an Apple Developer account and signing secrets (see mobile/README.md).
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Live website address the app opens (https only)"
+        required: true
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: mobile/package-lock.json }
+      - run: npm ci
+        working-directory: mobile
+      - run: npx cap sync ios
+        working-directory: mobile
+        env:
+          CAP_SERVER_URL: ${{ inputs.server_url }}
+      - name: Build for the iPhone simulator (unsigned)
+        working-directory: mobile/ios/App
+        run: xcodebuild -project App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

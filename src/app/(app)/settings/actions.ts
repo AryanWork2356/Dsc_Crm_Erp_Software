@@ -24,6 +24,7 @@ const companySchema = z.object({
   quotationPrefix: zReqStr(),
   poPrefix: zReqStr(),
   defaultTaxPercent: zNumPos().max(100),
+  defaultPaymentTerms: zReqStr("Enter the default payment terms"),
   approvalLevel1: zNumPos(),
   approvalLevel2: zNumPos(),
 });

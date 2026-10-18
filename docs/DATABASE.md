@@ -2,7 +2,7 @@
 
 > Generated from `prisma/schema.prisma` by `npm run docs` – do not edit by hand.
 
-PostgreSQL, managed with Prisma migrations (`prisma/migrations`). **60 tables, 29 enums.**
+PostgreSQL, managed with Prisma migrations (`prisma/migrations`). **68 tables, 37 enums.**
 
 ## Design rules
 
@@ -53,6 +53,15 @@ PostgreSQL, managed with Prisma migrations (`prisma/migrations`). **60 tables, 2
 | `defaultTaxPercent` | Decimal |  |
 | `approvalLevel1` | Decimal |  |
 | `approvalLevel2` | Decimal |  |
+| `reportMorningDue` | String |  |
+| `reportMorningDueOutstation` | String |  |
+| `reportEveningDue` | String |  |
+| `tatConfig` | Json? | optional |
+| `defaultPaymentTerms` | String |  |
+| `materialNoticeDays` | Int |  |
+| `leaveNoticeDays` | Int |  |
+| `longLeaveNoticeDays` | Int |  |
+| `leaveYearlyCap` | Int |  |
 | `payrollConfig` | Json? | optional |
 | `notificationPrefs` | Json? | optional |
 | `whatsappConfig` | Json? | optional |
@@ -404,6 +413,7 @@ Indexes: `index: conversationId, createdAt`
 | `total` | Decimal |  |
 | `terms` | String? | optional |
 | `paymentTerms` | String? | optional |
+| `placeOfSupply` | String? | optional |
 | `notes` | String? | optional |
 | `createdAt` | DateTime |  |
 | `updatedAt` | DateTime |  |
@@ -482,6 +492,7 @@ Indexes: `unique: companyId, number`, `index: companyId, projectId`
 | `specification` | String? | optional |
 | `unit` | String |  |
 | `quantity` | Decimal |  |
+| `measurements` | Json? | optional |
 | `materialCost` | Decimal |  |
 | `labourCost` | Decimal |  |
 | `otherCost` | Decimal |  |
@@ -515,6 +526,7 @@ Indexes: `index: boqId`, `index: materialId`
 | `designerId` | String? | optional |
 | `siteEngineerId` | String? | optional |
 | `supervisorId` | String? | optional |
+| `outstation` | Boolean |  |
 | `contractValue` | Decimal |  |
 | `budget` | Decimal |  |
 | `status` | ProjectStatus |  |
@@ -533,6 +545,10 @@ Indexes: `index: boqId`, `index: materialId`
 | `materialIssues` | MaterialIssue[] → MaterialIssue (many) |  |
 | `members` | ProjectMember[] → ProjectMember (many) |  |
 | `tickets` | SupportTicket[] → SupportTicket (many) |  |
+| `dailyReports` | DailyReport[] → DailyReport (many) |  |
+| `additionalWork` | AdditionalWork[] → AdditionalWork (many) |  |
+| `closure` | ProjectClosure? → ProjectClosure | optional |
+| `review` | ProjectReview? → ProjectReview | optional |
 
 Indexes: `unique: companyId, code`, `index: companyId, status`, `index: companyId, clientId`
 
@@ -758,6 +774,7 @@ Indexes: `index: companyId, materialId, createdAt`, `index: companyId, projectId
 | `requiredDate` | DateTime? | optional |
 | `reason` | String? | optional |
 | `priority` | Priority |  |
+| `shortNotice` | Boolean |  |
 | `status` | PurchaseRequestStatus |  |
 | `createdAt` | DateTime |  |
 | `updatedAt` | DateTime |  |
@@ -840,6 +857,7 @@ Indexes: `unique: companyId, number`, `index: companyId, status`, `index: compan
 | `vehicleNo` | String? | optional |
 | `remarks` | String? | optional |
 | `receivedById` | String? | optional |
+| `challanDocId` | String? | optional |
 | `createdAt` | DateTime |  |
 | `items` | MaterialReceiptItem[] → MaterialReceiptItem (many) |  |
 
@@ -918,6 +936,7 @@ Indexes: `unique: companyId, number`, `index: companyId, projectId`
 | `salaryStructure` | SalaryStructure? → SalaryStructure | optional |
 | `payslips` | Payslip[] → Payslip (many) |  |
 | `leaves` | Leave[] → Leave (many) |  |
+| `advances` | EmployeeAdvance[] → EmployeeAdvance (many) |  |
 
 Indexes: `unique: companyId, code`, `index: companyId, name`
 
@@ -954,6 +973,7 @@ Indexes: `unique: companyId, code`, `index: companyId, name`
 | `incentives` | Decimal |  |
 | `bonus` | Decimal |  |
 | `deductions` | Decimal |  |
+| `advanceRecovery` | Decimal |  |
 | `leaveDeduction` | Decimal |  |
 | `netSalary` | Decimal |  |
 | `createdAt` | DateTime |  |
@@ -973,6 +993,8 @@ Indexes: `unique: employeeId, month, year`, `index: companyId, year, month`
 | `days` | Decimal |  |
 | `reason` | String? | optional |
 | `paid` | Boolean |  |
+| `kind` | LeaveKind |  |
+| `exceedsCap` | Boolean |  |
 | `status` | LeaveStatus |  |
 | `decidedById` | String? | optional |
 | `decisionNote` | String? | optional |
@@ -1118,6 +1140,7 @@ Indexes: `unique: workerId, date`, `unique: employeeId, date`, `index: companyId
 | `total` | Decimal |  |
 | `paid` | Decimal |  |
 | `paymentTerms` | String? | optional |
+| `placeOfSupply` | String? | optional |
 | `notes` | String? | optional |
 | `createdAt` | DateTime |  |
 | `updatedAt` | DateTime |  |
@@ -1176,6 +1199,10 @@ Indexes: `index: companyId, date`
 | `paid` | Decimal |  |
 | `status` | VendorBillStatus |  |
 | `notes` | String? | optional |
+| `certRequired` | Boolean |  |
+| `certifiedById` | String? | optional |
+| `certifiedAt` | DateTime? | optional |
+| `certNote` | String? | optional |
 | `createdAt` | DateTime |  |
 | `payments` | VendorPayment[] → VendorPayment (many) |  |
 
@@ -1246,6 +1273,17 @@ Indexes: `index: companyId, date`, `index: companyId, projectId`
 
 Indexes: `index: companyId, entityType, entityId`, `index: companyId, name`
 
+## Other
+
+- DailyReport
+- TransferRequest
+- AdditionalWork
+- ProjectClosure
+- ProjectClosureItem
+- ProjectReview
+- EmployeeAdvance
+- AdvanceRecovery
+
 ## Enums
 
 - **RoleKey**: OWNER, MANAGEMENT, ADMIN, SALES, PROJECT_MANAGER, DESIGNER, PROCUREMENT, ACCOUNTS, HR, STORE, SITE_ENGINEER, SITE_SUPERVISOR, WORKER, VENDOR, CLIENT
@@ -1271,9 +1309,17 @@ Indexes: `index: companyId, entityType, entityId`, `index: companyId, name`
 - **ApprovalType**: QUOTATION, BOQ, PURCHASE_REQUEST, PURCHASE_ORDER, EXPENSE, VENDOR_PAYMENT, CLIENT_DISCOUNT, PROJECT_BUDGET, INVOICE, LEAVE, PAYROLL
 - **ApprovalStatus**: PENDING, APPROVED, REJECTED, CANCELLED
 - **TicketStatus**: OPEN, ASSIGNED, IN_PROGRESS, WAITING, RESOLVED, CLOSED
-- **NotificationType**: FOLLOW_UP, APPROVAL_PENDING, PO_PENDING, MATERIAL_RECEIVED, LOW_STOCK, PAYMENT_DUE, INVOICE_OVERDUE, PROJECT_DEADLINE, TASK_DEADLINE, LEAVE_REQUEST, ATTENDANCE_ISSUE, SUPPORT_TICKET, DOCUMENT_EXPIRY, GENERAL
+- **NotificationType**: FOLLOW_UP, APPROVAL_PENDING, PO_PENDING, MATERIAL_RECEIVED, LOW_STOCK, PAYMENT_DUE, INVOICE_OVERDUE, PROJECT_DEADLINE, TASK_DEADLINE, LEAVE_REQUEST, ATTENDANCE_ISSUE, SUPPORT_TICKET, DOCUMENT_EXPIRY, REPORT_MISSING, TIME_LIMIT, GENERAL
 - **DocumentType**: CONTRACT, DRAWING, FLOOR_PLAN, SITE_PHOTO, INVOICE, BILL, GST, PAN, ID_PROOF, PURCHASE, VENDOR_DOC, PROJECT_REPORT, WARRANTY, OTHER
 - **WorkerTrade**: CARPENTER, ELECTRICIAN, PLUMBER, PAINTER, CIVIL, FABRICATOR, HELPER, INSTALLER, FALSE_CEILING, OTHER
 - **WageType**: DAILY, MONTHLY, CONTRACT
 - **WhatsAppDirection**: INBOUND, OUTBOUND, NOTE
 - **EmploymentStatus**: ACTIVE, ON_LEAVE, EXITED
+- **ReportKind**: MORNING, EVENING
+- **SiteMaterialStatus**: OK, SHORT_SOON, WORK_STOPPED
+- **TransferKind**: MATERIAL, MANPOWER
+- **TransferStatus**: PENDING, APPROVED, REJECTED
+- **AdditionalWorkStatus**: DRAFT, SENT, APPROVED, REJECTED, IN_PROGRESS, COMPLETED
+- **ClosureStatus**: OPEN, SUBMITTED, CLOSED
+- **LeaveKind**: REGULAR, MEDICAL, EMERGENCY, LONG
+- **AdvanceStatus**: OPEN, CLEARED, WRITTEN_OFF

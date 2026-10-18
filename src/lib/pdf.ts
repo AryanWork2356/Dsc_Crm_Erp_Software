@@ -17,6 +17,7 @@ export type PdfDocSpec = {
   party2?: { heading: string; lines: string[] };
   columns: PdfColumn[];
   rows: PdfRow[];
+  summary?: { heading: string; rows: [string, string][] }; // e.g. amount per work category, printed above the totals
   totals?: [string, string][]; // last entry rendered bold
   amountWords?: string;
   sections?: { heading: string; body: string }[];
@@ -131,6 +132,27 @@ export function renderPdf(company: CompanyInfo, spec: PdfDocSpec): Promise<Buffe
       }
       doc.moveTo(left, y + h).lineTo(right, y + h).strokeColor(LINE).lineWidth(0.5).stroke();
       y += h;
+    }
+
+    // ── summary by category (above the totals)
+    if (spec.summary?.rows.length) {
+      const rowH = 16;
+      const boxW = 300;
+      const need = spec.summary.rows.length * rowH + 34;
+      if (y + need > bottomLimit()) {
+        doc.addPage();
+        y = 40;
+      }
+      y += 14;
+      doc.font("Helvetica-Bold").fontSize(9).fillColor(NAVY).text(spec.summary.heading, left, y, { width });
+      y = doc.y + 4;
+      for (const [i, [k, v]] of spec.summary.rows.entries()) {
+        doc.rect(left, y - 2, boxW, rowH).fill(i % 2 ? "#ffffff" : "#f8fafc");
+        doc.font("Helvetica").fontSize(8.5).fillColor("#334155");
+        doc.text(k, left + 6, y + 1, { width: boxW * 0.6, lineBreak: false });
+        doc.text(v, left + boxW * 0.5, y + 1, { width: boxW * 0.5 - 6, align: "right", lineBreak: false });
+        y += rowH;
+      }
     }
 
     // ── totals

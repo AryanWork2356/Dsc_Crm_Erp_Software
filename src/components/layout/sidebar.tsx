@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell, CheckSquare, ChevronDown, LayoutDashboard, Menu, Settings, Users, X, FileText, FolderKanban,
-  ShoppingCart, Boxes, HardHat, Wallet, UserCog, FolderOpen, MessageCircle, LifeBuoy, BarChart3, Building2,
+  ShoppingCart, Boxes, HardHat, Wallet, UserCog, FolderOpen, MessageCircle, LifeBuoy, BarChart3, Building2, Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +12,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "layout-dashboard": LayoutDashboard, users: Users, "check-square": CheckSquare, bell: Bell, settings: Settings,
   "file-text": FileText, "folder-kanban": FolderKanban, "shopping-cart": ShoppingCart, boxes: Boxes,
   "hard-hat": HardHat, wallet: Wallet, "user-cog": UserCog, "folder-open": FolderOpen,
-  "message-circle": MessageCircle, "life-buoy": LifeBuoy, "bar-chart": BarChart3,
+  "message-circle": MessageCircle, "life-buoy": LifeBuoy, "bar-chart": BarChart3, timer: Timer,
 };
 
 export type SidebarGroup = {

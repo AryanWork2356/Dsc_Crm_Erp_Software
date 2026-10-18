@@ -8,6 +8,8 @@ import { useToast } from "@/components/ui/toast";
 import { LineItemsEditor, newRow, type LineRow } from "@/components/forms/line-items";
 import type { ActionResult } from "@/lib/action";
 import { BOQ_CATEGORY_OPTS, UNIT_OPTS, type Opt } from "@/lib/enums";
+import { PAYMENT_PRESETS } from "@/lib/payment-terms";
+import { STATE_OPTIONS } from "@/lib/gst";
 
 type Props = {
   action: (fd: FormData) => Promise<ActionResult<{ id: string }>>;
@@ -17,7 +19,7 @@ type Props = {
   defaultTax: number;
   initial: {
     clientId?: string; leadId?: string; title?: string; date: string; validUntil?: string;
-    terms?: string; paymentTerms?: string; notes?: string; discountPct?: number; items: Omit<LineRow, "key">[];
+    terms?: string; paymentTerms?: string; placeOfSupply?: string; notes?: string; discountPct?: number; items: Omit<LineRow, "key">[];
   };
   cancelHref: string;
 };
@@ -28,6 +30,7 @@ export function QuotationForm({ action, clients, leads, templates, defaultTax, i
   const [pending, start] = React.useTransition();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [terms, setTerms] = React.useState(initial.terms ?? "");
+  const [payTerms, setPayTerms] = React.useState(initial.paymentTerms ?? "");
   const rows = React.useMemo(() => initial.items.map((i) => newRow(i)), [initial.items]);
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -97,7 +100,15 @@ export function QuotationForm({ action, clients, leads, templates, defaultTax, i
               <Textarea name="terms" rows={6} value={terms} onChange={(e) => setTerms(e.target.value)} />
             </div>
           </Field>
-          <Field label="Payment terms"><Textarea name="paymentTerms" defaultValue={initial.paymentTerms} placeholder="e.g. 40% advance, 30% on carcass, 20% on finishing, 10% on handover" /></Field>
+          <Field label="Place of supply (GST)" hint="Blank = state in the client's GSTIN"><Select name="placeOfSupply" defaultValue={initial.placeOfSupply ?? ""}><option value="">From the client&apos;s GSTIN</option>{STATE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
+          <Field label="Payment terms" hint="Pick a schedule, then edit if needed.">
+            <div className="mb-1.5 flex flex-wrap gap-1.5">
+              {PAYMENT_PRESETS.map((p) => (
+                <button key={p.label} type="button" onClick={() => setPayTerms(p.text)} className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-brand-400 hover:bg-brand-50">{p.label}</button>
+              ))}
+            </div>
+            <Textarea name="paymentTerms" value={payTerms} onChange={(e) => setPayTerms(e.target.value)} rows={3} placeholder="e.g. 40% advance, 30% on carcass, 20% on finishing, 10% on handover" />
+          </Field>
           <Field label="Notes"><Textarea name="notes" defaultValue={initial.notes} /></Field>
         </CardBody>
       </Card>

@@ -26,7 +26,7 @@ export default async function EditInvoice({ params }: { params: Promise<{ id: st
       <InvoiceForm
         action={updateInvoice.bind(null, id)} clients={clients} defaultTax={num(settings?.defaultTaxPercent ?? 18)} cancelHref={`/finance/invoices/${id}`}
         projects={projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}`, clientId: p.clientId }))}
-        initial={{ clientId: inv.clientId, projectId: inv.projectId ?? undefined, quotationId: inv.quotationId ?? undefined, issueDate: toDateInput(inv.issueDate), dueDate: toDateInput(inv.dueDate), paymentTerms: inv.paymentTerms ?? undefined, notes: inv.notes ?? undefined, discountPct: Math.round(disc * 100) / 100, items: inv.items.map((i) => ({ description: i.description, unit: i.unit, quantity: num(i.quantity), rate: num(i.rate), taxPercent: num(i.taxPercent) })) }}
+        initial={{ clientId: inv.clientId, projectId: inv.projectId ?? undefined, quotationId: inv.quotationId ?? undefined, issueDate: toDateInput(inv.issueDate), dueDate: toDateInput(inv.dueDate), paymentTerms: inv.paymentTerms ?? undefined, placeOfSupply: inv.placeOfSupply ?? undefined, notes: inv.notes ?? undefined, discountPct: Math.round(disc * 100) / 100, items: inv.items.map((i) => ({ description: i.description, unit: i.unit, quantity: num(i.quantity), rate: num(i.rate), taxPercent: num(i.taxPercent) })) }}
       />
     </>
   );

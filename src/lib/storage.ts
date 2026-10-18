@@ -2,11 +2,13 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 /**
  * File storage abstraction. Development/single-server deployments use the local disk (UPLOAD_DIR).
- * To move to S3-compatible storage, implement the same three functions against the S3 SDK and switch
- * on STORAGE_DRIVER=s3 – nothing else in the app needs to change.
+ * On Vercel (no permanent disk) set STORAGE_DRIVER=s3 and the S3_* variables – works with AWS S3, Cloudflare R2,
+ * Supabase Storage, DigitalOcean Spaces or any S3-compatible service. Files are always private: they are only
+ * ever read back through the app (which checks who may see them), never by public link.
  */
 
 const ROOT = path.resolve(process.env.UPLOAD_DIR ?? "./uploads");
@@ -45,14 +47,42 @@ export async function validateUpload(file: File): Promise<ValidatedFile> {
   return { ext, mime: rule.mime, size: bytes.length, bytes, safeName };
 }
 
+// ───────── local disk ─────────
 function keyPath(key: string) {
   const full = path.resolve(ROOT, key);
   if (!full.startsWith(ROOT + path.sep)) throw new Error("Invalid storage key"); // path-traversal guard
   return full;
 }
 
+const newKey = (companyId: string, ext: string) => `${companyId}/${crypto.randomUUID()}.${ext}`;
+const validKey = (key: string) => /^[\w-]+\/[\w-]+\.[a-z0-9]{2,5}$/i.test(key);
+
+// ───────── S3-compatible ─────────
+let client: S3Client | null = null;
+function s3() {
+  const bucket = process.env.S3_BUCKET;
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  if (!bucket || !accessKeyId || !secretAccessKey) throw new Error("File storage is set to S3 but S3_BUCKET, S3_ACCESS_KEY_ID or S3_SECRET_ACCESS_KEY is missing.");
+  client ??= new S3Client({
+    region: process.env.S3_REGION || "auto",
+    endpoint: process.env.S3_ENDPOINT || undefined, // e.g. https://<account>.r2.cloudflarestorage.com
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    credentials: { accessKeyId, secretAccessKey },
+  });
+  return { client, bucket };
+}
+const s3Enabled = () => process.env.STORAGE_DRIVER === "s3";
+
+const MIME_BY_EXT: Record<string, string> = Object.fromEntries(Object.entries(ALLOWED).map(([e, r]) => [e, r.mime]));
+
 export async function putFile(companyId: string, bytes: Buffer, ext: string): Promise<string> {
-  const key = `${companyId}/${crypto.randomUUID()}.${ext}`;
+  const key = newKey(companyId, ext);
+  if (s3Enabled()) {
+    const { client: c, bucket } = s3();
+    await c.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: MIME_BY_EXT[ext] ?? "application/octet-stream" }));
+    return key;
+  }
   const full = keyPath(key);
   await fs.mkdir(path.dirname(full), { recursive: true });
   await fs.writeFile(full, bytes);
@@ -60,9 +90,22 @@ export async function putFile(companyId: string, bytes: Buffer, ext: string): Pr
 }
 
 export async function getFile(key: string): Promise<Buffer> {
+  if (s3Enabled()) {
+    if (!validKey(key)) throw new Error("Invalid storage key");
+    const { client: c, bucket } = s3();
+    const r = await c.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    if (!r.Body) throw new Error("File not found");
+    return Buffer.from(await r.Body.transformToByteArray());
+  }
   return fs.readFile(keyPath(key));
 }
 
 export async function deleteFile(key: string): Promise<void> {
+  if (s3Enabled()) {
+    if (!validKey(key)) return;
+    const { client: c, bucket } = s3();
+    await c.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    return;
+  }
   await fs.rm(keyPath(key), { force: true });
 }

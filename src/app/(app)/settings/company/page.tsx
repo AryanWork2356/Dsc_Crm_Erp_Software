@@ -22,7 +22,7 @@ export default async function CompanySettingsPage() {
               bankAccountNo: s?.bankAccountNo ?? "", bankIfsc: s?.bankIfsc ?? "", bankBranch: s?.bankBranch ?? "",
               invoicePrefix: s?.invoicePrefix ?? "INV", quotationPrefix: s?.quotationPrefix ?? "QT", poPrefix: s?.poPrefix ?? "PO",
               defaultTaxPercent: Number(s?.defaultTaxPercent ?? 18), approvalLevel1: Number(s?.approvalLevel1 ?? 25000),
-              approvalLevel2: Number(s?.approvalLevel2 ?? 100000),
+              approvalLevel2: Number(s?.approvalLevel2 ?? 100000), defaultPaymentTerms: s?.defaultPaymentTerms ?? "",
             }}
           />
         </CardBody>

@@ -63,6 +63,8 @@ type Req = {
   entityId: string;
   title: string;
   amount?: number;
+  /** Overrides the role the amount would normally require (e.g. leave beyond the yearly cap needs the Owner). */
+  requiredRole?: RoleKey;
 };
 
 /**
@@ -71,7 +73,7 @@ type Req = {
  */
 export async function requestApproval(tx: Tx, c: Ctx, r: Req): Promise<{ approvalId: string; autoApproved: boolean }> {
   const amount = r.amount ?? 0;
-  const required = await requiredRoleFor(c.companyId, r.type, amount, tx);
+  const required = r.requiredRole ?? (await requiredRoleFor(c.companyId, r.type, amount, tx));
 
   // cancel any older pending request for the same entity (e.g. resubmission after edits)
   await tx.approval.updateMany({

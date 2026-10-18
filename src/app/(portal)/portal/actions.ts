@@ -35,6 +35,26 @@ export async function approveMilestone(id: string) {
   });
 }
 
+/** The client approves or declines extra work in writing, from their own portal. */
+export async function respondToExtraWork(id: string, approve: boolean, fd?: FormData) {
+  return run(async () => {
+    const c = await clientCtx();
+    const note = (fd ? String(fd.get("note") ?? "") : "").trim();
+    const w = await db.additionalWork.findFirst({ where: { id, companyId: c.companyId, status: "SENT", project: { clientId: c.clientId, deletedAt: null } }, include: { project: true } });
+    if (!w) throw new UserError("This request is no longer waiting for your approval.");
+    if (!approve && !note) throw new UserError("Please tell us why you are declining.");
+    await db.$transaction(async (tx) => {
+      const r = await tx.additionalWork.updateMany({ where: { id, status: "SENT" }, data: { status: approve ? "APPROVED" : "REJECTED", decidedAt: new Date(), decidedByName: c.name, decisionVia: "PORTAL", decisionNote: note || null } });
+      if (r.count !== 1) throw new UserError("This request has already been answered.");
+      await audit(c, { action: approve ? "APPROVE" : "REJECT", entityType: "AdditionalWork", entityId: id, summary: `Client ${c.name} ${approve ? "approved" : "declined"} extra work ${w.number} (${w.title}) in the portal${note ? ` – ${note}` : ""}` }, tx);
+      await notifyUsers([w.project.projectManagerId, w.requestedById].filter((u): u is string => !!u), { companyId: c.companyId, type: "GENERAL", title: approve ? `Client approved extra work: ${w.title}` : `Client declined extra work: ${w.title}`, body: w.project.name, link: "/extra-work" }, tx);
+      if (approve) await notifyRoles(c.companyId, ["ACCOUNTS", "MANAGEMENT"], { type: "GENERAL", title: `Extra work approved by client: ${w.number}`, body: `${w.project.code} – ${w.title}`, link: "/extra-work", dedupeKey: `aw-approved:${id}` }, tx);
+    });
+    revalidatePath(`/portal/projects/${w.projectId}`);
+    return { message: approve ? "Thank you – approved" : "Your response has been sent" };
+  });
+}
+
 export async function respondToQuotation(id: string, decision: "ACCEPT" | "CHANGES", fd?: FormData) {
   return run(async () => {
     const c = await clientCtx();

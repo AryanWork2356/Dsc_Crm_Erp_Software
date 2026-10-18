@@ -2,6 +2,8 @@
 
 *Every section of the software: where it is, who uses it, how to use it, why it exists, and why it is easier than before.*
 
+> **New in this version (for DSC):** daily site reports with photos · time limits with automatic escalation · measurement-sheet BOQ and quotation payment terms · material notice rule and challan photos · transfers between projects · extra work locked until the client approves · vendor bills certified before payment · project closure checklist and report · performance scorecards · weekly/monthly director reports · leave policy and salary advances · CGST/SGST/IGST · installable phone app. Each is explained in [`WORKFLOWS.md`](WORKFLOWS.md) (sections 14–23); site staff have a one-page [`SUPERVISOR_QUICK_GUIDE.md`](SUPERVISOR_QUICK_GUIDE.md); going live is in [`GO_LIVE.md`](GO_LIVE.md).
+
 > **How to read this guide.** Each section follows the same pattern:
 > **📍 Where** (menu path) · **👤 Who** · **🎯 Why it exists** · **🛠 How to use it** · **✅ Simpler because…**
 >

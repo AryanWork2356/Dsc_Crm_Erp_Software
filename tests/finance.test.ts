@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/lib/db";
 import { loginAs, logout, fd } from "./setup";
-import { createInvoice, updateInvoice, submitInvoice, cancelInvoice, invoiceFromMilestone, recordPayment, deletePayment, createExpense, createVendorBill, payVendorBill } from "@/app/(app)/finance/actions";
+import { createInvoice, updateInvoice, submitInvoice, cancelInvoice, invoiceFromMilestone, recordPayment, deletePayment, createExpense, createVendorBill, payVendorBill, certifyVendorBill } from "@/app/(app)/finance/actions";
 import { approveRequest, rejectRequest } from "@/app/(app)/approvals/actions";
 import { receivables, payables, monthlyCashFlow } from "@/lib/finance-stats";
 import { projectFinancials } from "@/lib/project-finance";
@@ -165,8 +165,8 @@ describe("expenses and project cost", () => {
     await loginAs("director@dsc.demo");
     expect((await approveRequest(ap.id)).ok).toBe(true);
     const after = (await projectFinancials(p.companyId, [p.id])).get(p.id)!;
-    expect(after.actualCost - before.actualCost).toBe(40000);
-    expect(after.other - before.other).toBe(40000);
+    expect(after.actualCost - before.actualCost).toBeCloseTo(40000, 2);
+    expect(after.other - before.other).toBeCloseTo(40000, 2);
   });
 
   it("a rejected expense never counts; small expenses on your own project are auto-approved for the PM", async () => {
@@ -213,6 +213,10 @@ describe("vendor bills and payments", () => {
     const v = await db.vendor.findFirstOrThrow({ where: { name: { startsWith: "Asian" } } });
     expect((await createVendorBill(fd({ vendorId: v.id, number: "AC/9001", billDate: today, dueDate: "2020-01-01", amount: 40000 }))).ok).toBe(true);
     const b = await db.vendorBill.findFirstOrThrow({ where: { number: "AC/9001" } });
+    expect((await payVendorBill(fd({ billId: b.id, amount: 15000, date: today }))).ok).toBe(false); // not certified yet
+    await loginAs("owner@dsc.demo");
+    expect((await certifyVendorBill(b.id, fd({ docsChecked: "on" }))).ok).toBe(true);
+    await loginAs("accounts@dsc.demo");
     expect((await payVendorBill(fd({ billId: b.id, amount: 15000, date: today }))).ok).toBe(true);
     expect((await db.vendorBill.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("PARTIALLY_PAID");
     expect((await payVendorBill(fd({ billId: b.id, amount: 30000, date: today }))).ok).toBe(false);
@@ -227,6 +231,7 @@ describe("vendor bills and payments", () => {
     const v = await db.vendor.findFirstOrThrow({ where: { name: { startsWith: "Greenply" } } });
     await createVendorBill(fd({ vendorId: v.id, number: "GP/BIG", billDate: today, amount: 500000 }));
     const b = await db.vendorBill.findFirstOrThrow({ where: { number: "GP/BIG" } });
+    await db.vendorBill.update({ where: { id: b.id }, data: { certifiedAt: new Date() } }); // certification has its own tests
     expect((await payVendorBill(fd({ billId: b.id, amount: 200000, date: today }))).ok).toBe(false); // above ₹1,00,000
     expect((await payVendorBill(fd({ billId: b.id, amount: 90000, date: today }))).ok).toBe(true);
     await loginAs("owner@dsc.demo");

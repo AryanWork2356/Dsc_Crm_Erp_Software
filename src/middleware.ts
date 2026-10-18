@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 // /api/whatsapp/webhook and /api/cron/daily authenticate themselves (Meta HMAC signature / bearer CRON_SECRET)
-const PUBLIC = ["/login", "/forbidden", "/api/health", "/api/whatsapp/webhook", "/api/cron/daily"];
+// the app manifest, service worker and offline screen must load before anyone signs in
+const PUBLIC = ["/login", "/forbidden", "/api/health", "/api/whatsapp/webhook", "/api/cron/daily", "/manifest.webmanifest", "/sw.js", "/offline.html"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

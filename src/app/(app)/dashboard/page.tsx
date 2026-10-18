@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, Clock } from "l
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { maybeRunDaily } from "@/lib/automation";
+import { maybeRunReminders } from "@/lib/reminders";
 import { executiveStats, PERIODS, resolvePeriod } from "@/lib/dashboard";
 import { projectScope } from "@/lib/scope";
 import { calendarDay, formatDate, formatINR, formatINRCompact, humanize, num, startOfDay, cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ type SP = { period?: string; from?: string; to?: string };
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<SP> }) {
   const c = await requirePerm("dashboard:view");
+  void maybeRunReminders(c.companyId); // missing reports + late items (at most every 5 minutes)
   void maybeRunDaily(c.companyId); // once a day, first visitor triggers the reminders (never blocks or breaks the page)
   const sp = await searchParams;
   const exec = ["OWNER", "MANAGEMENT", "ADMIN"].includes(c.role);

@@ -31,6 +31,7 @@ const headerSchema = z.object({
   validUntil: zOptDate,
   terms: zOptStr,
   paymentTerms: zOptStr,
+  placeOfSupply: zOptStr,
   notes: zOptStr,
   discountPct: zNumPos().max(100, "Max 100%").default(0),
 });
@@ -78,7 +79,7 @@ export async function createQuotation(fd: FormData) {
       const x = await tx.quotation.create({
         data: {
           companyId: c.companyId, number, clientId: h.clientId, leadId: h.leadId ?? null, title: h.title, date: h.date, validUntil: h.validUntil,
-          preparedById: c.userId, terms: h.terms, paymentTerms: h.paymentTerms, notes: h.notes, discountPct: h.discountPct,
+          preparedById: c.userId, terms: h.terms, paymentTerms: h.paymentTerms, placeOfSupply: h.placeOfSupply ?? null, notes: h.notes, discountPct: h.discountPct,
           subtotal: t.subtotal, discountAmount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows },
         },
       });
@@ -108,7 +109,7 @@ export async function updateQuotation(id: string, fd: FormData) {
       await tx.quotation.update({
         where: { id },
         data: {
-          clientId: h.clientId, leadId: h.leadId ?? null, title: h.title, date: h.date, validUntil: h.validUntil, terms: h.terms, paymentTerms: h.paymentTerms, notes: h.notes,
+          clientId: h.clientId, leadId: h.leadId ?? null, title: h.title, date: h.date, validUntil: h.validUntil, terms: h.terms, paymentTerms: h.paymentTerms, placeOfSupply: h.placeOfSupply ?? null, notes: h.notes,
           discountPct: h.discountPct, subtotal: t.subtotal, discountAmount: t.discount, taxAmount: t.tax, total: t.total, status: "DRAFT",
           items: { create: rows },
         },
@@ -298,7 +299,7 @@ export async function createQuotationFromBoq(boqId: string, fd: FormData) {
       const defaultTerms = await tx.termsAndConditions.findFirst({ where: { companyId: c.companyId, kind: "QUOTATION", isDefault: true } });
       const x = await tx.quotation.create({
         data: {
-          companyId: c.companyId, number, clientId, boqId: boq.id, title: boq.title, preparedById: c.userId, terms: defaultTerms?.body,
+          companyId: c.companyId, number, clientId, boqId: boq.id, title: boq.title, preparedById: c.userId, terms: defaultTerms?.body, paymentTerms: settings?.defaultPaymentTerms,
           subtotal: t.subtotal, discountAmount: 0, taxAmount: t.tax, total: t.total,
           items: { create: boq.items.map((i, idx) => ({ sortOrder: idx, category: i.category, description: [i.item, i.specification].filter(Boolean).join(" – "), unit: i.unit, quantity: i.quantity, rate: i.sellingRate, taxPercent: tax, amount: t.lines[idx].amount })) },
         },

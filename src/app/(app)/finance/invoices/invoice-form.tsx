@@ -1,4 +1,5 @@
 "use client";
+import { STATE_OPTIONS } from "@/lib/gst";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ export function InvoiceForm({ action, clients, projects, defaultTax, initial, ca
   clients: Opt[];
   projects: (Opt & { clientId: string })[];
   defaultTax: number;
-  initial: { clientId?: string; projectId?: string; quotationId?: string; issueDate: string; dueDate?: string; paymentTerms?: string; notes?: string; discountPct?: number; items: Omit<LineRow, "key">[] };
+  initial: { clientId?: string; projectId?: string; quotationId?: string; issueDate: string; dueDate?: string; paymentTerms?: string; placeOfSupply?: string; notes?: string; discountPct?: number; items: Omit<LineRow, "key">[] };
   cancelHref: string;
 }) {
   const router = useRouter();
@@ -50,6 +51,7 @@ export function InvoiceForm({ action, clients, projects, defaultTax, initial, ca
           </Field>
           <Field label="Invoice date" required error={errors.issueDate}><Input name="issueDate" type="date" defaultValue={initial.issueDate} required /></Field>
           <Field label="Due date" error={errors.dueDate}><Input name="dueDate" type="date" defaultValue={initial.dueDate} /></Field>
+          <Field label="Place of supply (GST)" hint="Leave blank to use the state in the client's GSTIN. Same state as DSC = CGST + SGST; another state = IGST."><Select name="placeOfSupply" defaultValue={initial.placeOfSupply ?? ""}><option value="">From the client&apos;s GSTIN</option>{STATE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
           <Field label="Payment terms" className="sm:col-span-2"><Input name="paymentTerms" defaultValue={initial.paymentTerms} placeholder="e.g. Payable within 15 days of invoice" /></Field>
         </CardBody>
       </Card>

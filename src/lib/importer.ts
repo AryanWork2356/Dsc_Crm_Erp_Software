@@ -23,6 +23,8 @@ type Raw = Record<string, string>;
 type Entity = {
   key: string; label: string; perm: PermissionKey;
   columns: { header: string; example: string; required?: boolean; hint?: string }[];
+  /** Other systems' column names (lower-case) mapped to ours, e.g. Keka's "Job Title" → "Designation". */
+  aliases?: Record<string, string>;
   /** Validate one row. Returns cleaned data or throws a ZodError. */
   parse: (r: Raw) => Record<string, unknown>;
   /** Natural key used to detect rows that already exist. */
@@ -41,8 +43,10 @@ const n = (msg: string) => z.string().trim().optional().transform((v, ctx) => {
 });
 const date = z.string().trim().optional().transform((v, ctx) => {
   if (!v) return undefined;
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(v + "T00:00:00Z") : /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.test(v) ? new Date(`${v.split(/[/-]/)[2]}-${v.split(/[/-]/)[1].padStart(2, "0")}-${v.split(/[/-]/)[0].padStart(2, "0")}T00:00:00Z`) : null;
-  if (!iso || isNaN(iso.getTime())) { ctx.addIssue({ code: "custom", message: "Use a date like 2024-03-31 or 31/03/2024" }); return z.NEVER; }
+  const mon = /^(\d{1,2})[- ]([A-Za-z]{3})[A-Za-z]*[- ,]+(\d{4})$/.exec(v);
+  const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const iso = mon && MONTHS.includes(mon[2].toLowerCase()) ? new Date(Date.UTC(Number(mon[3]), MONTHS.indexOf(mon[2].toLowerCase()), Number(mon[1]))) : /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(v + "T00:00:00Z") : /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.test(v) ? new Date(`${v.split(/[/-]/)[2]}-${v.split(/[/-]/)[1].padStart(2, "0")}-${v.split(/[/-]/)[0].padStart(2, "0")}T00:00:00Z`) : null;
+  if (!iso || isNaN(iso.getTime())) { ctx.addIssue({ code: "custom", message: "Use a date like 2024-03-31, 31/03/2024 or 31-Mar-2024" }); return z.NEVER; }
   return iso;
 });
 const pick = <T extends string>(vals: readonly T[], label: string, dflt: T) => z.string().trim().optional().transform((v, ctx) => {
@@ -112,11 +116,12 @@ export const ENTITIES: Entity[] = [
   },
   {
     key: "employees", label: "Employees", perm: "employees:create",
-    columns: [{ header: "Name", example: "Pooja Shinde", required: true }, { header: "Email", example: "pooja@dscinterior.com" }, { header: "Phone", example: "98200 22334" }, { header: "Designation", example: "Junior Designer" }, { header: "Department", example: "Design" }, { header: "Joining date", example: "2024-06-03" }],
-    parse: (r) => parse(z.object({ Name: name, Email: zEmail.or(z.literal("").transform(() => undefined)), Phone: phone, Designation: s, Department: s, "Joining date": date }), r),
-    dedupe: (d) => (d.Email ? { where: { email: { equals: d.Email as string, mode: "insensitive" } }, label: `email ${d.Email}` } : null),
+    columns: [{ header: "Name", example: "Pooja Shinde", required: true }, { header: "Employee code", example: "DSC031", hint: "Optional – e.g. the Keka employee number. Leave blank to number automatically." }, { header: "Email", example: "pooja@dscinterior.com" }, { header: "Phone", example: "98200 22334" }, { header: "Designation", example: "Junior Designer" }, { header: "Department", example: "Design" }, { header: "Work location", example: "Thane" }, { header: "Joining date", example: "2024-06-03" }],
+    aliases: { "display name": "Name", "employee number": "Employee code", "mobile number": "Phone", "job title": "Designation", location: "Work location", "date joined (dd-mmm-yyyy)": "Joining date", "date of joining": "Joining date" },
+    parse: (r) => parse(z.object({ Name: name, "Employee code": s, Email: zEmail.or(z.literal("").transform(() => undefined)), Phone: phone, Designation: s, Department: s, "Work location": s, "Joining date": date }), r),
+    dedupe: (d) => (d["Employee code"] ? { where: { code: { equals: d["Employee code"] as string, mode: "insensitive" } }, label: `code ${d["Employee code"]}` } : d.Email ? { where: { email: { equals: d.Email as string, mode: "insensitive" } }, label: `email ${d.Email}` } : null),
     exists: async (c, where) => !!(await db.employee.findFirst({ where: { companyId: c.companyId, deletedAt: null, ...where } })),
-    create: async (tx, c, d) => { await tx.employee.create({ data: { companyId: c.companyId, code: await nextNumber(tx, c.companyId, "EMP", 3), name: d.Name as string, email: d.Email as string | undefined, phone: d.Phone as string | undefined, designation: d.Designation as string | undefined, department: d.Department as string | undefined, joiningDate: d["Joining date"] as Date | undefined } }); },
+    create: async (tx, c, d) => { await tx.employee.create({ data: { companyId: c.companyId, code: (d["Employee code"] as string | undefined) ?? (await nextNumber(tx, c.companyId, "EMP", 3)), name: d.Name as string, email: d.Email as string | undefined, workLocation: d["Work location"] as string | undefined, phone: d.Phone as string | undefined, designation: d.Designation as string | undefined, department: d.Department as string | undefined, joiningDate: d["Joining date"] as Date | undefined } }); },
   },
 ];
 
@@ -173,10 +178,12 @@ export type ImportReport = { total: number; valid: number; duplicates: number; e
 export async function runImport(c: Ctx, entity: Entity, rows: Raw[], commit: boolean): Promise<ImportReport> {
   const required = entity.columns.filter((x) => x.required).map((x) => x.header);
   const present = Object.keys(rows[0] ?? {});
-  const missing = required.filter((h) => !present.some((p) => p.toLowerCase() === h.toLowerCase()));
+  const known = (h: string) => present.some((p) => p.toLowerCase() === h.toLowerCase() || entity.aliases?.[p.toLowerCase()] === h);
+  const missing = required.filter((h) => !known(h));
   if (missing.length) throw new UserError(`The file is missing the column(s): ${missing.join(", ")}. Download the template for the exact layout.`);
   // normalise header case so "name" == "Name"
   const canon = new Map(entity.columns.map((x) => [x.header.toLowerCase(), x.header]));
+  for (const [from, to] of Object.entries(entity.aliases ?? {})) if (!canon.has(from)) canon.set(from, to);
   const norm = rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [canon.get(k.toLowerCase()) ?? k, v])));
 
   const errors: ImportReport["errors"] = [];

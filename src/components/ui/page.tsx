@@ -80,7 +80,7 @@ export function StatCard({
         {trend === "up" && <TrendingUp className="h-4 w-4 text-emerald-600" />}
         {trend === "down" && <TrendingDown className="h-4 w-4 text-red-600" />}
       </p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+      {sub && <div className="mt-1 text-xs text-slate-500">{sub}</div>}
     </div>
   );
   return href ? <Link href={href}>{body}</Link> : body;

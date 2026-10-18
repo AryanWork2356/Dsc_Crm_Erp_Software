@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ListFilters } from "@/components/list/list-filters";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
-import { cancelVendorBill, createVendorBill, payVendorBill } from "../actions";
+import { cancelVendorBill, certifyVendorBill, createVendorBill, payVendorBill } from "../actions";
 
 export const metadata = { title: "Vendor Bills" };
 
@@ -70,10 +70,11 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
                       <Td>{b.vendor.name}</Td><Td>{b.po?.number ?? "—"}</Td>
                       <Td className={cn(overdue && "font-medium text-red-600")}>{formatDate(b.dueDate)}{overdue && <Badge tone="red" className="ml-1.5">Overdue</Badge>}</Td>
                       <Td right>{formatINR(b.amount)}</Td><Td right className={bal > 0.005 && b.status !== "CANCELLED" ? "font-semibold text-amber-700" : "text-slate-400"}>{b.status === "CANCELLED" ? "—" : formatINR(bal)}</Td>
-                      <Td><StatusBadge status={b.status} /></Td>
+                      <Td><div className="flex flex-wrap items-center gap-1"><StatusBadge status={b.status} />{b.status !== "CANCELLED" && b.certRequired && (b.certifiedAt ? <Badge tone="green">Certified</Badge> : <Badge tone="amber">Needs certification</Badge>)}</div></Td>
                       <Td right>
                         <div className="flex justify-end gap-1">
-                          {c.can("vendor_bills:edit") && bal > 0.005 && b.status !== "CANCELLED" && <FormDialog title={`Pay – bill ${b.number}`} description={`Balance: ${formatINR(bal, true)}`} trigger={<Button size="sm" variant="secondary">Pay</Button>} fields={[{ name: "billId", label: "Bill", type: "hidden", defaultValue: b.id }, { name: "amount", label: "Amount (₹)", type: "number", required: true, defaultValue: Math.round(bal * 100) / 100 }, { name: "date", label: "Payment date", type: "date", required: true, defaultValue: toDateInput(new Date()) }, { name: "method", label: "Method", type: "select", options: PAYMENT_METHOD_OPTS, defaultValue: "BANK_TRANSFER" }, { name: "reference", label: "Reference / UTR" }]} action={payVendorBill} submitLabel="Record payment" />}
+                          {c.can("bill_certification:approve") && b.certRequired && !b.certifiedAt && b.status !== "CANCELLED" && <FormDialog title={`Certify bill ${b.number}`} description="Confirm the supporting documents (challan, measurements, invoice) have been checked." trigger={<Button size="sm">Certify</Button>} fields={[{ name: "docsChecked", label: "I have checked the supporting documents", type: "checkbox", required: true, full: true }, { name: "note", label: "Note (optional)", type: "textarea", full: true }]} action={certifyVendorBill.bind(null, b.id)} submitLabel="Certify bill" />}
+                          {c.can("vendor_bills:edit") && bal > 0.005 && b.status !== "CANCELLED" && (!b.certRequired || b.certifiedAt) && <FormDialog title={`Pay – bill ${b.number}`} description={`Balance: ${formatINR(bal, true)}`} trigger={<Button size="sm" variant="secondary">Pay</Button>} fields={[{ name: "billId", label: "Bill", type: "hidden", defaultValue: b.id }, { name: "amount", label: "Amount (₹)", type: "number", required: true, defaultValue: Math.round(bal * 100) / 100 }, { name: "date", label: "Payment date", type: "date", required: true, defaultValue: toDateInput(new Date()) }, { name: "method", label: "Method", type: "select", options: PAYMENT_METHOD_OPTS, defaultValue: "BANK_TRANSFER" }, { name: "reference", label: "Reference / UTR" }]} action={payVendorBill} submitLabel="Record payment" />}
                           {c.can("vendor_bills:delete") && num(b.paid) === 0 && b.status !== "CANCELLED" && <ActionButton size="sm" variant="ghost" className="text-red-600 hover:bg-red-50" action={cancelVendorBill.bind(null, b.id)} confirm={{ title: `Cancel bill ${b.number}?`, confirmLabel: "Cancel bill" }}>Cancel</ActionButton>}
                         </div>
                       </Td>

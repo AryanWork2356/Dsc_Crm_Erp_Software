@@ -22,6 +22,7 @@ export default async function NewRequest({ searchParams }: { searchParams: Promi
     <>
       <PageHeader back={{ href: "/procurement/requests", label: "Purchase requests" }} title="New purchase request" subtitle={boqOk ? `Prefilled from ${boq.number} – remove what you don't need to order now.` : "List what you need. It goes for approval before procurement orders it."} />
       <PrForm
+        noticeDays={(await db.companySettings.findUnique({ where: { companyId: c.companyId }, select: { materialNoticeDays: true } }))?.materialNoticeDays ?? 2}
         action={createPurchaseRequest}
         projects={projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))}
         catalog={materials}

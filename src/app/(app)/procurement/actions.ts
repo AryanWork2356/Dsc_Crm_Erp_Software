@@ -12,6 +12,8 @@ import { computeTotals } from "@/lib/money";
 import { projectScope } from "@/lib/scope";
 import { formToObject, zEmail, zGstin, zNumPos, zOptDate, zOptStr, zPan, zPhone, zReqStr } from "@/lib/form";
 import { num } from "@/lib/utils";
+import { daysNotice, isShortNotice } from "@/lib/material-notice";
+import { notifyRoles, notifyUsers } from "@/lib/notify";
 
 // ───────────────────────── VENDORS ─────────────────────────
 const vendorSchema = z.object({
@@ -178,6 +180,11 @@ async function prValue(items: z.infer<typeof prItem>[]) {
   return items.reduce((s, i) => s + i.quantity * (i.materialId ? cost.get(i.materialId) ?? 0 : 0), 0);
 }
 
+/** Company rule: material is requested at least this many days before it is needed. */
+async function minNotice(companyId: string) {
+  return (await db.companySettings.findUnique({ where: { companyId }, select: { materialNoticeDays: true } }))?.materialNoticeDays ?? 2;
+}
+
 async function checkProject(c: Ctx, projectId?: string) {
   if (!projectId) return;
   const p = await db.project.findFirst({ where: { id: projectId, ...projectScope(c) }, select: { id: true } });
@@ -191,10 +198,11 @@ export async function createPurchaseRequest(fd: FormData) {
     const d = prSchema.parse(raw);
     const items = parseJson(raw.items, z.array(prItem).min(1, "Add at least one item"), "Add at least one item");
     await checkProject(c, d.projectId);
+    const shortNotice = isShortNotice(d.requiredDate, await minNotice(c.companyId));
     const pr = await db.$transaction(async (tx) => {
       const number = await nextNumber(tx, c.companyId, "PR");
       const x = await tx.purchaseRequest.create({
-        data: { companyId: c.companyId, number, projectId: d.projectId ?? null, requestedById: c.userId, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } },
+        data: { companyId: c.companyId, number, projectId: d.projectId ?? null, requestedById: c.userId, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, shortNotice, items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } },
       });
       await audit(c, { action: "CREATE", entityType: "PurchaseRequest", entityId: x.id, summary: `Created purchase request ${number} (${items.length} items)` }, tx);
       return x;
@@ -215,9 +223,10 @@ export async function updatePurchaseRequest(id: string, fd: FormData) {
     if (!["DRAFT", "REJECTED"].includes(pr.status)) throw new UserError("Only draft or rejected requests can be edited.");
     if (pr.requestedById !== c.userId && !c.can("purchase_requests:approve")) throw new UserError("You can only edit your own requests.");
     await checkProject(c, d.projectId);
+    const shortNotice = isShortNotice(d.requiredDate, await minNotice(c.companyId));
     await db.$transaction(async (tx) => {
       await tx.purchaseRequestItem.deleteMany({ where: { requestId: id } });
-      await tx.purchaseRequest.update({ where: { id }, data: { projectId: d.projectId ?? null, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, status: "DRAFT", items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } } });
+      await tx.purchaseRequest.update({ where: { id }, data: { projectId: d.projectId ?? null, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, shortNotice, status: "DRAFT", items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } } });
       await audit(c, { action: "UPDATE", entityType: "PurchaseRequest", entityId: id, summary: `Updated purchase request ${pr.number}` }, tx);
     });
     revalidatePath("/procurement/requests");
@@ -233,9 +242,22 @@ export async function submitPurchaseRequest(id: string) {
     if (!pr) throw new UserError("Request not found.");
     if (!["DRAFT", "REJECTED"].includes(pr.status)) throw new UserError("This request has already been submitted.");
     if (!pr.items.length) throw new UserError("Add items first.");
+    // SOP: ask at least 2-3 days ahead. Late requests are allowed, but only with a reason, and they are flagged to the PM and procurement.
+    const minDays = await minNotice(c.companyId);
+    const late = isShortNotice(pr.requiredDate, minDays);
+    if (late && !pr.reason?.trim()) {
+      const left = daysNotice(pr.requiredDate!);
+      throw new UserError(`This material is needed ${left <= 0 ? "today or earlier" : `in ${left} day${left === 1 ? "" : "s"}`}, but requests must be raised at least ${minDays} days ahead. Write the reason it is late in the Reason box, then submit again.`);
+    }
     const value = await prValue(pr.items.map((i) => ({ materialId: i.materialId, description: i.description, unit: i.unit, quantity: num(i.quantity), boqItemId: i.boqItemId })));
     const r = await db.$transaction(async (tx) => {
-      await tx.purchaseRequest.update({ where: { id }, data: { status: "PENDING_APPROVAL" } });
+      await tx.purchaseRequest.update({ where: { id }, data: { status: "PENDING_APPROVAL", shortNotice: late, ...(late && (pr.priority === "LOW" || pr.priority === "MEDIUM") ? { priority: "HIGH" } : {}) } });
+      if (late) {
+        const pm = pr.projectId ? (await tx.project.findUnique({ where: { id: pr.projectId }, select: { projectManagerId: true } }))?.projectManagerId : null;
+        const t = { companyId: c.companyId, type: "GENERAL" as const, title: `Short-notice material request ${pr.number}`, body: `Needed by ${pr.requiredDate!.toISOString().slice(0, 10)}. Reason: ${pr.reason}`, link: `/procurement/requests/${id}` };
+        if (pm && pm !== c.userId) await notifyUsers([pm], t, tx);
+        await notifyRoles(c.companyId, ["PROCUREMENT"], t, tx);
+      }
       return requestApproval(tx, c, { type: "PURCHASE_REQUEST", entityType: "PurchaseRequest", entityId: id, title: `Purchase request ${pr.number}`, amount: value });
     });
     revalidatePath("/procurement/requests");

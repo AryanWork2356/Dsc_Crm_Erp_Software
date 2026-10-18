@@ -21,6 +21,7 @@ export default async function EditRequest({ params }: { params: Promise<{ id: st
     <>
       <PageHeader back={{ href: `/procurement/requests/${id}`, label: pr.number }} title={`Edit ${pr.number}`} />
       <PrForm
+        noticeDays={(await db.companySettings.findUnique({ where: { companyId: c.companyId }, select: { materialNoticeDays: true } }))?.materialNoticeDays ?? 2}
         action={updatePurchaseRequest.bind(null, id)}
         projects={projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))}
         catalog={materials}

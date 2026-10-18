@@ -54,7 +54,7 @@ export async function seedFinance(prisma: PrismaClient, core: CoreSeed, proj: Pr
     billNo++;
     const amount = Math.round(Number(po.total) * (po.status === "RECEIVED" ? 1 : 0.5));
     const paid = po.status === "RECEIVED" ? amount : 0;
-    const bill = await prisma.vendorBill.create({ data: { companyId, number: `${po.vendor.name.slice(0, 3).toUpperCase()}/${2600 + billNo}`, vendorId: po.vendorId, poId: po.id, projectId: po.projectId, billDate: day(-22 + billNo * 6), dueDate: day(-2 + billNo * 6), amount, paid, status: paid >= amount ? "PAID" : "UNPAID" } });
+    const bill = await prisma.vendorBill.create({ data: { companyId, number: `${po.vendor.name.slice(0, 3).toUpperCase()}/${2600 + billNo}`, vendorId: po.vendorId, poId: po.id, projectId: po.projectId, billDate: day(-22 + billNo * 6), dueDate: day(-2 + billNo * 6), amount, paid, status: paid >= amount ? "PAID" : "UNPAID", certRequired: paid < amount } });
     if (paid > 0) await prisma.vendorPayment.create({ data: { companyId, vendorId: po.vendorId, billId: bill.id, amount: paid, date: day(-12), method: "BANK_TRANSFER", reference: "NEFT445521" } });
   }
   const vendor = await prisma.vendor.findFirstOrThrow({ where: { companyId, name: { startsWith: "Havells" } } });

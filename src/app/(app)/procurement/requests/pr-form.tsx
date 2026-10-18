@@ -7,6 +7,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { ActionResult } from "@/lib/action";
+import { daysNotice } from "@/lib/material-notice";
 import { PRIORITY_OPTS, UNIT_OPTS, type Opt } from "@/lib/enums";
 
 type Row = { key: string; description: string; unit: string; quantity: number | ""; materialId?: string | null; boqItemId?: string | null };
@@ -14,13 +15,14 @@ let n = 0;
 const mk = (p: Partial<Row> = {}): Row => ({ key: `p${Date.now()}_${n++}`, description: "", unit: "nos", quantity: 1, ...p });
 
 export function PrForm({
-  action, projects, catalog, initial, cancelHref,
+  action, projects, catalog, initial, cancelHref, noticeDays = 2,
 }: {
   action: (fd: FormData) => Promise<ActionResult<{ id: string }>>;
   projects: Opt[];
   catalog: { id: string; name: string; unit: string }[];
   initial: { projectId?: string; requiredDate?: string; reason?: string; priority?: string; items: Omit<Row, "key">[] };
   cancelHref: string;
+  noticeDays?: number;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -28,6 +30,8 @@ export function PrForm({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [rows, setRows] = React.useState<Row[]>(initial.items.length ? initial.items.map((i) => mk(i)) : [mk()]);
   const listId = React.useId();
+  const [req, setReq] = React.useState(initial.requiredDate ?? "");
+  const left = req ? daysNotice(req) : null;
   const set = (key: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 
   function onDesc(r: Row, value: string) {
@@ -59,7 +63,10 @@ export function PrForm({
         <CardHeader><CardTitle>Request details</CardTitle></CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Project"><Select name="projectId" defaultValue={initial.projectId ?? ""}><option value="">— Stock / general —</option>{projects.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></Field>
-          <Field label="Required by" error={errors.requiredDate}><Input name="requiredDate" type="date" defaultValue={initial.requiredDate} /></Field>
+          <Field label="Required by" error={errors.requiredDate} hint={left !== null && left < noticeDays ? undefined : `Raise requests at least ${noticeDays} days ahead.`}>
+            <Input name="requiredDate" type="date" defaultValue={initial.requiredDate} onChange={(e) => setReq(e.target.value)} />
+            {left !== null && left < noticeDays && <span className="mt-1 block rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Short notice: needed in {Math.max(0, left)} day(s). Company rule is {noticeDays}. You can still send it, but write the reason below.</span>}
+          </Field>
           <Field label="Priority"><Select name="priority" defaultValue={initial.priority ?? "MEDIUM"}>{PRIORITY_OPTS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></Field>
           <Field label="Reason" className="sm:col-span-2 lg:col-span-4"><Textarea name="reason" rows={2} defaultValue={initial.reason} placeholder="Why is this needed?" /></Field>
         </CardBody>

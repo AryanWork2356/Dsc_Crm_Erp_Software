@@ -8,7 +8,9 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress, EmptyState, DetailGrid } from "@/components/ui/page";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/forms/action-button";
-import { approveMilestone } from "../../actions";
+import { approveMilestone, respondToExtraWork } from "../../actions";
+import { FormDialog } from "@/components/forms/form-dialog";
+import { Button } from "@/components/ui/button";
 
 export default async function ClientProject({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,9 +21,10 @@ export default async function ClientProject({ params }: { params: Promise<{ id: 
     include: { milestones: { orderBy: [{ dueDate: "asc" }, { name: "asc" }] }, tasks: { where: { status: "COMPLETED" }, orderBy: { updatedAt: "desc" }, take: 6 } },
   });
   if (!p) notFound();
-  const [docs, boq] = await Promise.all([
+  const [docs, boq, extra] = await Promise.all([
     db.document.findMany({ where: { companyId: c.companyId, entityType: "PROJECT", entityId: id, isPortalVisible: true, deletedAt: null }, orderBy: { createdAt: "desc" } }),
     db.boq.findFirst({ where: { projectId: id, deletedAt: null, status: "APPROVED" }, include: { items: { select: { category: true, total: true } } }, orderBy: { revision: "desc" } }),
+    db.additionalWork.findMany({ where: { projectId: id, companyId: c.companyId, status: { not: "DRAFT" } }, orderBy: { createdAt: "desc" } }),
   ]);
   const photos = docs.filter((d) => d.mimeType.startsWith("image/"));
   const files = docs.filter((d) => !d.mimeType.startsWith("image/"));
@@ -35,6 +38,30 @@ export default async function ClientProject({ params }: { params: Promise<{ id: 
         <div><div className="mb-1 flex justify-between text-sm"><span className="text-slate-600">Overall progress</span><span className="font-semibold">{p.progress}%</span></div><Progress value={p.progress} /></div>
         <DetailGrid items={[{ label: "Site", value: p.siteAddress }, { label: "Start date", value: formatDate(p.startDate) }, { label: "Expected completion", value: formatDate(p.plannedEndDate) }]} />
       </CardBody></Card>
+
+      {extra.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Extra work</CardTitle></CardHeader>
+          <ul className="divide-y divide-slate-100">
+            {extra.map((w) => (
+              <li key={w.id} className="px-5 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0"><p className="font-medium text-slate-900">{w.title}</p>{w.description && <p className="mt-0.5 text-sm text-slate-600">{w.description}</p>}</div>
+                  <span className="tabular text-sm font-semibold">{formatINR(w.amount)} <span className="text-xs font-normal text-slate-500">+ GST</span></span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {w.status === "SENT" ? (
+                    <>
+                      <ActionButton variant="success" action={respondToExtraWork.bind(null, w.id, true)} confirm={{ title: "Approve this extra work?", body: `You approve ${w.title} at ${formatINR(w.amount)} plus GST. Work starts only after your approval.`, confirmLabel: "Yes, approve" }}>Approve</ActionButton>
+                      <FormDialog title="Decline extra work" trigger={<Button variant="secondary">Decline</Button>} fields={[{ name: "note", label: "Reason", type: "textarea", required: true, full: true }]} action={respondToExtraWork.bind(null, w.id, false)} submitLabel="Decline" />
+                    </>
+                  ) : w.status === "REJECTED" ? <Badge tone="red">Declined</Badge> : <Badge tone="green">{w.status === "COMPLETED" ? "Completed" : w.status === "IN_PROGRESS" ? "In progress" : "Approved"}</Badge>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><CardTitle>Stages</CardTitle></CardHeader>

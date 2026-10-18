@@ -69,6 +69,11 @@ export function CompanyForm({ values, canEdit }: { values: V; canEdit: boolean }
           {f("invoicePrefix", "Invoice prefix", { required: true })}
           {f("defaultTaxPercent", "Default GST %", { type: "number", step: "0.01" })}
         </div>
+        <div className="mt-4">
+          <Field label="Default payment terms on quotations" error={errors.defaultPaymentTerms} hint="Printed on quotations created from a BOQ. You can change it on each quotation." required>
+            <Textarea name="defaultPaymentTerms" defaultValue={values.defaultPaymentTerms} disabled={!canEdit} />
+          </Field>
+        </div>
       </section>
       <section>
         <h2 className="mb-1 text-sm font-semibold text-slate-900">Approval limits</h2>

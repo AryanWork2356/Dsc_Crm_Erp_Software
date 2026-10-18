@@ -1,0 +1,36 @@
+name: Build Android app (APK)
+
+# Builds an installable Android file in the cloud – no Android Studio needed.
+# Run it from GitHub: Actions → "Build Android app (APK)" → Run workflow → paste your live website address.
+# Download the APK from the finished run ("Artifacts"), send it to the phones and tap to install.
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Live website address the app opens (https only), e.g. https://dsc-erp.vercel.app"
+        required: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: mobile/package-lock.json }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - name: Point the app at the live website
+        run: npx cap sync android
+        env:
+          CAP_SERVER_URL: ${{ inputs.server_url }}
+      - name: Build debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsc-interior-android
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk

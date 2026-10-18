@@ -8,7 +8,7 @@ export type CoreSeed = {
 
 const STAFF: { role: RoleKey; name: string; email: string; designation: string; department: string; phone: string; salary: number }[] = [
   { role: "OWNER", name: "Rupesh Sharma", email: "owner@dsc.demo", designation: "Managing Director", department: "Management", phone: "+91 98200 10001", salary: 0 },
-  { role: "MANAGEMENT", name: "Neha Kulkarni", email: "director@dsc.demo", designation: "Director - Operations", department: "Management", phone: "+91 98200 10002", salary: 180000 },
+  { role: "MANAGEMENT", name: "Satish Sharma", email: "director@dsc.demo", designation: "Commercial Director", department: "Management", phone: "+91 98200 10002", salary: 180000 },
   { role: "ADMIN", name: "Sandeep Pawar", email: "admin@dsc.demo", designation: "Office Administrator", department: "Admin", phone: "+91 98200 10003", salary: 45000 },
   { role: "SALES", name: "Rohan Mehta", email: "sales@dsc.demo", designation: "Senior Sales Executive", department: "Sales", phone: "+91 98200 10004", salary: 60000 },
   { role: "SALES", name: "Priya Nair", email: "sales2@dsc.demo", designation: "Sales Executive", department: "Sales", phone: "+91 98200 10005", salary: 42000 },
@@ -21,6 +21,9 @@ const STAFF: { role: RoleKey; name: string; email: string; designation: string; 
   { role: "STORE", name: "Ganesh Shinde", email: "store@dsc.demo", designation: "Store Keeper", department: "Stores", phone: "+91 98200 10012", salary: 32000 },
   { role: "SITE_ENGINEER", name: "Tushar Bhosale", email: "engineer@dsc.demo", designation: "Site Engineer", department: "Projects", phone: "+91 98200 10013", salary: 58000 },
   { role: "SITE_SUPERVISOR", name: "Mahesh Gaikwad", email: "supervisor@dsc.demo", designation: "Site Supervisor", department: "Projects", phone: "+91 98200 10014", salary: 38000 },
+  // appended (not inserted) so existing employee codes do not shift
+  { role: "OWNER", name: "Dinesh Sharma", email: "dinesh@dsc.demo", designation: "Main Director", department: "Management", phone: "+91 98200 10015", salary: 0 },
+  { role: "MANAGEMENT", name: "Gopal Sharma", email: "gopal@dsc.demo", designation: "Project Director", department: "Management", phone: "+91 98200 10016", salary: 0 },
 ];
 
 export async function seedCore(prisma: PrismaClient, passwordHash: string): Promise<CoreSeed> {

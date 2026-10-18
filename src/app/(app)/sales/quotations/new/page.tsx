@@ -38,6 +38,7 @@ export default async function NewQuotation({ searchParams }: { searchParams: Pro
           date: toDateInput(new Date()),
           validUntil: toDateInput(validity),
           terms: templates.find((t) => t.isDefault)?.body,
+          paymentTerms: settings?.defaultPaymentTerms,
           items: [],
         }}
       />

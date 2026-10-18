@@ -252,6 +252,8 @@ enum NotificationType {
   ATTENDANCE_ISSUE
   SUPPORT_TICKET
   DOCUMENT_EXPIRY
+  REPORT_MISSING
+  TIME_LIMIT
   GENERAL
 }
 
@@ -316,32 +318,46 @@ model Company {
 }
 
 model CompanySettings {
-  id                String   @id @default(cuid())
-  companyId         String   @unique
-  company           Company  @relation(fields: [companyId], references: [id])
-  legalName         String?
-  logoUrl           String?
-  address           String?
-  phone             String?
-  email             String?
-  website           String?
-  gstin             String?
-  pan               String?
-  bankName          String?
-  bankAccountNo     String?
-  bankIfsc          String?
-  bankBranch        String?
-  invoicePrefix     String   @default("INV")
-  quotationPrefix   String   @default("QT")
-  poPrefix          String   @default("PO")
-  defaultTaxPercent Decimal  @default(18) @db.Decimal(5, 2)
+  id                         String   @id @default(cuid())
+  companyId                  String   @unique
+  company                    Company  @relation(fields: [companyId], references: [id])
+  legalName                  String?
+  logoUrl                    String?
+  address                    String?
+  phone                      String?
+  email                      String?
+  website                    String?
+  gstin                      String?
+  pan                        String?
+  bankName                   String?
+  bankAccountNo              String?
+  bankIfsc                   String?
+  bankBranch                 String?
+  invoicePrefix              String   @default("INV")
+  quotationPrefix            String   @default("QT")
+  poPrefix                   String   @default("PO")
+  defaultTaxPercent          Decimal  @default(18) @db.Decimal(5, 2)
   // approval thresholds in INR: below L1 -> PM, up to L2 -> Management, above -> Owner
-  approvalLevel1    Decimal  @default(25000) @db.Decimal(14, 2)
-  approvalLevel2    Decimal  @default(100000) @db.Decimal(14, 2)
-  payrollConfig     Json?
-  notificationPrefs Json?
-  whatsappConfig    Json?
-  updatedAt         DateTime @updatedAt
+  approvalLevel1             Decimal  @default(25000) @db.Decimal(14, 2)
+  approvalLevel2             Decimal  @default(100000) @db.Decimal(14, 2)
+  // site report deadlines (24h "HH:mm", IST)
+  reportMorningDue           String   @default("10:00")
+  reportMorningDueOutstation String   @default("09:30")
+  reportEveningDue           String   @default("19:00")
+  // per-rule time limits in hours, overriding the SOP defaults: { "po_release": 24, ... }
+  tatConfig                  Json?
+  // default payment schedule printed on new quotations (editable per quotation)
+  defaultPaymentTerms        String   @default("50% advance payment; 40% before project handover; 10% within 15 days of final bill. Final billing as per actual quantities.")
+  // material must be requested at least this many days before it is needed (SOP: 2-3 days)
+  materialNoticeDays         Int      @default(2)
+  // leave policy: notice needed for regular leave, for long leave, and the yearly cap (days)
+  leaveNoticeDays            Int      @default(15)
+  longLeaveNoticeDays        Int      @default(90)
+  leaveYearlyCap             Int      @default(30)
+  payrollConfig              Json?
+  notificationPrefs          Json?
+  whatsappConfig             Json?
+  updatedAt                  DateTime @updatedAt
 }
 
 model Sequence {
@@ -421,6 +437,7 @@ model Employee {
   salaryStructure SalaryStructure?
   payslips        Payslip[]
   leaves          Leave[]
+  advances        EmployeeAdvance[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -439,24 +456,25 @@ model SalaryStructure {
 }
 
 model Payslip {
-  id             String   @id @default(cuid())
-  companyId      String
-  employeeId     String
-  employee       Employee @relation(fields: [employeeId], references: [id])
-  month          Int
-  year           Int
-  workingDays    Int      @default(0)
-  presentDays    Decimal  @default(0) @db.Decimal(5, 1)
-  basic          Decimal  @default(0) @db.Decimal(12, 2)
-  hra            Decimal  @default(0) @db.Decimal(12, 2)
-  allowances     Decimal  @default(0) @db.Decimal(12, 2)
-  overtime       Decimal  @default(0) @db.Decimal(12, 2)
-  incentives     Decimal  @default(0) @db.Decimal(12, 2)
-  bonus          Decimal  @default(0) @db.Decimal(12, 2)
-  deductions     Decimal  @default(0) @db.Decimal(12, 2)
-  leaveDeduction Decimal  @default(0) @db.Decimal(12, 2)
-  netSalary      Decimal  @default(0) @db.Decimal(12, 2)
-  createdAt      DateTime @default(now())
+  id              String   @id @default(cuid())
+  companyId       String
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  month           Int
+  year            Int
+  workingDays     Int      @default(0)
+  presentDays     Decimal  @default(0) @db.Decimal(5, 1)
+  basic           Decimal  @default(0) @db.Decimal(12, 2)
+  hra             Decimal  @default(0) @db.Decimal(12, 2)
+  allowances      Decimal  @default(0) @db.Decimal(12, 2)
+  overtime        Decimal  @default(0) @db.Decimal(12, 2)
+  incentives      Decimal  @default(0) @db.Decimal(12, 2)
+  bonus           Decimal  @default(0) @db.Decimal(12, 2)
+  deductions      Decimal  @default(0) @db.Decimal(12, 2)
+  advanceRecovery Decimal  @default(0) @db.Decimal(12, 2) // included in deductions
+  leaveDeduction  Decimal  @default(0) @db.Decimal(12, 2)
+  netSalary       Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt       DateTime @default(now())
 
   @@unique([employeeId, month, year])
   @@index([companyId, year, month])
@@ -472,6 +490,8 @@ model Leave {
   days         Decimal     @db.Decimal(4, 1)
   reason       String?
   paid         Boolean     @default(true)
+  kind         LeaveKind   @default(REGULAR)
+  exceedsCap   Boolean     @default(false) // beyond the yearly cap: needs the Managing Director's written approval
   status       LeaveStatus @default(PENDING)
   decidedById  String?
   decisionNote String?
@@ -739,6 +759,7 @@ model Quotation {
   total          Decimal         @default(0) @db.Decimal(14, 2)
   terms          String?
   paymentTerms   String?
+  placeOfSupply  String? // GST state code; blank = from the client's GSTIN
   notes          String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -814,6 +835,8 @@ model BoqItem {
   specification String?
   unit          String      @default("nos")
   quantity      Decimal     @db.Decimal(12, 3)
+  // site measurement sheet (feet+inches lines); when present, quantity is calculated from it
+  measurements  Json?
   // internal cost split (never exposed to clients)
   materialCost  Decimal     @default(0) @db.Decimal(12, 2) // per unit
   labourCost    Decimal     @default(0) @db.Decimal(12, 2) // per unit
@@ -847,6 +870,8 @@ model Project {
   designerId       String?
   siteEngineerId   String?
   supervisorId     String?
+  // outstation sites report earlier (SOP: 9:30 vs 10:00) – times are company settings
+  outstation       Boolean       @default(false)
   contractValue    Decimal       @default(0) @db.Decimal(14, 2)
   budget           Decimal       @default(0) @db.Decimal(14, 2)
   status           ProjectStatus @default(PLANNING)
@@ -866,6 +891,10 @@ model Project {
   materialIssues   MaterialIssue[]
   members          ProjectMember[]
   tickets          SupportTicket[]
+  dailyReports     DailyReport[]
+  additionalWork   AdditionalWork[]
+  closure          ProjectClosure?
+  review           ProjectReview?
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -1049,6 +1078,7 @@ model PurchaseRequest {
   requiredDate  DateTime?
   reason        String?
   priority      Priority              @default(MEDIUM)
+  shortNotice   Boolean               @default(false)
   status        PurchaseRequestStatus @default(DRAFT)
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
@@ -1128,6 +1158,7 @@ model MaterialReceipt {
   vehicleNo    String?
   remarks      String?
   receivedById String?
+  challanDocId String? // photo of the delivery challan
   createdAt    DateTime      @default(now())
 
   items MaterialReceiptItem[]
@@ -1179,28 +1210,29 @@ model MaterialIssueItem {
 
 // ───────────────────────── FINANCE ─────────────────────────
 model Invoice {
-  id           String        @id @default(cuid())
-  companyId    String
-  number       String
-  clientId     String
-  client       Client        @relation(fields: [clientId], references: [id])
-  projectId    String?
-  project      Project?      @relation(fields: [projectId], references: [id])
-  quotationId  String?
-  quotation    Quotation?    @relation(fields: [quotationId], references: [id])
-  issueDate    DateTime      @default(now())
-  dueDate      DateTime?
-  status       InvoiceStatus @default(DRAFT)
-  subtotal     Decimal       @default(0) @db.Decimal(14, 2)
-  discount     Decimal       @default(0) @db.Decimal(14, 2)
-  taxAmount    Decimal       @default(0) @db.Decimal(14, 2)
-  total        Decimal       @default(0) @db.Decimal(14, 2)
-  paid         Decimal       @default(0) @db.Decimal(14, 2)
-  paymentTerms String?
-  notes        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
+  id            String        @id @default(cuid())
+  companyId     String
+  number        String
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  projectId     String?
+  project       Project?      @relation(fields: [projectId], references: [id])
+  quotationId   String?
+  quotation     Quotation?    @relation(fields: [quotationId], references: [id])
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime?
+  status        InvoiceStatus @default(DRAFT)
+  subtotal      Decimal       @default(0) @db.Decimal(14, 2)
+  discount      Decimal       @default(0) @db.Decimal(14, 2)
+  taxAmount     Decimal       @default(0) @db.Decimal(14, 2)
+  total         Decimal       @default(0) @db.Decimal(14, 2)
+  paid          Decimal       @default(0) @db.Decimal(14, 2)
+  paymentTerms  String?
+  placeOfSupply String? // GST state code; blank = from the client's GSTIN
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
 
   items    InvoiceItem[]
   payments Payment[]
@@ -1238,21 +1270,26 @@ model Payment {
 }
 
 model VendorBill {
-  id        String           @id @default(cuid())
-  companyId String
-  number    String
-  vendorId  String
-  vendor    Vendor           @relation(fields: [vendorId], references: [id])
-  poId      String?
-  po        PurchaseOrder?   @relation(fields: [poId], references: [id])
-  projectId String?
-  billDate  DateTime         @default(now())
-  dueDate   DateTime?
-  amount    Decimal          @db.Decimal(14, 2)
-  paid      Decimal          @default(0) @db.Decimal(14, 2)
-  status    VendorBillStatus @default(UNPAID)
-  notes     String?
-  createdAt DateTime         @default(now())
+  id            String           @id @default(cuid())
+  companyId     String
+  number        String
+  vendorId      String
+  vendor        Vendor           @relation(fields: [vendorId], references: [id])
+  poId          String?
+  po            PurchaseOrder?   @relation(fields: [poId], references: [id])
+  projectId     String?
+  billDate      DateTime         @default(now())
+  dueDate       DateTime?
+  amount        Decimal          @db.Decimal(14, 2)
+  paid          Decimal          @default(0) @db.Decimal(14, 2)
+  status        VendorBillStatus @default(UNPAID)
+  notes         String?
+  // SOP: a bill is paid only after the project manager certifies it with supporting documents
+  certRequired  Boolean          @default(true)
+  certifiedById String?
+  certifiedAt   DateTime?
+  certNote      String?
+  createdAt     DateTime         @default(now())
 
   payments VendorPayment[]
 
@@ -1484,4 +1521,224 @@ model AuditLog {
 
   @@index([companyId, createdAt])
   @@index([companyId, entityType, entityId])
+}
+
+enum ReportKind {
+  MORNING
+  EVENING
+}
+
+enum SiteMaterialStatus {
+  OK
+  SHORT_SOON
+  WORK_STOPPED
+}
+
+/// One supervisor report per project per day per kind (morning plan / evening progress + photos).
+model DailyReport {
+  id             String             @id @default(cuid())
+  companyId      String
+  projectId      String
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reportDate     DateTime           @db.Date
+  kind           ReportKind
+  submittedById  String
+  submittedAt    DateTime           @default(now())
+  onTime         Boolean            @default(true)
+  manpower       Int                @default(0)
+  progressPct    Int?
+  workDone       String?
+  planNext       String?
+  materialStatus SiteMaterialStatus @default(OK)
+  issues         String?
+  photoIds       String[]           @default([])
+
+  @@unique([projectId, reportDate, kind])
+  @@index([companyId, reportDate])
+  @@index([companyId, submittedById])
+}
+
+enum TransferKind {
+  MATERIAL
+  MANPOWER
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Material or manpower moved between projects. Needs the written approval of the project it leaves (SOP).
+model TransferRequest {
+  id            String         @id @default(cuid())
+  companyId     String
+  number        String
+  kind          TransferKind
+  fromProjectId String
+  toProjectId   String
+  requestedById String
+  reason        String?
+  // MATERIAL: [{ materialId, quantity }]   MANPOWER: [{ workerId }]
+  items         Json
+  emergency     Boolean        @default(false)
+  status        TransferStatus @default(PENDING)
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  createdAt     DateTime       @default(now())
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([companyId, fromProjectId])
+}
+
+enum AdditionalWorkStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// Work outside the agreed scope. SOP: it cannot start until the client has approved it in writing.
+model AdditionalWork {
+  id            String               @id @default(cuid())
+  companyId     String
+  number        String
+  projectId     String
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  amount        Decimal              @default(0) @db.Decimal(14, 2)
+  status        AdditionalWorkStatus @default(DRAFT)
+  requestedById String
+  sentAt        DateTime?
+  decidedAt     DateTime?
+  decidedByName String? // who at the client approved / declined
+  decisionVia   String? // PORTAL | RECORDED
+  decisionNote  String?
+  approvalDocId String? // uploaded written approval (email, signed letter, WhatsApp screenshot)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@unique([companyId, number])
+  @@index([companyId, projectId])
+  @@index([companyId, status])
+}
+
+enum ClosureStatus {
+  OPEN
+  SUBMITTED
+  CLOSED
+}
+
+/// HR & Admin SOP: after handover, 15 documents/checks must be complete and the closure report goes to the directors.
+model ProjectClosure {
+  id             String        @id @default(cuid())
+  companyId      String
+  projectId      String        @unique
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status         ClosureStatus @default(OPEN)
+  lessonsLearned String? // written by the Project Director
+  startedAt      DateTime      @default(now())
+  submittedAt    DateTime?
+  submittedById  String?
+  closedAt       DateTime?
+  closedById     String?
+  createdAt      DateTime      @default(now())
+
+  items ProjectClosureItem[]
+
+  @@index([companyId, status])
+}
+
+model ProjectClosureItem {
+  id          String         @id @default(cuid())
+  closureId   String
+  closure     ProjectClosure @relation(fields: [closureId], references: [id], onDelete: Cascade)
+  key         String
+  title       String
+  sortOrder   Int            @default(0)
+  docRequired Boolean        @default(true)
+  auto        Boolean        @default(false) // checked by the system from live records
+  done        Boolean        @default(false)
+  doneAt      DateTime?
+  doneById    String?
+  note        String?
+  docId       String?
+
+  @@unique([closureId, key])
+}
+
+/// End-of-project evaluation of the project manager and site supervisor. The numbers come from real records;
+/// this holds the judgement calls that only a person can make (replaces the manual Performance form).
+model ProjectReview {
+  id                String   @id @default(cuid())
+  companyId         String
+  projectId         String   @unique
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evaluatedById     String
+  clientRating      Int? // 1-5
+  delayReason       String?
+  delayInControl    Boolean? // was the delay within the employee's control?
+  reworkRequired    Boolean  @default(false)
+  snagClosedOnTime  Boolean  @default(true)
+  labourDiscipline  Boolean  @default(true)
+  wastageControlled Boolean  @default(true)
+  safetyFollowed    Boolean  @default(true)
+  remarks           String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+enum LeaveKind {
+  REGULAR
+  MEDICAL
+  EMERGENCY
+  LONG
+}
+
+enum AdvanceStatus {
+  OPEN
+  CLEARED
+  WRITTEN_OFF
+}
+
+/// Money given to an employee in advance and recovered from salary in instalments (HR SOP: advances and recoveries register).
+model EmployeeAdvance {
+  id              String        @id @default(cuid())
+  companyId       String
+  employeeId      String
+  employee        Employee      @relation(fields: [employeeId], references: [id])
+  amount          Decimal       @db.Decimal(12, 2)
+  givenOn         DateTime      @default(now())
+  reason          String?
+  monthlyRecovery Decimal       @db.Decimal(12, 2)
+  status          AdvanceStatus @default(OPEN)
+  createdById     String
+  createdAt       DateTime      @default(now())
+
+  recoveries AdvanceRecovery[]
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model AdvanceRecovery {
+  id        String          @id @default(cuid())
+  advanceId String
+  advance   EmployeeAdvance @relation(fields: [advanceId], references: [id], onDelete: Cascade)
+  month     Int
+  year      Int
+  amount    Decimal         @db.Decimal(12, 2)
+  note      String?
+  createdAt DateTime        @default(now())
+
+  @@unique([advanceId, month, year])
 }

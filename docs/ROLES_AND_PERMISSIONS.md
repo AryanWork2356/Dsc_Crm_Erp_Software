@@ -15,18 +15,18 @@ Menus are hidden for modules a role cannot open, and the server re-checks on eve
 
 | Role | Modules | Cost & margin | Salaries | Finance overview | Audit log | Manage users |
 |---|---|---|---|---|---|---|
-| Owner / Super Admin | 32 | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Management / Director | 32 | ✔ | ✔ | ✔ | ✔ | – |
-| Admin | 32 | – | – | – | ✔ | ✔ |
+| Owner / Super Admin | 38 | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Management / Director | 38 | ✔ | ✔ | ✔ | ✔ | – |
+| Admin | 38 | – | – | – | ✔ | ✔ |
 | Sales | 15 | – | – | – | – | – |
-| Project Manager | 23 | ✔ | – | – | – | – |
+| Project Manager | 29 | ✔ | – | – | – | – |
 | Designer | 11 | – | – | – | – | – |
-| Procurement | 15 | – | – | – | – | – |
-| Accounts / Finance | 19 | ✔ | – | ✔ | – | – |
-| HR | 12 | – | ✔ | – | – | – |
-| Store / Inventory | 9 | – | – | – | – | – |
-| Site Engineer | 15 | – | – | – | – | – |
-| Site Supervisor | 11 | – | – | – | – | – |
+| Procurement | 17 | – | – | – | – | – |
+| Accounts / Finance | 22 | ✔ | – | ✔ | – | – |
+| HR | 14 | – | ✔ | – | – | – |
+| Store / Inventory | 11 | – | – | – | – | – |
+| Site Engineer | 19 | – | – | – | – | – |
+| Site Supervisor | 15 | – | – | – | – | – |
 | Worker | 3 | – | – | – | – | – |
 | Vendor | 3 | – | – | – | – | – |
 | Client | 7 | – | – | – | – | – |
@@ -71,6 +71,12 @@ Columns: **V**iew · **C**reate · **E**dit · **D**elete · **A**pprove · e**X
 | settings | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | team | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | notifications | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| site reports | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| transfers | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| bill certification | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| extra work | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| closure | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| scorecards | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 
 Special access: margins:view, salary:view, finance:view, audit:view, users:manage
 
@@ -110,6 +116,12 @@ Special access: margins:view, salary:view, finance:view, audit:view, users:manag
 | settings | ✔ |  |  |  |  |  |  |
 | team | ✔ |  |  |  |  |  |  |
 | notifications | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| site reports | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| transfers | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| bill certification | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| extra work | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| closure | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| scorecards | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 
 Special access: margins:view, salary:view, finance:view, audit:view
 
@@ -149,6 +161,12 @@ Special access: margins:view, salary:view, finance:view, audit:view
 | settings | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | team | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | notifications | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| site reports | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| transfers | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| bill certification | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| extra work | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| closure | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| scorecards | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 
 Special access: audit:view, users:manage
 
@@ -201,6 +219,12 @@ Special access: none
 | support | ✔ | ✔ | ✔ |  |  |  |  |
 | reports | ✔ |  |  |  |  |  |  |
 | notifications | ✔ |  |  |  |  |  |  |
+| site reports | ✔ | ✔ | ✔ |  |  | ✔ |  |
+| transfers | ✔ | ✔ |  |  | ✔ |  |  |
+| bill certification | ✔ |  |  |  | ✔ |  |  |
+| extra work | ✔ | ✔ | ✔ |  |  | ✔ |  |
+| closure | ✔ |  | ✔ |  |  |  |  |
+| scorecards | ✔ |  | ✔ |  |  |  |  |
 
 Special access: margins:view
 
@@ -241,6 +265,8 @@ Special access: none
 | whatsapp | ✔ |  |  |  |  |  |  |
 | reports | ✔ |  |  |  |  |  |  |
 | notifications | ✔ |  |  |  |  |  |  |
+| site reports | ✔ |  |  |  |  |  |  |
+| transfers | ✔ |  |  |  |  |  |  |
 
 Special access: none
 
@@ -267,6 +293,9 @@ Special access: none
 | documents | ✔ | ✔ | ✔ |  |  |  |  |
 | reports | ✔ |  |  |  |  | ✔ |  |
 | notifications | ✔ |  |  |  |  |  |  |
+| transfers | ✔ |  |  |  |  |  |  |
+| extra work | ✔ |  |  |  |  |  |  |
+| closure | ✔ |  |  |  |  |  |  |
 
 Special access: margins:view, finance:view
 
@@ -286,6 +315,8 @@ Special access: margins:view, finance:view
 | reports | ✔ |  |  |  |  | ✔ |  |
 | team | ✔ |  |  |  |  |  | ✔ |
 | notifications | ✔ |  |  |  |  |  |  |
+| closure | ✔ | ✔ | ✔ |  |  |  |  |
+| scorecards | ✔ |  |  |  |  |  |  |
 
 Special access: salary:view
 
@@ -302,6 +333,8 @@ Special access: salary:view
 | documents | ✔ |  |  |  |  |  |  |
 | reports | ✔ |  |  |  |  |  |  |
 | notifications | ✔ |  |  |  |  |  |  |
+| site reports | ✔ |  |  |  |  |  |  |
+| transfers | ✔ | ✔ |  |  |  |  |  |
 
 Special access: none
 
@@ -324,6 +357,10 @@ Special access: none
 | documents | ✔ | ✔ | ✔ |  |  |  |  |
 | support | ✔ | ✔ | ✔ |  |  |  |  |
 | notifications | ✔ |  |  |  |  |  |  |
+| site reports | ✔ | ✔ | ✔ |  |  |  |  |
+| transfers | ✔ | ✔ |  |  |  |  |  |
+| extra work | ✔ | ✔ |  |  |  |  |  |
+| scorecards | ✔ |  |  |  |  |  |  |
 
 Special access: none
 
@@ -342,6 +379,10 @@ Special access: none
 | expenses | ✔ | ✔ |  |  |  |  |  |
 | documents | ✔ | ✔ | ✔ |  |  |  |  |
 | notifications | ✔ |  |  |  |  |  |  |
+| site reports | ✔ | ✔ | ✔ |  |  |  |  |
+| transfers | ✔ | ✔ |  |  |  |  |  |
+| extra work | ✔ | ✔ |  |  |  |  |  |
+| scorecards | ✔ |  |  |  |  |  |  |
 
 Special access: none
 

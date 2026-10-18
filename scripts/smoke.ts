@@ -32,7 +32,7 @@ async function main() {
   expect("unauthenticated /dashboard redirects to login", r.status === 307 && !!r.loc?.includes("/login"), JSON.stringify(r));
 
   r = await get("/dashboard", "owner@dsc.demo");
-  expect("owner sees dashboard", r.status === 200 && r.body.includes("Welcome, Rajesh"), String(r.status));
+  expect("owner sees dashboard", r.status === 200 && r.body.includes("Welcome, Rupesh"), String(r.status));
   r = await get("/settings/team", "owner@dsc.demo");
   expect("owner sees team page + users", r.status === 200 && r.body.includes("sales@dsc.demo"), String(r.status));
   r = await get("/settings/audit", "owner@dsc.demo");
@@ -337,6 +337,72 @@ async function main() {
   expect("lead import template downloads", f.status === 200 && f.buf.toString().includes("Estimated value"), String(f.status));
   r = await get("/settings/terms", "owner@dsc.demo");
   expect("terms templates page renders", r.status === 200 || r.status === 404, String(r.status));
+
+  // daily site reports
+  r = await get("/site-reports", "supervisor@dsc.demo");
+  expect("supervisor lands on site reports with send buttons", r.status === 200 && r.body.includes("Send morning update") && r.body.includes("Deshpande"), String(r.status));
+  r = await get("/site-reports/new?kind=MORNING", "supervisor@dsc.demo");
+  expect("morning update form renders", r.status === 200 && r.body.includes("How many people are working on site"), String(r.status));
+  r = await get("/site-reports/new?kind=EVENING", "supervisor@dsc.demo");
+  expect("evening report form renders with photo picker", r.status === 200 && r.body.includes("Take or choose photos"), String(r.status));
+  r = await get("/site-reports", "owner@dsc.demo");
+  expect("owner sees reporting discipline table", r.status === 200 && r.body.includes("Reporting discipline"), String(r.status));
+  r = await get("/site-reports", "sales@dsc.demo");
+  expect("sales has no site reports", r.status === 307 && !!r.loc?.includes("/forbidden"), JSON.stringify(r));
+  r = await get("/login", "supervisor@dsc.demo");
+  expect("signed-in supervisor visiting /login goes to site reports", r.status === 307 && !!r.loc?.includes("/site-reports"), JSON.stringify(r));
+  // time limits
+  for (const who of ["owner@dsc.demo", "pm@dsc.demo", "accounts@dsc.demo", "supervisor@dsc.demo"]) {
+    r = await get("/time-limits", who);
+    expect(`${who} can open the time limits board`, r.status === 200 && r.body.includes("Time limits"), String(r.status));
+  }
+  r = await get("/settings/time-limits", "owner@dsc.demo");
+  expect("owner can change time limits", r.status === 200 && r.body.includes("Site report deadlines"), String(r.status));
+  r = await get("/settings/time-limits", "pm@dsc.demo");
+  expect("project manager cannot change time limits", r.status === 307 && !!r.loc?.includes("/forbidden"), JSON.stringify(r));
+  // one record page of every kind opens (list pages alone once hid a crash on the BOQ page)
+  const firstId = async (m: { findFirst: (a?: object) => Promise<{ id: string } | null> }) => (await m.findFirst({}))?.id;
+  const records: [string, string | undefined][] = [
+    ["/crm/leads/", await firstId(prisma.lead)], ["/crm/clients/", await firstId(prisma.client)], ["/sales/quotations/", await firstId(prisma.quotation)],
+    ["/sales/boq/", await firstId(prisma.boq)], ["/projects/", await firstId(prisma.project)], ["/procurement/requests/", await firstId(prisma.purchaseRequest)],
+    ["/procurement/orders/", await firstId(prisma.purchaseOrder)], ["/finance/invoices/", await firstId(prisma.invoice)], ["/support/", await firstId(prisma.supportTicket)],
+    ["/inventory/materials/", await firstId(prisma.material)], ["/site-reports/", await firstId(prisma.dailyReport)], ["/procurement/vendors/", await firstId(prisma.vendor)],
+  ];
+  for (const [base, id] of records) {
+    if (!id) continue;
+    r = await get(base + id, "owner@dsc.demo");
+    expect(`owner can open a record page ${base}…`, r.status === 200 && !/Application error|Internal Server Error/.test(r.body), String(r.status));
+  }
+  r = await get("/sales/boq/" + (await prisma.boq.findFirstOrThrow({ where: { status: "DRAFT" } })).id, "owner@dsc.demo");
+  expect("a draft BOQ shows the Measure button", r.status === 200 && r.body.includes("Measure"), String(r.status));
+  // new DSC workflow screens
+  const screens: [string, string, string][] = [
+    ["/transfers", "pm@dsc.demo", "Transfers between projects"], ["/transfers/new", "supervisor@dsc.demo", "Moving FROM"], ["/extra-work", "pm@dsc.demo", "Extra work"],
+    ["/bills-to-certify", "pm@dsc.demo", "Bills to certify"], ["/closure", "hr@dsc.demo", "Project closure"], ["/scorecards", "director@dsc.demo", "Performance scorecards"],
+    ["/director-reports", "owner@dsc.demo", "Director reports"], ["/director-reports?kind=monthly", "owner@dsc.demo", "Turnover"], ["/hr/advances", "hr@dsc.demo", "Employee advances"],
+    ["/settings/time-limits", "owner@dsc.demo", "Notice rules"], ["/finance/bills", "accounts@dsc.demo", "Vendor bills"],
+  ];
+  for (const [path, who, needle] of screens) {
+    r = await get(path, who);
+    expect(`${who} opens ${path}`, r.status === 200 && r.body.includes(needle), String(r.status));
+  }
+  r = await get("/extra-work", "sales@dsc.demo");
+  expect("sales has no extra-work screen", r.status === 307 && !!r.loc?.includes("/forbidden"), JSON.stringify(r));
+  r = await get("/director-reports", "pm@dsc.demo");
+  expect("project manager cannot open director reports", r.status === 307 && !!r.loc?.includes("/forbidden"), JSON.stringify(r));
+  for (const path of ["/manifest.webmanifest", "/sw.js", "/offline.html"]) {
+    r = await get(path);
+    expect(`${path} loads without signing in`, r.status === 200, String(r.status));
+  }
+  const pr = await prisma.project.findFirstOrThrow({ where: { code: "PRJ-00001" } });
+  r = await get(`/scorecards/${pr.id}`, "owner@dsc.demo");
+  expect("a project scorecard opens", r.status === 200 && r.body.includes("How the score is made"), String(r.status));
+  f = await bytes(`/scorecards/${pr.id}/pdf`, "owner@dsc.demo");
+  expect("evaluation form PDF downloads", f.status === 200 && f.buf.subarray(0, 4).toString() === "%PDF", String(f.status));
+  f = await bytes("/director-reports/pdf?kind=weekly", "owner@dsc.demo");
+  expect("weekly report PDF downloads", f.status === 200 && f.buf.subarray(0, 4).toString() === "%PDF", String(f.status));
+  f = await bytes("/reports/gst-sales/export?format=xlsx", "accounts@dsc.demo");
+  expect("GST sales register exports to Excel", f.status === 200, String(f.status));
 
   await prisma.$disconnect();
   console.log(failures ? `\n${failures} FAILED` : "\nAll smoke checks passed");

@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { EmploymentStatus } from "@prisma/client";
+import { EmploymentStatus, LeaveKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { assertPerm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -11,6 +11,9 @@ import { requestApproval } from "@/lib/workflow";
 import { computePayslip, leaveDaysInMonth, readPayrollConfig } from "@/lib/payroll";
 import { formToObject, zDate, zEmail, zNumPos, zOptDate, zOptStr, zPhone, zReqStr } from "@/lib/form";
 import { num, round2, startOfDay } from "@/lib/utils";
+import { evaluateLeave } from "@/lib/leave-policy";
+import { daysNotice } from "@/lib/material-notice";
+import { planRecoveries, saveRecoveries } from "@/lib/advances";
 
 // ───────────── EMPLOYEES ─────────────
 const empSchema = z.object({
@@ -91,7 +94,7 @@ export async function saveSalaryStructure(employeeId: string, fd: FormData) {
 }
 
 // ───────────── LEAVES ─────────────
-const leaveSchema = z.object({ fromDate: zDate("Pick the first day"), toDate: zDate("Pick the last day"), reason: zOptStr, paid: z.boolean().default(true) });
+const leaveSchema = z.object({ fromDate: zDate("Pick the first day"), toDate: zDate("Pick the last day"), reason: zOptStr, paid: z.boolean().default(true), kind: z.nativeEnum(LeaveKind).default("REGULAR") });
 
 export async function applyLeave(fd: FormData) {
   return run(async () => {
@@ -107,13 +110,21 @@ export async function applyLeave(fd: FormData) {
     if (days > 60) throw new UserError("Leave can't be longer than 60 days in one request.");
     const overlap = await db.leave.findFirst({ where: { employeeId: emp.id, status: { in: ["PENDING", "APPROVED"] }, fromDate: { lte: d.toDate }, toDate: { gte: d.fromDate } } });
     if (overlap) throw new UserError("You already have leave requested or approved for these dates.");
+    // company leave policy (Code of Conduct): notice period, long leave, yearly cap
+    const st = await db.companySettings.findUnique({ where: { companyId: c.companyId }, select: { leaveNoticeDays: true, longLeaveNoticeDays: true, leaveYearlyCap: true } });
+    const policy = { noticeDays: st?.leaveNoticeDays ?? 15, longNoticeDays: st?.longLeaveNoticeDays ?? 90, yearlyCap: st?.leaveYearlyCap ?? 30 };
+    const yr = d.fromDate.getUTCFullYear();
+    const used = await db.leave.aggregate({ where: { employeeId: emp.id, status: { in: ["PENDING", "APPROVED"] }, fromDate: { gte: new Date(Date.UTC(yr, 0, 1)), lt: new Date(Date.UTC(yr + 1, 0, 1)) } }, _sum: { days: true } });
+    const v = evaluateLeave({ kind: d.kind, days, noticeDays: daysNotice(d.fromDate), usedThisYear: num(used._sum.days), policy });
+    if (v.error) throw new UserError(v.error);
+    if ((v.kind === "MEDICAL" || v.kind === "EMERGENCY") && !d.reason) throw new UserError("Tell us the reason – it is needed for medical and emergency leave.");
     const leave = await db.$transaction(async (tx) => {
-      const l = await tx.leave.create({ data: { companyId: c.companyId, employeeId: emp.id, fromDate: d.fromDate, toDate: d.toDate, days, reason: d.reason, paid: d.paid } });
-      await requestApproval(tx, c, { type: "LEAVE", entityType: "Leave", entityId: l.id, title: `Leave – ${emp.name}, ${days} day(s)`, amount: 0 });
+      const l = await tx.leave.create({ data: { companyId: c.companyId, employeeId: emp.id, fromDate: d.fromDate, toDate: d.toDate, days, reason: d.reason, paid: d.paid, kind: v.kind, exceedsCap: v.exceedsCap } });
+      await requestApproval(tx, c, { type: "LEAVE", entityType: "Leave", entityId: l.id, title: `${v.kind === "LONG" ? "Long leave" : v.kind === "MEDICAL" ? "Medical leave" : v.kind === "EMERGENCY" ? "Emergency leave" : "Leave"} – ${emp.name}, ${days} day(s)${v.exceedsCap ? " (above yearly cap)" : ""}`, amount: 0, requiredRole: v.requiredRole });
       return tx.leave.findUniqueOrThrow({ where: { id: l.id } });
     });
     revalidatePath("/hr/leaves");
-    return { message: leave.status === "APPROVED" ? "Leave approved" : "Leave request sent to HR" };
+    return { message: leave.status === "APPROVED" ? "Leave approved" : v.requiredRole === "OWNER" ? "Sent to the Managing Director for written approval" : v.requiredRole === "MANAGEMENT" ? "Long leave sent for Management approval" : "Leave request sent to HR" };
   });
 }
 
@@ -205,7 +216,9 @@ export async function runPayroll(fd: FormData) {
           paidLeaveDays: paidLeave, unpaidLeaveDays: unpaidLeave, absentDays: absent, overtimeHours: ot,
           incentives: num(existing?.incentives), bonus: num(existing?.bonus),
         });
-        const data = { companyId: c.companyId, employeeId: e.id, month, year, workingDays: cfg.workingDays, presentDays: r.presentDays, basic: s.basic, hra: s.hra, allowances: s.allowances, overtime: r.overtime, incentives: existing?.incentives ?? 0, bonus: existing?.bonus ?? 0, deductions: r.deductions, leaveDeduction: r.leaveDeduction, netSalary: r.netSalary };
+        const adv = await planRecoveries(tx, e.id, month, year); // advances are recovered in instalments
+        const net = Math.max(0, round2(r.netSalary - adv.total));
+        const data = { companyId: c.companyId, employeeId: e.id, month, year, workingDays: cfg.workingDays, presentDays: r.presentDays, basic: s.basic, hra: s.hra, allowances: s.allowances, overtime: r.overtime, incentives: existing?.incentives ?? 0, bonus: existing?.bonus ?? 0, deductions: round2(r.deductions + adv.total), advanceRecovery: adv.total, leaveDeduction: r.leaveDeduction, netSalary: net };
         if (existing) {
           await tx.payslip.update({ where: { id: existing.id }, data });
           updated++;
@@ -213,7 +226,8 @@ export async function runPayroll(fd: FormData) {
           await tx.payslip.create({ data });
           created++;
         }
-        total += r.netSalary;
+        await saveRecoveries(tx, month, year, adv.items);
+        total += net;
       }
       await audit(c, { action: "CREATE", entityType: "Payslip", summary: `${c.name} ran payroll for ${String(month).padStart(2, "0")}/${year}: ${created} new, ${updated} refreshed, net ₹${round2(total).toLocaleString("en-IN")}` }, tx);
     });
@@ -255,5 +269,53 @@ export async function savePayrollConfig(fd: FormData) {
     await audit(c, { action: "UPDATE", entityType: "CompanySettings", entityId: c.companyId, summary: "Payroll rules updated", oldValue: old?.payrollConfig ?? null, newValue: d });
     revalidatePath("/hr/payroll");
     return { message: "Payroll rules saved" };
+  });
+}
+
+
+// ───────────── EMPLOYEE ADVANCES ─────────────
+const advanceSchema = z.object({
+  employeeId: zReqStr("Choose the employee"),
+  amount: z.coerce.number({ message: "Enter the amount" }).positive("Amount must be above 0"),
+  monthlyRecovery: z.coerce.number({ message: "Enter the monthly recovery" }).positive("Monthly recovery must be above 0"),
+  givenOn: zOptDate,
+  reason: zOptStr,
+});
+
+/** Advance given to an employee, recovered from salary in monthly instalments by payroll. */
+export async function giveAdvance(fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("payroll:create");
+    if (!c.can("salary:view")) throw new UserError("You don't have access to salary information.");
+    const d = advanceSchema.parse(formToObject(fd));
+    if (d.monthlyRecovery > d.amount) throw new UserError("The monthly recovery can't be more than the advance.");
+    const e = await db.employee.findFirst({ where: { id: d.employeeId, companyId: c.companyId, deletedAt: null, status: { not: "EXITED" } } });
+    if (!e) throw new UserError("Employee not found, or has left.");
+    const open = await db.employeeAdvance.aggregate({ where: { employeeId: e.id, status: "OPEN" }, _sum: { amount: true } });
+    const a = await db.$transaction(async (tx) => {
+      const x = await tx.employeeAdvance.create({ data: { companyId: c.companyId, employeeId: e.id, amount: d.amount, monthlyRecovery: d.monthlyRecovery, givenOn: d.givenOn ?? new Date(), reason: d.reason, createdById: c.userId } });
+      await audit(c, { action: "CREATE", entityType: "EmployeeAdvance", entityId: x.id, summary: `Gave advance ₹${d.amount.toLocaleString("en-IN")} to ${e.name}, recovered ₹${d.monthlyRecovery.toLocaleString("en-IN")} a month${num(open._sum.amount) > 0 ? " (other advances still open)" : ""}` }, tx);
+      return x;
+    });
+    revalidatePath("/hr/advances");
+    return { message: `Advance recorded – ${Math.ceil(d.amount / d.monthlyRecovery)} month(s) of recovery from payroll`, data: { id: a.id } };
+  });
+}
+
+/** Stops recovery and closes an advance that will not be repaid. Management / Owner only. */
+export async function writeOffAdvance(id: string, fd?: FormData) {
+  return run(async () => {
+    const c = await assertPerm("payroll:edit");
+    if (!["OWNER", "MANAGEMENT"].includes(c.role)) throw new UserError("Only Management or the Owner can write off an advance.");
+    const note = String(fd?.get("note") ?? "").trim();
+    if (!note) throw new UserError("Write the reason.");
+    const a = await db.employeeAdvance.findFirst({ where: { id, companyId: c.companyId }, include: { employee: true, recoveries: true } });
+    if (!a) throw new UserError("Advance not found.");
+    if (a.status !== "OPEN") throw new UserError("This advance is already closed.");
+    const left = round2(num(a.amount) - a.recoveries.reduce((s, r) => s + num(r.amount), 0));
+    await db.employeeAdvance.update({ where: { id }, data: { status: "WRITTEN_OFF" } });
+    await audit(c, { action: "UPDATE", entityType: "EmployeeAdvance", entityId: id, summary: `Wrote off ₹${left.toLocaleString("en-IN")} of ${a.employee.name}'s advance: ${note}` });
+    revalidatePath("/hr/advances");
+    return { message: "Advance written off" };
   });
 }

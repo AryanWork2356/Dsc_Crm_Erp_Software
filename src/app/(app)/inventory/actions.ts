@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { run, UserError } from "@/lib/action";
 import { nextNumber } from "@/lib/sequence";
 import { move, siteLocation } from "@/lib/inventory";
+import { putFile, deleteFile, validateUpload, UploadError } from "@/lib/storage";
 import { notifyRoles, notifyUsers } from "@/lib/notify";
 import { projectScope } from "@/lib/scope";
 import { formToObject, zDate, zOptDate, zOptStr, zReqStr } from "@/lib/form";
@@ -72,6 +73,19 @@ export async function createReceipt(fd: FormData) {
     const lines = json(raw.items, z.array(receiptItem)).filter((l) => l.receivedQty > 0);
     if (!lines.length) throw new UserError("Enter the quantity received for at least one item.");
 
+    // optional photo of the delivery challan – checked before anything is saved
+    const photo = fd.get("challanPhoto");
+    let challan: Awaited<ReturnType<typeof validateUpload>> | null = null;
+    if (photo instanceof File && photo.size > 0) {
+      if (!/\.(jpe?g|png|webp)$/i.test(photo.name)) throw new UserError("The challan photo must be a JPG, PNG or WebP image.");
+      try {
+        challan = await validateUpload(photo);
+      } catch (e) {
+        if (e instanceof UploadError) throw new UserError(e.message);
+        throw e;
+      }
+    }
+
     const result = await db.$transaction(async (tx) => {
       const po = await tx.purchaseOrder.findFirst({ where: { id: d.poId, companyId: c.companyId }, include: { items: true, vendor: true } });
       if (!po) throw new UserError("Purchase order not found.");
@@ -112,8 +126,18 @@ export async function createReceipt(fd: FormData) {
       const pm = po.projectId ? (await tx.project.findUnique({ where: { id: po.projectId }, select: { projectManagerId: true } }))?.projectManagerId : null;
       if (pm && pm !== c.userId) await notifyUsers([pm], { companyId: c.companyId, type: "MATERIAL_RECEIVED", title: `Material received for ${po.number}`, body: `${po.vendor.name} · ${newStatus === "RECEIVED" ? "complete" : "partial delivery"}`, link: `/procurement/orders/${po.id}` }, tx);
       await notifyRoles(c.companyId, ["PROCUREMENT"], { type: "MATERIAL_RECEIVED", title: `${po.number} ${newStatus === "RECEIVED" ? "fully received" : "partially received"}`, link: `/procurement/orders/${po.id}`, dedupeKey: `grn:${receipt.id}` }, tx);
-      return { receipt, status: newStatus, acceptedTotal };
+      return { receipt, status: newStatus, acceptedTotal, poId: po.id };
     });
+    if (challan) {
+      const key = await putFile(c.companyId, challan.bytes, challan.ext);
+      try {
+        const doc = await db.document.create({ data: { companyId: c.companyId, name: `Delivery challan ${result.receipt.number}.${challan.ext}`, type: "PURCHASE", folder: "Delivery challans", entityType: "PO", entityId: result.poId, storageKey: key, mimeType: challan.mime, size: challan.size, uploadedById: c.userId } });
+        await db.materialReceipt.update({ where: { id: result.receipt.id }, data: { challanDocId: doc.id } });
+      } catch (e) {
+        await deleteFile(key);
+        throw e;
+      }
+    }
     revalidate();
     return { message: `${result.receipt.number} recorded – order ${result.status === "RECEIVED" ? "fully received" : "partially received"}`, data: { id: result.receipt.id } };
   });

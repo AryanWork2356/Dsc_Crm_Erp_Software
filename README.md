@@ -8,16 +8,17 @@ Built for DSC Interior Pvt. Ltd. (Thane / Mumbai), designed so other interior fi
 |---|---|
 | **Type** | Web application (desktop, tablet and phone browsers). Workers, clients and vendors get simplified screens. |
 | **Stack** | Next.js 15 (App Router, Server Actions) · TypeScript · React 19 · Tailwind CSS 4 · PostgreSQL · Prisma 6 · Zod · Recharts · pdfkit · exceljs |
-| **Size** | ~80 screens, 60 database tables, 177 automated workflow tests + a large-data speed test |
+| **Size** | ~95 screens, 68 database tables, 276 automated workflow tests + a large-data speed test |
 
 → **Start here (non-technical): [`docs/FULL_GUIDE.md`](docs/FULL_GUIDE.md)** – every section, why it exists, how to use it · role-by-role day plans: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
+→ **Going live:** [`docs/GO_LIVE.md`](docs/GO_LIVE.md) · **Site supervisors:** [`docs/SUPERVISOR_QUICK_GUIDE.md`](docs/SUPERVISOR_QUICK_GUIDE.md) · **Phone app:** [`mobile/README.md`](mobile/README.md)
 → Technical docs: [`ARCHITECTURE`](docs/ARCHITECTURE.md) · [`DATABASE`](docs/DATABASE.md) · [`WORKFLOWS`](docs/WORKFLOWS.md) · [`ROLES & PERMISSIONS`](docs/ROLES_AND_PERMISSIONS.md)
 
 ---
 
 ## What's inside
 
-CRM (leads, pipeline board, follow-ups, clients, site visits) · Quotations (revisions, PDF, approval) · BOQ (cost vs selling, Excel import/export, revisions, compare) · Approvals (amount-based routing) · Projects (tasks, milestones, timeline, live profit) · Procurement (requests, POs, vendors, deliveries) · Inventory (ledger-based stock, receipts, site issue/return, low-stock alerts) · Workforce (workers, contractors, work orders, attendance, wages) · HR (employees, leave, payroll, payslips, announcements) · Finance (invoices, stage billing, payments, expenses, vendor bills, receivables/payables ageing) · Documents (secure uploads, versions, expiry) · WhatsApp inbox (official Cloud API) · Customer support & warranty · Marketing · Dashboards per role · 18 exportable reports · Global search · Client / vendor / worker portals · Audit log · Daily automation.
+CRM (leads, pipeline board, follow-ups, clients, site visits) · Quotations (revisions, PDF, approval) · BOQ (cost vs selling, Excel import/export, revisions, compare) · Approvals (amount-based routing) · Projects (tasks, milestones, timeline, live profit) · Procurement (requests, POs, vendors, deliveries) · Inventory (ledger-based stock, receipts, site issue/return, low-stock alerts) · Workforce (workers, contractors, work orders, attendance, wages) · HR (employees, leave, payroll, payslips, announcements) · Finance (invoices, stage billing, payments, expenses, vendor bills, receivables/payables ageing) · Documents (secure uploads, versions, expiry) · WhatsApp inbox (official Cloud API) · Customer support & warranty · Marketing · Daily site reports with photos · Time limits with automatic escalation · Measurement-sheet BOQ · Transfers between projects · Extra work with client-approval lock · Vendor-bill certification · Project closure checklist & report · Performance scorecards · Director weekly/monthly reports · Leave policy & advances · CGST/SGST/IGST · Installable phone app (PWA) + Android/iPhone shell · Dashboards per role · 18 exportable reports · Global search · Client / vendor / worker portals · Audit log · Daily automation.
 
 ---
 
@@ -78,8 +79,9 @@ Sign in with a demo account (password **`Demo@1234`** for all):
 | `npm run build` / `npm start` | Production build / server |
 | `npm run db:start` | Embedded dev PostgreSQL |
 | `npx prisma migrate deploy` | Apply migrations (dev & production) |
-| `npm run db:seed` | Load demo data |
-| `npm test` | 177 automated tests (needs `db:start`; uses its own throw-away database) |
+| `npm run db:seed` | Load demo data (**never on a live database**) |
+| `npm run setup:company -- --company … --owner-email … --password …` | First-run setup for a real installation – company + Owner login, no demo data |
+| `npm test` | 276 automated tests (needs `db:start`; uses its own throw-away database) |
 | `npm run perf` | Speed test: loads 10k leads, 10k tasks, 100k stock movements, 100k attendance rows into a throw-away database and times every heavy screen (all must be < 1.5 s) |
 | `npx tsx scripts/smoke.ts` | Page / permission / PDF smoke test against a running server |
 | `npm run typecheck` · `npm run lint` | Static checks |
@@ -122,7 +124,7 @@ Scaling note: the login rate-limiter is in-memory (per process). Running several
 |---|---|
 | **WhatsApp Business Cloud API** (official) | Fully built: inbox, templates, webhook (HMAC-verified), delivery status, automatic messages. **Needs your Meta credentials** – Settings → WhatsApp Connection. Until then messages are stored as "not delivered". |
 | **Email** | In-app notifications work. Email delivery is not wired – add a sender inside `src/lib/notify.ts` (single choke-point for all notifications). |
-| **File storage** | Local disk behind `src/lib/storage.ts`. To use S3, implement `putFile/getFile/deleteFile` against the S3 SDK there; nothing else changes. |
+| **File storage** | Local disk by default; **S3-compatible cloud storage** (AWS S3, Cloudflare R2, Supabase…) with `STORAGE_DRIVER=s3` – needed on Vercel. |
 | **Instagram / Facebook** | Marketing tracks campaigns and lead-source results manually. No scraping and no unofficial APIs; official Graph API ingestion can be added later. |
 | **Payments / accounting software** | Not integrated. Exports (CSV/Excel/PDF) are available for the accountant. |
 

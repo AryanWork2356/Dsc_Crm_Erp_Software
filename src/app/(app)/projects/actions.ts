@@ -10,6 +10,7 @@ import { nextNumber } from "@/lib/sequence";
 import { notifyUsers } from "@/lib/notify";
 import { projectScope } from "@/lib/scope";
 import { recalcProgress } from "@/lib/project-progress";
+import { ensureClosure } from "@/lib/closure";
 import { formToObject, zNumPos, zOptDate, zOptStr, zReqStr } from "@/lib/form";
 import { humanize, num } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ const projectSchema = z.object({
   designerId: zOptStr,
   siteEngineerId: zOptStr,
   supervisorId: zOptStr,
+  outstation: z.boolean().default(false),
   contractValue: zNumPos().default(0),
   budget: zNumPos().default(0),
 });
@@ -75,7 +77,7 @@ export async function updateProject(id: string, fd: FormData) {
     // people who can edit but can't see money may not change contract value / budget
     const money = c.can("margins:view") ? { contractValue: d.contractValue, budget: d.budget } : {};
     await db.$transaction(async (tx) => {
-      await tx.project.update({ where: { id }, data: { name: d.name, clientId: d.clientId, segment: d.segment, siteAddress: d.siteAddress, startDate: d.startDate, plannedEndDate: d.plannedEndDate, projectManagerId: d.projectManagerId ?? null, designerId: d.designerId ?? null, siteEngineerId: d.siteEngineerId ?? null, supervisorId: d.supervisorId ?? null, ...money } });
+      await tx.project.update({ where: { id }, data: { name: d.name, clientId: d.clientId, segment: d.segment, siteAddress: d.siteAddress, startDate: d.startDate, plannedEndDate: d.plannedEndDate, projectManagerId: d.projectManagerId ?? null, designerId: d.designerId ?? null, siteEngineerId: d.siteEngineerId ?? null, supervisorId: d.supervisorId ?? null, outstation: d.outstation, ...money } });
       await syncMembers(tx, id, d);
       const changed = "contractValue" in money && num(old.contractValue) !== d.contractValue;
       await audit(c, { action: "UPDATE", entityType: "Project", entityId: id, summary: changed ? `${c.name} changed contract value of ${old.code} from ₹${num(old.contractValue).toLocaleString("en-IN")} to ₹${d.contractValue.toLocaleString("en-IN")}` : `Updated project ${old.code}`, oldValue: { contractValue: num(old.contractValue), budget: num(old.budget) }, newValue: money }, tx);
@@ -107,6 +109,7 @@ export async function changeProjectStatus(id: string, status: string) {
         data: { status: s, actualEndDate: s === "COMPLETED" ? new Date() : s === "CANCELLED" ? p.actualEndDate : null, ...(s === "COMPLETED" ? { progress: 100 } : {}), ...(s === "EXECUTION" && !p.startDate ? { startDate: new Date() } : {}) },
       });
       await audit(c, { action: "UPDATE", entityType: "Project", entityId: id, summary: `Project ${p.code} moved from ${humanize(p.status)} to ${humanize(s)}`, oldValue: { status: p.status }, newValue: { status: s } }, tx);
+      if (s === "HANDOVER" || s === "COMPLETED") await ensureClosure(tx, c.companyId, id); // SOP: closure checklist starts at handover
       const forward = ORDER.indexOf(s) > ORDER.indexOf(p.status);
       if (forward || s === "ON_HOLD" || s === "CANCELLED") {
         await notifyUsers([p.projectManagerId, p.siteEngineerId, p.supervisorId, p.designerId].filter((u): u is string => !!u && u !== c.userId), { companyId: c.companyId, type: "GENERAL", title: `${p.name}: now ${humanize(s)}`, link: `/projects/${id}` }, tx);
