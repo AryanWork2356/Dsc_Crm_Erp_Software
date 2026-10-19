@@ -22,10 +22,10 @@ export function Modal({
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
-        <D.Overlay className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px]" />
+        <D.Overlay className="anim-fade-in fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[2px]" />
         <D.Content
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100vw-1.5rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl bg-white shadow-2xl focus:outline-none",
+            "anim-scale-in fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100vw-1.5rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl bg-white shadow-2xl focus:outline-none",
             wide ? "max-w-3xl" : "max-w-lg",
           )}
         >

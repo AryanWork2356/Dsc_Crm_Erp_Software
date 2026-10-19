@@ -1,12 +1,14 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Bell, CheckSquare, ChevronDown, LayoutDashboard, Menu, Settings, Users, X, FileText, FolderKanban,
-  ShoppingCart, Boxes, HardHat, Wallet, UserCog, FolderOpen, MessageCircle, LifeBuoy, BarChart3, Building2, Timer,
+  ShoppingCart, Boxes, HardHat, Wallet, UserCog, FolderOpen, MessageCircle, LifeBuoy, BarChart3, Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from "./language";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "layout-dashboard": LayoutDashboard, users: Users, "check-square": CheckSquare, bell: Bell, settings: Settings,
@@ -33,6 +35,10 @@ export function Sidebar({ groups, companyName }: { groups: SidebarGroup[]; compa
       {groups.map((g) => (
         <Group key={g.label} g={g} pathname={pathname} />
       ))}
+      <div className="mt-3 border-t border-white/10 px-1 pt-4">
+        <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Language</p>
+        <LanguageSwitcher tone="dark" fullWidth />
+      </div>
     </nav>
   );
 
@@ -55,8 +61,8 @@ export function Sidebar({ groups, companyName }: { groups: SidebarGroup[]; compa
       {/* mobile drawer */}
       {open && (
         <div className="no-print fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-slate-900/60" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-brand-950 text-slate-300 shadow-xl">
+          <div className="anim-fade-in absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+          <aside className="anim-drawer absolute inset-y-0 left-0 flex w-72 flex-col bg-brand-950 text-slate-300 shadow-xl">
             <div className="flex items-center justify-between pr-3">
               <Brand name={companyName} />
               <button onClick={() => setOpen(false)} aria-label="Close menu" className="rounded p-1 text-slate-400 hover:text-white">
@@ -74,9 +80,7 @@ export function Sidebar({ groups, companyName }: { groups: SidebarGroup[]; compa
 function Brand({ name }: { name: string }) {
   return (
     <div className="flex h-16 items-center gap-3 px-5">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-white">
-        <Building2 className="h-5 w-5" />
-      </div>
+      <Image src="/icons/icon-192.png" alt="" width={36} height={36} className="h-9 w-9 rounded-lg ring-1 ring-white/15" />
       <div className="min-w-0 leading-tight">
         <p className="truncate text-sm font-semibold text-white">{name}</p>
         <p className="text-[11px] uppercase tracking-wider text-slate-400">ERP + CRM</p>
@@ -95,7 +99,7 @@ function Group({ g, pathname }: { g: SidebarGroup; pathname: string }) {
 
   if (g.href) {
     return (
-      <Link href={g.href} className={cn(base, isActive(g.href) ? "bg-white/10 text-white" : "hover:bg-white/5 hover:text-white")}>
+      <Link href={g.href} className={cn(base, isActive(g.href) ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_var(--color-accent)]" : "hover:bg-white/5 hover:text-white")}>
         <Icon className="h-4 w-4" /> {g.label}
       </Link>
     );
@@ -108,14 +112,14 @@ function Group({ g, pathname }: { g: SidebarGroup; pathname: string }) {
         <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
+        <div className="anim-fade-in ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
           {g.items.map((i) => (
             <Link
               key={i.href}
               href={i.href}
               className={cn(
-                "block rounded-md px-3 py-1.5 text-sm transition-colors",
-                isActive(i.href) ? "bg-white/10 font-medium text-white" : "text-slate-400 hover:text-white",
+                "block rounded-md px-3 py-1.5 text-sm transition-[color,background-color,transform] duration-150",
+                isActive(i.href) ? "bg-white/10 font-medium text-white shadow-[inset_3px_0_0_0_var(--color-accent)]" : "text-slate-400 hover:translate-x-0.5 hover:text-white",
               )}
             >
               {i.label}

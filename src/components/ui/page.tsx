@@ -40,9 +40,9 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <div className="mb-3 rounded-full bg-slate-100 p-3">
-        <Inbox className="h-6 w-6 text-slate-400" />
+    <div className="anim-fade-up flex flex-col items-center justify-center px-6 py-14 text-center">
+      <div className="mb-4 rounded-2xl bg-gradient-to-br from-brand-50 to-amber-50 p-4 ring-1 ring-brand-100">
+        <Inbox className="h-7 w-7 text-brand-600" />
       </div>
       <p className="font-medium text-slate-800">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-sm text-slate-500">{hint}</p>}
@@ -73,7 +73,7 @@ export function StatCard({
     bad: "border-l-4 border-l-red-500",
   }[tone];
   const body = (
-    <div className={cn("h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow", ring, href && "hover:shadow-md")}>
+    <div className={cn("h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-[box-shadow,transform] duration-200", ring, href && "hover:-translate-y-0.5 hover:shadow-md")}>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className="tabular mt-1.5 flex items-center gap-1.5 text-2xl font-semibold text-slate-900">
         {value}
@@ -91,7 +91,7 @@ export function Progress({ value, className, tone }: { value: number; className?
   const color = tone === "brand" ? "bg-brand-600" : v >= 100 ? "bg-emerald-500" : v >= 50 ? "bg-brand-600" : "bg-amber-500";
   return (
     <div className={cn("h-2 w-full overflow-hidden rounded-full bg-slate-100", className)} role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}>
-      <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${v}%` }} />
+      <div className={cn("anim-grow h-full rounded-full transition-all duration-500", color)} style={{ width: `${v}%` }} />
     </div>
   );
 }

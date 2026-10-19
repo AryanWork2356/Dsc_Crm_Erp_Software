@@ -20,7 +20,7 @@ export function Th({ children, className, right }: { children?: React.ReactNode;
 }
 
 export function Tr({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <tr className={cn("border-b border-slate-100 last:border-0 hover:bg-slate-50/60", className)}>{children}</tr>;
+  return <tr className={cn("border-b border-slate-100 transition-colors last:border-0 hover:bg-brand-50/40", className)}>{children}</tr>;
 }
 
 export function Td({ children, className, right }: { children?: React.ReactNode; className?: string; right?: boolean }) {

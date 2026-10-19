@@ -50,7 +50,14 @@ export function TranslateLoader() {
 }
 
 /** Globe button with the four languages. Choosing one saves it on this device and reloads the page. */
-export function LanguageSwitcher({ className = "" }: { className?: string }) {
+const TONES = {
+  light: { box: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:border-brand-500 focus:ring-brand-200", icon: "text-slate-500" },
+  dark: { box: "border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 focus:border-accent focus:ring-accent/30", icon: "text-slate-400" },
+  // sign-in page: sits on the navy hero on a phone and on the white panel on a computer
+  auto: { box: "border-white/30 bg-white/10 text-white hover:bg-white/20 focus:border-accent focus:ring-accent/30 lg:border-slate-200 lg:bg-white lg:text-slate-700 lg:hover:bg-slate-50", icon: "text-white/80 lg:text-slate-500" },
+} as const;
+
+export function LanguageSwitcher({ className = "", tone = "light", fullWidth = false }: { className?: string; tone?: keyof typeof TONES; fullWidth?: boolean }) {
   const [code, setCode] = React.useState<LangCode>("en");
   React.useEffect(() => setCode(langFromCookie(document.cookie)), []);
 
@@ -61,10 +68,10 @@ export function LanguageSwitcher({ className = "" }: { className?: string }) {
   }
 
   return (
-    <label className={`notranslate relative inline-flex items-center ${className}`} translate="no" title="Language">
-      <Globe className="pointer-events-none absolute left-2 h-4 w-4 text-slate-500" aria-hidden />
-      <select value={code} onChange={(e) => choose(e.target.value as LangCode)} aria-label="Language" className="h-9 cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white pl-8 pr-2 text-sm text-slate-700 hover:bg-slate-50 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200">
-        {LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+    <label className={`notranslate relative inline-flex items-center ${fullWidth ? "w-full" : ""} ${className}`} translate="no" title="Language">
+      <Globe className={`pointer-events-none absolute left-2.5 h-4 w-4 ${TONES[tone].icon}`} aria-hidden />
+      <select value={code} onChange={(e) => choose(e.target.value as LangCode)} aria-label="Language" className={`h-9 cursor-pointer appearance-none rounded-lg border pl-8 pr-3 text-sm focus:outline-none focus:ring-2 ${fullWidth ? "w-full" : ""} ${TONES[tone].box}`}>
+        {LANGS.map((l) => <option key={l.code} value={l.code} className="text-slate-900">{l.label}</option>)}
       </select>
     </label>
   );

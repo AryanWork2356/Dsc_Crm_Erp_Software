@@ -60,3 +60,30 @@ body {
 .goog-te-banner-frame, .goog-te-balloon-frame, #goog-gt-tt, .goog-tooltip, .goog-te-spinner-pos, iframe.skiptranslate { display: none !important; }
 body { top: 0 !important; }
 .goog-text-highlight { background: none !important; box-shadow: none !important; }
+
+/* ── motion ── short, soft, and switched off for people who ask for less motion */
+@keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes slide-in-left { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes glow { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.55; } }
+@keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-14px, 16px); } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.anim-page { animation: fade-up 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-fade-up { animation: fade-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-scale-in { animation: scale-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-fade-in { animation: fade-in 0.2s ease-out both; }
+.anim-drawer { animation: slide-in-left 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-toast { animation: toast-in 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-float { animation: float 12s ease-in-out infinite; }
+.anim-glow { animation: glow 3.6s ease-in-out infinite; }
+.anim-grow { transform-origin: left; animation: grow 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-draw :is(path, rect, ellipse):not(.anim-glow) { stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: draw 3.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .anim-draw :is(path, rect, ellipse):not(.anim-glow) { stroke-dashoffset: 0 !important; }
+}
