@@ -76,6 +76,11 @@ export async function seedExtras(prisma: PrismaClient, core: CoreSeed, crm: CrmS
   const root = path.resolve(process.env.UPLOAD_DIR ?? "./uploads");
   const put = async (bytes: Buffer, ext: string) => {
     const key = `${companyId}/${crypto.randomUUID()}.${ext}`;
+    if (process.env.STORAGE_DRIVER === "db") {
+      // hosted setup with no disk: the demo files go into the database, where the app reads them from
+      await prisma.storedFile.create({ data: { key, data: new Uint8Array(bytes), size: bytes.length } });
+      return key;
+    }
     await fs.mkdir(path.dirname(path.join(root, key)), { recursive: true });
     await fs.writeFile(path.join(root, key), bytes);
     return key;
