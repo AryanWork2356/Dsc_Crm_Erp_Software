@@ -1,3 +1,4 @@
+import type { RoleKey } from "@prisma/client";
 import type { PermissionKey } from "./permissions";
 
 export type NavItem = { label: string; href: string; perm?: PermissionKey };
@@ -123,3 +124,37 @@ export const NAV: NavGroup[] = [
     ],
   },
 ];
+
+/**
+ * Lean menus. Roles are allowed to open more screens than they need day to day, but their MENU shows only the jobs
+ * they actually do (a supervisor sees 13 items instead of 25). This hides menu entries only –
+ * what a role may open is still decided by the permission matrix and row scope. Add a role here to simplify its menu;
+ * leave it out to show everything its permissions allow.
+ */
+const STAFF_COMMON = ["/hr/leaves", "/hr/payslips", "/hr/announcements", "/notifications"];
+const SITE_CORE = ["/site-reports", "/projects", "/projects/tasks", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work", "/finance/expenses", ...STAFF_COMMON];
+export const SIMPLE_MENU: Partial<Record<RoleKey, string[]>> = {
+  SITE_SUPERVISOR: SITE_CORE,
+  SITE_ENGINEER: [...SITE_CORE, "/crm/site-visits", "/sales/boq", "/inventory/stock", "/inventory/issues", "/support"],
+  PROJECT_MANAGER: ["/dashboard", "/time-limits", "/approvals", "/projects", "/site-reports", "/transfers", "/extra-work", "/bills-to-certify", "/closure", "/scorecards", "/projects/tasks", "/sales/boq", "/procurement/requests", "/procurement/orders", "/procurement/deliveries", "/inventory/stock", "/workforce/attendance", "/finance/expenses", "/documents", "/support", "/reports", ...STAFF_COMMON],
+  SALES: ["/dashboard", "/time-limits", "/crm/leads", "/crm/follow-ups", "/crm/site-visits", "/crm/clients", "/sales/quotations", "/sales/boq", "/projects", "/whatsapp", "/reports", "/approvals", ...STAFF_COMMON],
+  DESIGNER: ["/dashboard", "/crm/clients", "/crm/site-visits", "/sales/boq", "/sales/quotations", "/projects", "/projects/tasks", "/documents", "/approvals", ...STAFF_COMMON],
+  PROCUREMENT: ["/dashboard", "/time-limits", "/approvals", "/procurement/requests", "/procurement/orders", "/procurement/vendors", "/procurement/deliveries", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/finance/bills", "/finance/payables", "/sales/boq", "/projects", "/site-reports", "/transfers", "/whatsapp", "/documents", "/reports", ...STAFF_COMMON],
+  STORE: ["/dashboard", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/inventory/issues", "/inventory/movements", "/inventory/locations", "/procurement/orders", "/procurement/deliveries", "/transfers", "/site-reports", "/projects", ...STAFF_COMMON],
+  ACCOUNTS: ["/dashboard", "/time-limits", "/approvals", "/finance", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/crm/clients", "/sales/quotations", "/projects", "/extra-work", "/closure", "/procurement/orders", "/procurement/vendors", "/documents", "/reports", ...STAFF_COMMON],
+  HR: ["/dashboard", "/time-limits", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/workforce/attendance", "/workforce/workers", "/workforce/contractors", "/workforce/labour", "/closure", "/scorecards", "/documents", "/notifications"],
+  MANAGEMENT: ["/dashboard", "/time-limits", "/approvals", "/crm/leads", "/crm/clients", "/sales/quotations", "/sales/boq", "/projects", "/site-reports", "/transfers", "/extra-work", "/closure", "/scorecards", "/bills-to-certify", "/procurement/orders", "/procurement/vendors", "/inventory/stock", "/workforce/attendance", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/finance", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/documents", "/reports", "/notifications", "/settings/company", "/settings/time-limits", "/settings/audit"],
+  ADMIN: ["/dashboard", "/approvals", "/projects", "/closure", "/hr/employees", "/hr/leaves", "/hr/announcements", "/hr/payslips", "/documents", "/support", "/reports", "/notifications", "/settings/team", "/settings/company", "/settings/roles", "/settings/import", "/settings/terms", "/settings/time-limits", "/settings/automation", "/settings/audit"],
+  // OWNER: no list on purpose – the owner sees everything
+};
+
+export type MenuGroup = { label?: string; icon: string; href?: string; items: NavItem[] };
+
+/** The sidebar for one user: permission-filtered, and trimmed to the role's simple menu if it has one. */
+export function menuFor(role: RoleKey, can: (p: PermissionKey) => boolean): MenuGroup[] {
+  const only = SIMPLE_MENU[role];
+  const ok = (href: string, perm?: PermissionKey) => (!perm || can(perm)) && (!only || only.includes(href));
+  return NAV.map((g) => ({ label: g.label, icon: g.icon, href: g.href, items: g.items.filter((i) => ok(i.href, i.perm)), top: g.href ? ok(g.href, g.perm) : false }))
+    .filter((g) => (g.href ? g.top : g.items.length > 0))
+    .map(({ top: _t, ...g }) => g);
+}

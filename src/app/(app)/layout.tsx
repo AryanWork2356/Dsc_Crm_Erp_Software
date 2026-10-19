@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireCtx } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { NAV } from "@/lib/nav";
+import { menuFor } from "@/lib/nav";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { homeFor } from "@/lib/home";
 import { Sidebar, type SidebarGroup } from "@/components/layout/sidebar";
@@ -18,12 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.notification.count({ where: { userId: c.userId, readAt: null } }),
   ]);
 
-  const groups: SidebarGroup[] = NAV.map((g) => {
-    const items = g.items.filter((i) => !i.perm || c.can(i.perm));
-    return { label: g.label, icon: g.icon, href: g.href, items, perm: g.perm };
-  })
-    .filter((g) => (g.href ? !g.perm || c.can(g.perm) : g.items.length > 0))
-    .map(({ perm: _p, ...g }) => g);
+  const groups: SidebarGroup[] = menuFor(c.role, c.can);
 
   return (
     <div className="flex h-screen overflow-hidden">
