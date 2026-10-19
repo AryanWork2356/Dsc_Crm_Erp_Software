@@ -152,3 +152,21 @@ A document's tax is split into **CGST + SGST** (supplier and place of supply in 
 3. Tick the sheets, choose add/replace, optionally keep the client's rates, click Import. Rows marked with a warning (for example quantity "RO") were adjusted: check them.
 4. Fill in DSC's rates on the BOQ page, create the quotation as usual.
 5. On the quotation page click **Excel**: a workbook with the DSC letterhead (logo, GSTIN, bank details), a summary of work, CGST/SGST or IGST, payment terms and a "BOQ details" sheet with live formulas. Clients and vendors cannot download it.
+
+## 25. Client rates and profit (rate cards)
+
+Each client company has its own rate card: DSC's cost per unit (per sq ft, rft, nos …) for the items it usually quotes, and the profit % added on cost for that client.
+
+1. On a BOQ choose the client (or pick it when creating the BOQ).
+2. Type the cost per unit in Material / Labour / Other. The selling rate (cost + profit %), row totals and BOQ total are calculated automatically. Typing a selling rate by hand switches that row to manual.
+3. Press **Remember these rates for the client** to save them as the client's rate card.
+4. Next BOQ for the same client: the app asks **"Use the same rates as last time?"** Yes fills every matching row (by name and unit) and sets the saved profit; **View / change** opens the rate card; **Start fresh** skips it. New items are left empty.
+5. **Sales → Client rates** lists every client's card and lets you edit it directly.
+
+Only people who may see margins (Owner, Management, Project Manager, Accounts) can see or use rate cards; the Designer and Sales roles can pick the client but never see costs or profit.
+
+## 26. Saving and clearing the data
+
+- `npm run data:clear` saves a full copy of this computer's database to `backups/<date-time>/` (JSON, one file per table, plus uploaded files), checks the copy, and then clears all business data. It keeps the company, its settings, permissions, Terms & Conditions templates and staff logins.
+- `npm run data:clear-hosted` does the same to the online database (asks for its address and for the word CLEAR).
+- `npm run data:restore -- "<backup folder>"` (or `data:restore-hosted`) puts a saved copy back.

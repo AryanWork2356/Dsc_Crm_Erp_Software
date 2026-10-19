@@ -77,7 +77,7 @@ function itemRows(items: BoqItemInput[]) {
   });
 }
 
-const createSchema = z.object({ title: zReqStr("Give the BOQ a title"), projectId: zOptStr, notes: zOptStr });
+const createSchema = z.object({ title: zReqStr("Give the BOQ a title"), projectId: zOptStr, clientId: zOptStr, notes: zOptStr });
 
 export async function createBoq(fd: FormData) {
   return run(async () => {
@@ -87,9 +87,15 @@ export async function createBoq(fd: FormData) {
       const p = await db.project.findFirst({ where: { id: d.projectId, companyId: c.companyId, deletedAt: null } });
       if (!p) throw new UserError("Project not found.");
     }
+    let profitPct: number | null = null;
+    if (d.clientId) {
+      const cl = await db.client.findFirst({ where: { id: d.clientId, companyId: c.companyId, deletedAt: null }, include: { rateCard: true } });
+      if (!cl) throw new UserError("Client not found.");
+      if (cl.rateCard && c.can("margins:view")) profitPct = num(cl.rateCard.profitPct);
+    }
     const b = await db.$transaction(async (tx) => {
       const number = await nextNumber(tx, c.companyId, "BOQ");
-      const x = await tx.boq.create({ data: { companyId: c.companyId, number, title: d.title, projectId: d.projectId ?? null, notes: d.notes } });
+      const x = await tx.boq.create({ data: { companyId: c.companyId, number, title: d.title, projectId: d.projectId ?? null, clientId: d.clientId ?? null, profitPct, notes: d.notes } });
       await audit(c, { action: "CREATE", entityType: "Boq", entityId: x.id, summary: `Created BOQ ${number} – ${d.title}` }, tx);
       return x;
     });
@@ -99,7 +105,7 @@ export async function createBoq(fd: FormData) {
 }
 
 /** Replaces all items. Users without cost access cannot see or change cost columns – existing costs are preserved. */
-export async function saveBoqItems(id: string, itemsJson: string) {
+export async function saveBoqItems(id: string, itemsJson: string, profitPct?: number | null) {
   return run(async () => {
     const c = await assertPerm("boq:edit");
     const b = await load(c, id);
@@ -127,7 +133,7 @@ export async function saveBoqItems(id: string, itemsJson: string) {
     await db.$transaction(async (tx) => {
       await tx.boqItem.deleteMany({ where: { boqId: id } });
       await tx.boqItem.createMany({ data: rows.map((r) => ({ ...r, boqId: id })) });
-      await tx.boq.update({ where: { id }, data: { updatedAt: new Date() } });
+      await tx.boq.update({ where: { id }, data: { updatedAt: new Date(), ...(c.can("margins:view") && profitPct !== undefined ? { profitPct: profitPct === null || !Number.isFinite(profitPct) ? null : Math.min(500, Math.max(0, profitPct)) } : {}) } });
       await audit(c, {
         action: "UPDATE", entityType: "Boq", entityId: id,
         summary: `${c.name} saved BOQ ${b.number}: ${rows.length} items, selling ₹${after.revenue.toLocaleString("en-IN")}${before.revenue !== after.revenue ? ` (was ₹${before.revenue.toLocaleString("en-IN")})` : ""}`,

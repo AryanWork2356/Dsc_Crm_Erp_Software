@@ -3,7 +3,7 @@ import type { BoqStatus, Prisma } from "@prisma/client";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { flatten, listParams } from "@/lib/list";
-import { projectOptions } from "@/lib/lookups";
+import { clientOptions, projectOptions } from "@/lib/lookups";
 import { formatDate, formatINR, humanize, num } from "@/lib/utils";
 import { PageHeader, EmptyState } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
@@ -37,10 +37,11 @@ export default async function BoqListPage({ searchParams }: { searchParams: Prom
     ...(sp.project ? { projectId: sp.project } : {}),
     ...(lp.q ? { OR: [{ number: { contains: lp.q, mode: "insensitive" } }, { title: { contains: lp.q, mode: "insensitive" } }] } : {}),
   };
-  const [rows, total, projects] = await Promise.all([
+  const [rows, total, projects, clients] = await Promise.all([
     db.boq.findMany({ where, include: { project: { select: { code: true, name: true } }, items: { select: { estimatedCost: true, total: true } } }, orderBy: { updatedAt: lp.dir }, skip: lp.skip, take: lp.take }),
     db.boq.count({ where }),
     projectOptions(c.companyId),
+    clientOptions(c.companyId),
   ]);
 
   return (
@@ -51,6 +52,7 @@ export default async function BoqListPage({ searchParams }: { searchParams: Prom
         actions={c.can("boq:create") && (
           <FormDialog title="New BOQ" trigger={<Button>New BOQ</Button>} fields={[
             { name: "title", label: "Title", required: true, full: true, placeholder: "e.g. Kapoor residence – interior BOQ" },
+            { name: "clientId", label: "Client company (so its saved rates and profit can be used)", type: "select", options: clients, full: true },
             { name: "projectId", label: "Project (optional)", type: "select", options: projects, full: true },
             { name: "notes", label: "Notes", type: "textarea" },
           ]} action={createBoq} successMessage="BOQ created" />

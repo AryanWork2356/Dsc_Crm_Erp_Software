@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Save, Ruler } from "lucide-react";
+import { Plus, Trash2, Save, Ruler, Calculator, BookmarkPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { boqItemTotals, boqSummary } from "@/lib/money";
 import { basisFor, blankLine, finalQty, lineProblem, lineValue, type MeasureLine } from "@/lib/measure";
 import { cn, formatINR, humanize } from "@/lib/utils";
+import { sellFromCost } from "@/lib/rate-card";
 import { BOQ_CATEGORY_OPTS, UNIT_OPTS } from "@/lib/enums";
 import type { ActionResult } from "@/lib/action";
 
@@ -26,6 +27,7 @@ export type EditorItem = {
   sellingRate: number | "";
   materialId?: string | null;
   lines: MeasureLine[]; // site measurement sheet; when not empty the quantity is calculated from it
+  auto?: boolean; // selling rate follows cost + profit % until someone types a selling rate by hand
 };
 
 let n = 0;
@@ -40,23 +42,49 @@ export function BoqEditor({
   editable,
   save,
   catalog,
+  profitPct,
+  clientName,
+  saveRates,
 }: {
   initial: Omit<EditorItem, "key">[];
   canCosts: boolean;
   editable: boolean;
-  save: (json: string) => Promise<ActionResult>;
+  save: (json: string, profitPct: number | null) => Promise<ActionResult>;
   catalog: { id: string; name: string; unit: string; cost: number }[];
+  profitPct: number | null;
+  clientName: string | null;
+  saveRates: ((profitPct: number) => Promise<ActionResult>) | null;
 }) {
   const router = useRouter();
   const toast = useToast();
-  const [rows, setRows] = React.useState<EditorItem[]>(() => initial.map(toEditorItem));
+  const [profit, setProfit] = React.useState<number | "">(profitPct ?? "");
+  const [rows, setRows] = React.useState<EditorItem[]>(() =>
+    initial.map((i) => {
+      const cost = v(i.materialCost) + v(i.labourCost) + v(i.otherCost);
+      return { ...toEditorItem(i), auto: v(i.sellingRate) === 0 || (profitPct !== null && cost > 0 && v(i.sellingRate) === sellFromCost(cost, profitPct)) };
+    }),
+  );
   const [dirty, setDirty] = React.useState(false);
   const [pending, start] = React.useTransition();
   const [open, setOpen] = React.useState<Set<string>>(new Set());
   const listId = React.useId();
 
+  const costOf = (r: EditorItem) => v(r.materialCost) + v(r.labourCost) + v(r.otherCost);
+  /** while a row is "auto", its selling rate is always cost + profit % */
+  const priced = (r: EditorItem, p: number | ""): EditorItem => (r.auto && p !== "" && costOf(r) > 0 ? { ...r, sellingRate: sellFromCost(costOf(r), p) } : r);
   const set = (key: string, patch: Partial<EditorItem>) => {
-    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    const manual = "sellingRate" in patch;
+    setRows((rs) => rs.map((r) => (r.key === key ? priced({ ...r, ...patch, ...(manual ? { auto: false } : {}) }, profit) : r)));
+    setDirty(true);
+  };
+  const changeProfit = (p: number | "") => {
+    setProfit(p);
+    setRows((rs) => rs.map((r) => priced(r, p)));
+    setDirty(true);
+  };
+  const priceAll = () => {
+    if (profit === "") return;
+    setRows((rs) => rs.map((r) => (costOf(r) > 0 ? priced({ ...r, auto: true }, profit) : r)));
     setDirty(true);
   };
 
@@ -80,11 +108,28 @@ export function BoqEditor({
   function doSave() {
     const payload = rows
       .filter((r) => r.item.trim() || v(r.sellingRate) || qtyOf(r) > 0)
-      .map(({ key: _k, lines, ...r }) => ({ ...r, quantity: lines.length ? finalQty(lines, r.unit) : v(r.quantity), measurements: lines.length ? { lines } : null, materialCost: v(r.materialCost), labourCost: v(r.labourCost), otherCost: v(r.otherCost), sellingRate: v(r.sellingRate) }));
+      .map(({ key: _k, auto: _a, lines, ...r }) => ({ ...r, quantity: lines.length ? finalQty(lines, r.unit) : v(r.quantity), measurements: lines.length ? { lines } : null, materialCost: v(r.materialCost), labourCost: v(r.labourCost), otherCost: v(r.otherCost), sellingRate: v(r.sellingRate) }));
     start(async () => {
-      const r = await save(JSON.stringify(payload));
+      const r = await save(JSON.stringify(payload), profit === "" ? null : profit);
       if (r.ok) {
         toast.success(r.message ?? "Saved");
+        setDirty(false);
+        router.refresh();
+      } else toast.error(r.error);
+    });
+  }
+
+  function doSaveRates() {
+    if (!saveRates || profit === "") return;
+    const payload = rows
+      .filter((r) => r.item.trim() || v(r.sellingRate) || qtyOf(r) > 0)
+      .map(({ key: _k, auto: _a, lines, ...r }) => ({ ...r, quantity: lines.length ? finalQty(lines, r.unit) : v(r.quantity), measurements: lines.length ? { lines } : null, materialCost: v(r.materialCost), labourCost: v(r.labourCost), otherCost: v(r.otherCost), sellingRate: v(r.sellingRate) }));
+    start(async () => {
+      const saved = await save(JSON.stringify(payload), profit); // the rates come from the saved rows, so save first
+      if (!saved.ok) return void toast.error(saved.error);
+      const r = await saveRates(profit);
+      if (r.ok) {
+        toast.success(r.message ?? "Rates saved");
         setDirty(false);
         router.refresh();
       } else toast.error(r.error);
@@ -104,6 +149,27 @@ export function BoqEditor({
         {canCosts && <Tile label="Gross margin" value={formatINR(sum.margin)} tone={sum.margin < 0 ? "bad" : "good"} />}
         {canCosts && <Tile label="Margin %" value={`${sum.marginPct.toFixed(1)}%`} tone={sum.marginPct < 15 ? "bad" : "good"} />}
       </div>
+
+      {canCosts && (
+        <Card>
+          <CardBody className="space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-sm font-medium text-slate-700">
+                Profit added on cost{clientName ? ` for ${clientName}` : ""}
+                <span className="mt-1 flex items-center gap-2">
+                  <Input type="number" min="0" max="500" step="any" inputMode="decimal" value={profit} disabled={!editable} onChange={(e) => changeProfit(e.target.value === "" ? "" : Number(e.target.value))} className="h-10 w-28 text-right" aria-label="Profit percent" />
+                  <span className="text-sm text-slate-500">%</span>
+                </span>
+              </label>
+              {editable && <Button size="sm" variant="secondary" onClick={priceAll} disabled={profit === ""}><Calculator className="h-4 w-4" /> Calculate selling rates for all rows</Button>}
+              {editable && saveRates && <Button size="sm" variant="secondary" onClick={doSaveRates} loading={pending} disabled={profit === ""}><BookmarkPlus className="h-4 w-4" /> Remember these rates for {clientName}</Button>}
+            </div>
+            <p className="text-xs text-slate-500">
+              Type DSC&apos;s cost <b>per unit</b> (for example per sq ft) in Material, Labour and Other. The selling rate, the row total, the profit and the BOQ total are worked out for you. Typing a selling rate yourself switches that row to manual.
+            </p>
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

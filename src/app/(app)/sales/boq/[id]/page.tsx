@@ -4,8 +4,9 @@ import { FileDown, FileSpreadsheet } from "lucide-react";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { clientOptions } from "@/lib/lookups";
-import { num, formatDateTime } from "@/lib/utils";
+import { num, formatDate, formatDateTime } from "@/lib/utils";
 import { PageHeader, Alert } from "@/components/ui/page";
+import { Card, CardBody } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
@@ -13,6 +14,7 @@ import { ActionButton } from "@/components/forms/action-button";
 import { createQuotationFromBoq } from "../../quotations/actions";
 import { parseMeasurements } from "@/lib/measure";
 import { deleteBoq, importBoqItems, reviseBoq, saveBoqItems, submitBoq } from "../actions";
+import { saveRatesForClient, setBoqClient, skipLastRates, applyLastRates } from "../rate-actions";
 import { BoqEditor } from "./boq-editor";
 
 export default async function BoqDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -20,18 +22,21 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
   const c = await requirePerm("boq:view");
   const b = await db.boq.findFirst({
     where: { id, companyId: c.companyId, deletedAt: null },
-    include: { items: { orderBy: { sortOrder: "asc" } }, project: { select: { id: true, code: true, name: true } } },
+    include: { items: { orderBy: { sortOrder: "asc" } }, project: { select: { id: true, code: true, name: true } }, client: { select: { id: true, name: true } } },
   });
   if (!b) notFound();
 
   const canCosts = c.can("margins:view");
   const edit = c.can("boq:edit");
   const editable = edit && b.status === "DRAFT";
-  const [materials, clients, pending, siblings] = await Promise.all([
+  const card = canCosts && b.clientId ? await db.clientRateCard.findUnique({ where: { clientId: b.clientId }, include: { _count: { select: { rates: true } } } }) : null;
+  const askLastRates = editable && canCosts && !!card && card._count.rates > 0 && !b.ratesAppliedAt && b.items.length > 0;
+  const [materials, clients, pending, siblings, allClients] = await Promise.all([
     db.material.findMany({ where: { companyId: c.companyId, deletedAt: null }, select: { id: true, name: true, unit: true, purchaseCost: true }, orderBy: { name: "asc" }, take: 2000 }),
     c.can("quotations:create") ? clientOptions(c.companyId) : [],
     b.status === "PENDING_APPROVAL" ? db.approval.findFirst({ where: { companyId: c.companyId, entityType: "Boq", entityId: id, status: "PENDING" } }) : null,
     db.boq.findMany({ where: { companyId: c.companyId, deletedAt: null, number: { startsWith: b.number.replace(/-R\d+$/, "") } }, orderBy: { revision: "asc" }, select: { id: true, number: true, revision: true, status: true } }),
+    edit ? clientOptions(c.companyId) : [],
   ]);
 
   return (
@@ -67,7 +72,7 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
                 title="Create quotation from this BOQ"
                 description="Copies item names, quantities and selling rates. Internal costs are never copied."
                 trigger={<Button size="sm" variant="secondary">Create quotation</Button>}
-                fields={[{ name: "clientId", label: "Client", type: "select", options: clients, required: true }]}
+                fields={[{ name: "clientId", label: "Client", type: "select", options: clients, required: true, defaultValue: b.clientId }]}
                 action={createQuotationFromBoq.bind(null, id)}
                 submitLabel="Create quotation"
               />
@@ -78,6 +83,32 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
           </>
         }
       />
+      {editable && (
+        <p className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          {b.client ? <>This BOQ is for <b className="text-slate-900">{b.client.name}</b>.</> : <span className="font-medium text-amber-700">Choose which client company this BOQ is for, so its saved rates and profit can be used.</span>}
+          <FormDialog
+            title="Which client is this BOQ for?"
+            trigger={<Button size="sm" variant="secondary">{b.client ? "Change client" : "Choose client"}</Button>}
+            fields={[{ name: "clientId", label: "Client company", type: "select", options: allClients, required: true, defaultValue: b.clientId }]}
+            action={setBoqClient.bind(null, id)}
+            submitLabel="Save"
+          />
+          {canCosts && b.clientId && <Link href={`/sales/rates/${b.clientId}`} className="font-medium text-brand-700 hover:underline">View {b.client?.name}&apos;s saved rates →</Link>}
+        </p>
+      )}
+      {askLastRates && card && (
+        <Card className="mb-4 border-brand-200 bg-brand-50/50">
+          <CardBody className="space-y-3">
+            <p className="text-sm font-semibold text-slate-900">Use the same rates as last time for {b.client?.name}?</p>
+            <p className="text-sm text-slate-600">DSC saved <b>{card._count.rates} rates</b> with <b>{num(card.profitPct)}% profit</b> for this client on {formatDate(card.updatedAt)}. Rows that match are filled in and priced for you. New items are left empty.</p>
+            <div className="flex flex-wrap gap-2">
+              <ActionButton size="sm" action={applyLastRates.bind(null, id)}>Yes, use the same as last time</ActionButton>
+              <Button asChild size="sm" variant="secondary"><Link href={`/sales/rates/${b.clientId}`}>View / change the saved rates</Link></Button>
+              <ActionButton size="sm" variant="ghost" action={skipLastRates.bind(null, id)}>No, start fresh</ActionButton>
+            </div>
+          </CardBody>
+        </Card>
+      )}
       {pending && <div className="mb-4"><Alert tone="warn">Waiting for Management approval. <Link href="/approvals" className="font-medium underline">Open approvals</Link></Alert></div>}
       {b.status === "REVISED" && <div className="mb-4"><Alert>This version has been superseded. {siblings.filter((s) => s.revision > b.revision).map((s) => <Link key={s.id} href={`/sales/boq/${s.id}`} className="ml-1 font-medium underline">{s.number}</Link>)}</Alert></div>}
       {b.status === "APPROVED" && edit && <div className="mb-4"><Alert tone="info">Approved BOQs are locked. Use <b>Revise</b> to make changes.</Alert></div>}
@@ -92,6 +123,9 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
         editable={editable}
         canCosts={canCosts}
         save={saveBoqItems.bind(null, id)}
+        profitPct={canCosts && b.profitPct !== null ? num(b.profitPct) : null}
+        clientName={b.client?.name ?? null}
+        saveRates={canCosts && b.clientId ? saveRatesForClient.bind(null, id) : null}
         catalog={materials.map((m) => ({ id: m.id, name: m.name, unit: m.unit, cost: num(m.purchaseCost) }))}
         initial={b.items.map((i) => ({
           id: i.id, category: i.category, item: i.item, specification: i.specification ?? "", unit: i.unit, quantity: num(i.quantity),

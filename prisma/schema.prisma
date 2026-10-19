@@ -655,9 +655,42 @@ model Client {
   invoices   Invoice[]
   tickets    SupportTicket[]
   siteVisits SiteVisit[]
+  boqs       Boq[]
+  rateCard   ClientRateCard?
 
   @@unique([companyId, code])
   @@index([companyId, name])
+}
+
+// DSC's own price list for one client company: cost per unit (per sq ft etc.) and the profit added on top.
+model ClientRateCard {
+  id        String       @id @default(cuid())
+  companyId String
+  clientId  String       @unique
+  client    Client       @relation(fields: [clientId], references: [id])
+  profitPct Decimal      @default(0) @db.Decimal(6, 2)
+  updatedBy String?
+  updatedAt DateTime     @updatedAt
+  createdAt DateTime     @default(now())
+  rates     ClientRate[]
+
+  @@index([companyId])
+}
+
+model ClientRate {
+  id           String         @id @default(cuid())
+  cardId       String
+  card         ClientRateCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  name         String
+  nameKey      String // lower-case letters/digits only, used to match BOQ rows
+  unit         String         @default("nos")
+  category     BoqCategory    @default(OTHER)
+  materialRate Decimal        @default(0) @db.Decimal(12, 2)
+  labourRate   Decimal        @default(0) @db.Decimal(12, 2)
+  otherRate    Decimal        @default(0) @db.Decimal(12, 2)
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([cardId, nameKey, unit])
 }
 
 model Lead {
@@ -803,19 +836,24 @@ model QuotationRevision {
 }
 
 model Boq {
-  id          String    @id @default(cuid())
-  companyId   String
-  number      String
-  revision    Int       @default(1)
-  projectId   String?
-  project     Project?  @relation(fields: [projectId], references: [id])
-  quotationId String?
-  title       String
-  status      BoqStatus @default(DRAFT)
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id             String    @id @default(cuid())
+  companyId      String
+  number         String
+  revision       Int       @default(1)
+  projectId      String?
+  project        Project?  @relation(fields: [projectId], references: [id])
+  quotationId    String?
+  // who the BOQ is for, and the profit added on cost for that client (see ClientRateCard)
+  clientId       String?
+  client         Client?   @relation(fields: [clientId], references: [id])
+  profitPct      Decimal?  @db.Decimal(6, 2)
+  ratesAppliedAt DateTime? // set once the "use last rates?" question has been answered
+  title          String
+  status         BoqStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
   items BoqItem[]
 
