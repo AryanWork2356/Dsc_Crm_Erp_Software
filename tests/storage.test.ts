@@ -58,3 +58,18 @@ describe("cloud file storage (S3-compatible)", () => {
     await expect(putFile("company1", Buffer.from("x"), "pdf")).rejects.toThrow(/S3_BUCKET/);
   });
 });
+
+describe("database file storage (no extra account)", () => {
+  it("keeps files in Postgres, reads them back and deletes them", async () => {
+    process.env.STORAGE_DRIVER = "db";
+    const { db } = await import("@/lib/db");
+    const key = await putFile("company1", Buffer.from([1, 2, 3, 250]), "jpg");
+    expect(key).toMatch(/^company1\/[0-9a-f-]{36}\.jpg$/);
+    expect([...(await getFile(key))]).toEqual([1, 2, 3, 250]);
+    expect((await db.storedFile.findUniqueOrThrow({ where: { key } })).size).toBe(4);
+    await deleteFile(key);
+    expect(await db.storedFile.count({ where: { key } })).toBe(0);
+    await expect(getFile(key)).rejects.toThrow(/not found/i);
+    await expect(getFile("../x.jpg")).rejects.toThrow(/invalid/i);
+  });
+});

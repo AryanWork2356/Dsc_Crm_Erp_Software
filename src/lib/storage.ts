@@ -2,11 +2,13 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { db } from "./db";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 /**
  * File storage abstraction. Development/single-server deployments use the local disk (UPLOAD_DIR).
- * On Vercel (no permanent disk) set STORAGE_DRIVER=s3 and the S3_* variables – works with AWS S3, Cloudflare R2,
+ * On Vercel (no permanent disk) either set STORAGE_DRIVER=db (files are kept in the Postgres database – no extra account,
+ * fine for a pilot and small teams) or STORAGE_DRIVER=s3 and the S3_* variables – works with AWS S3, Cloudflare R2,
  * Supabase Storage, DigitalOcean Spaces or any S3-compatible service. Files are always private: they are only
  * ever read back through the app (which checks who may see them), never by public link.
  */
@@ -73,11 +75,16 @@ function s3() {
   return { client, bucket };
 }
 const s3Enabled = () => process.env.STORAGE_DRIVER === "s3";
+const dbEnabled = () => process.env.STORAGE_DRIVER === "db";
 
 const MIME_BY_EXT: Record<string, string> = Object.fromEntries(Object.entries(ALLOWED).map(([e, r]) => [e, r.mime]));
 
 export async function putFile(companyId: string, bytes: Buffer, ext: string): Promise<string> {
   const key = newKey(companyId, ext);
+  if (dbEnabled()) {
+    await db.storedFile.create({ data: { key, data: new Uint8Array(bytes), size: bytes.length } });
+    return key;
+  }
   if (s3Enabled()) {
     const { client: c, bucket } = s3();
     await c.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: MIME_BY_EXT[ext] ?? "application/octet-stream" }));
@@ -90,6 +97,12 @@ export async function putFile(companyId: string, bytes: Buffer, ext: string): Pr
 }
 
 export async function getFile(key: string): Promise<Buffer> {
+  if (dbEnabled()) {
+    if (!validKey(key)) throw new Error("Invalid storage key");
+    const f = await db.storedFile.findUnique({ where: { key } });
+    if (!f) throw new Error("File not found");
+    return Buffer.from(f.data);
+  }
   if (s3Enabled()) {
     if (!validKey(key)) throw new Error("Invalid storage key");
     const { client: c, bucket } = s3();
@@ -101,6 +114,10 @@ export async function getFile(key: string): Promise<Buffer> {
 }
 
 export async function deleteFile(key: string): Promise<void> {
+  if (dbEnabled()) {
+    if (validKey(key)) await db.storedFile.deleteMany({ where: { key } });
+    return;
+  }
   if (s3Enabled()) {
     if (!validKey(key)) return;
     const { client: c, bucket } = s3();

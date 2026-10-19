@@ -1742,3 +1742,11 @@ model AdvanceRecovery {
 
   @@unique([advanceId, month, year])
 }
+
+/// File contents when STORAGE_DRIVER=db (no separate file service). Reached only through the app's access checks.
+model StoredFile {
+  key       String   @id
+  data      Bytes
+  size      Int
+  createdAt DateTime @default(now())
+}

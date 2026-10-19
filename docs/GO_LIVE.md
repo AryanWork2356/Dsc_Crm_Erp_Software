@@ -8,10 +8,10 @@ Everything below can be done by one person in about an hour. You need three free
 1. Go to **neon.tech**, sign up, create a project called `dsc-erp`.
 2. Copy the **connection string** (starts with `postgresql://`). Keep it private – it is the key to all company data.
 
-## 2. File storage (Cloudflare R2) – 10 minutes
-Vercel has no permanent disk, so photos and documents must live in a bucket.
-1. Go to **cloudflare.com → R2**, create a bucket named `dsc-files`. Keep it **private** (do not enable public access).
-2. Create an **API token** with *Object Read & Write* on that bucket. Note the *Access Key ID*, *Secret Access Key* and the *S3 endpoint* (`https://<account-id>.r2.cloudflarestorage.com`).
+## 2. File storage – nothing to create to start
+Vercel has no permanent disk, so uploaded photos and documents need a home. **To start, keep them in the Neon database** – no extra account, no card. Just set `STORAGE_DRIVER` to `db` in step 3. It is fine for a pilot and a small team (the free database holds about 0.5–1 GB, i.e. thousands of compressed site photos).
+
+Later, when usage grows, move to **Cloudflare R2** (10 GB free, needs a card on file): create a private bucket `dsc-files` and an API token with *Object Read & Write*, then set `STORAGE_DRIVER=s3` and the `S3_*` variables below. Tell us before you switch so existing files can be copied across.
 
 ## 3. The website (Vercel) – 10 minutes
 1. In Vercel: **Add New → Project →** pick `Dsc_Crm_Erp_Software`. Framework: **Next.js**. Root directory: leave blank.
@@ -22,11 +22,7 @@ Vercel has no permanent disk, so photos and documents must live in a bucket.
 | `DATABASE_URL` | the Neon connection string |
 | `AUTH_SECRET` | a long random string (run `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`) |
 | `APP_URL` | your Vercel address, e.g. `https://dsc-erp.vercel.app` |
-| `STORAGE_DRIVER` | `s3` |
-| `S3_BUCKET` | `dsc-files` |
-| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | from Cloudflare |
-| `S3_ENDPOINT` | the R2 endpoint |
-| `S3_REGION` | `auto` |
+| `STORAGE_DRIVER` | `db` (later `s3` with the `S3_*` settings for Cloudflare R2) |
 | `CRON_SECRET` | any 16+ character secret (lets the 7 AM daily reminders run) |
 
 3. Click **Deploy**. Every deploy automatically creates/updates the database tables (`vercel-build` runs `prisma migrate deploy`).
