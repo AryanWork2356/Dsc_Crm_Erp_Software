@@ -170,3 +170,7 @@ Only people who may see margins (Owner, Management, Project Manager, Accounts) c
 - `npm run data:clear` saves a full copy of this computer's database to `backups/<date-time>/` (JSON, one file per table, plus uploaded files), checks the copy, and then clears all business data. It keeps the company, its settings, permissions, Terms & Conditions templates and staff logins.
 - `npm run data:clear-hosted` does the same to the online database (asks for its address and for the word CLEAR).
 - `npm run data:restore -- "<backup folder>"` (or `data:restore-hosted`) puts a saved copy back.
+
+## 27. Screen language
+
+A globe button (top bar, and on the sign-in page) switches the whole screen between English, Hindi, Marathi and Gujarati. The choice is remembered on that device. The text is translated automatically in the browser by Google Translate, so wording can be imperfect, and the page text is sent to Google while a non-English language is on. Choosing English turns it off completely.

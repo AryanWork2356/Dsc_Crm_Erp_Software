@@ -3,6 +3,7 @@ import { Building2 } from "lucide-react";
 import { getCtx } from "@/lib/auth";
 import { homeFor } from "@/lib/home";
 import { LoginForm } from "./login-form";
+import { LanguageSwitcher } from "@/components/layout/language";
 
 export const metadata = { title: "Sign in" };
 
@@ -28,7 +29,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <p className="text-xs text-slate-400">Design · Project management · Turnkey civil interiors · Fixtures</p>
       </section>
-      <section className="flex items-center justify-center bg-white px-6 py-12">
+      <section className="relative flex items-center justify-center bg-white px-6 py-12">
+        <LanguageSwitcher className="absolute right-4 top-4" />
         <div className="w-full max-w-sm">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Welcome back</h1>
           <p className="mt-1 text-sm text-slate-500">Sign in to continue.</p>

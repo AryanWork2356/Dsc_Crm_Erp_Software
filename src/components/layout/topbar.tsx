@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell, LogOut, Search } from "lucide-react";
 import { initials } from "@/lib/utils";
 import { InstallApp } from "./pwa";
+import { LanguageSwitcher } from "./language";
 
 export function Topbar({
   name,
@@ -40,6 +41,7 @@ export function Topbar({
         />
       </form>
       <div className="ml-auto flex items-center gap-3">
+        <LanguageSwitcher />
         <InstallApp />
         <Link href="/notifications" className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
           <Bell className="h-5 w-5" />
