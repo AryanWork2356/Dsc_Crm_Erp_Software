@@ -144,3 +144,11 @@ Each project is scored out of 100: completed on time 25 · reporting discipline 
 
 ## 23. GST
 A document's tax is split into **CGST + SGST** (supplier and place of supply in the same state) or **IGST** (different states), per tax rate. Place of supply is chosen on the document, else taken from the client's GSTIN, else assumed to be DSC's own state (set DSC's GSTIN in Settings → Company). Printed on invoices, quotations and purchase orders, and listed in the **GST sales register** report (taxable value, CGST, SGST, IGST per invoice) for the CA.
+
+## 24. Client's BOQ in, DSC quotation out (Excel)
+
+1. Sales/Designer opens a draft BOQ and clicks **Import client's Excel**.
+2. Upload the file the client sent (any layout). The app finds the table on every sheet, the columns, section headings and units, ignores totals/GST/notes, and shows a preview. Nothing is saved yet.
+3. Tick the sheets, choose add/replace, optionally keep the client's rates, click Import. Rows marked with a warning (for example quantity "RO") were adjusted: check them.
+4. Fill in DSC's rates on the BOQ page, create the quotation as usual.
+5. On the quotation page click **Excel**: a workbook with the DSC letterhead (logo, GSTIN, bank details), a summary of work, CGST/SGST or IGST, payment terms and a "BOQ details" sheet with live formulas. Clients and vendors cannot download it.

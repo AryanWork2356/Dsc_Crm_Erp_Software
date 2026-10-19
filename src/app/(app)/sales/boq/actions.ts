@@ -14,6 +14,7 @@ import { formToObject, zOptStr, zReqStr } from "@/lib/form";
 import { BOQ_CATEGORIES } from "@/lib/enums";
 import { num } from "@/lib/utils";
 import { finalQty, lineProblem, type MeasureLine } from "@/lib/measure";
+import { readClientBoq, type ReadSheet } from "@/lib/boq-reader";
 
 const measureLine = z.object({
   desc: z.string().trim().max(120).optional(),
@@ -287,5 +288,71 @@ export async function importBoqItems(id: string, fd: FormData) {
     });
     revalidatePath(`/sales/boq/${id}`);
     return { message: `Imported ${rows.length} items` };
+  });
+}
+
+
+// ───────── client's own BOQ (any Excel layout) ─────────
+async function readUpload(fd: FormData) {
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new UserError("Choose the client's Excel file (.xlsx).");
+  if (!file.name.toLowerCase().endsWith(".xlsx")) throw new UserError("Only .xlsx files are supported. If the client sent .xls or PDF, open it in Excel and Save As .xlsx first.");
+  if (file.size > 8 * 1024 * 1024) throw new UserError("File is too large (max 8 MB).");
+  try {
+    return await readClientBoq(Buffer.from(await file.arrayBuffer()));
+  } catch (e) {
+    if (e instanceof UserError) throw e;
+    throw new UserError("That file couldn't be read as an Excel workbook.");
+  }
+}
+
+const summarise = (sh: ReadSheet) => {
+  const cats: Record<string, number> = {};
+  for (const i of sh.items) cats[i.category] = (cats[i.category] ?? 0) + 1;
+  return {
+    name: sh.name, headerRow: sh.headerRow, columns: sh.columns, count: sh.items.length, skipped: sh.skipped, sections: sh.sections, warnings: sh.warnings,
+    flagged: sh.items.filter((i) => i.flags.length).length, withRates: sh.items.filter((i) => i.rate !== null).length, categories: cats,
+    sample: sh.items.slice(0, 12).map((i) => ({ row: i.row, sl: i.sl, category: i.category, item: i.item, unit: i.unit, quantity: i.quantity, rate: i.rate, flags: i.flags })),
+  };
+};
+
+/** Step 1: reads the file and shows what it found. Saves nothing. */
+export async function previewClientBoq(fd: FormData) {
+  return run(async () => {
+    await assertPerm("boq:edit");
+    const sheets = await readUpload(fd);
+    if (!sheets.length) throw new UserError("I couldn't find a BOQ table in this file. It needs a header row with Description, Unit and Quantity columns. Check that the file is the BOQ itself, or use DSC's own template.");
+    return { message: `Found ${sheets.reduce((n, x) => n + x.items.length, 0)} items on ${sheets.length} sheet(s)`, data: { sheets: sheets.map(summarise) } };
+  });
+}
+
+/** Step 2: adds the chosen sheets' items to this (draft) BOQ. The client's rates are kept if you ask, otherwise left at 0 for DSC to price. */
+export async function importClientBoq(id: string, fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("boq:edit");
+    const b = await load(c, id);
+    if (b.status !== "DRAFT") throw new UserError("Only a draft BOQ can be imported into. Create a revision first.");
+    const wanted = new Set(String(fd.get("sheets") ?? "").split("|").filter(Boolean));
+    if (!wanted.size) throw new UserError("Tick at least one sheet to import.");
+    const mode = fd.get("mode") === "replace" ? "replace" : "append";
+    const keepRates = fd.get("keepRates") === "on" && c.can("quotations:view");
+    const sheets = (await readUpload(fd)).filter((x) => wanted.has(x.name));
+    const read = sheets.flatMap((x) => x.items);
+    if (!read.length) throw new UserError("Nothing to import from the chosen sheets.");
+    const existing = mode === "replace" ? 0 : b.items.length;
+    if (existing + read.length > 2000) throw new UserError(`That would make ${existing + read.length} rows (max 2000). Import fewer sheets.`);
+    const rows = itemRows(read.map((i) => ({
+      category: i.category, subcategory: i.section || undefined, item: i.item, description: [i.sl && `Client ref ${i.sl}`, i.remarks, ...i.flags].filter(Boolean).join(" · ") || undefined,
+      specification: i.specification || undefined, unit: i.unit, quantity: i.quantity, materialCost: 0, labourCost: 0, otherCost: 0, sellingRate: keepRates && i.rate ? i.rate : 0, materialId: null, measurements: null,
+    })));
+    await db.$transaction(async (tx) => {
+      if (mode === "replace") await tx.boqItem.deleteMany({ where: { boqId: id } });
+      await tx.boqItem.createMany({ data: rows.map((r, n) => ({ ...r, sortOrder: existing + n, boqId: id })) });
+      await tx.boq.update({ where: { id }, data: { updatedAt: new Date() } });
+      await audit(c, { action: "UPDATE", entityType: "Boq", entityId: id, summary: `Imported ${rows.length} items from the client's Excel into BOQ ${b.number} (${[...wanted].join(", ")})${mode === "replace" ? " – replaced the old items" : ""}` }, tx);
+    });
+    revalidatePath(`/sales/boq/${id}`);
+    revalidatePath("/sales/boq");
+    return { message: `Imported ${rows.length} items – now fill in the rates` };
   });
 }

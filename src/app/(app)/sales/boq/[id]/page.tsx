@@ -45,11 +45,12 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
             <StatusBadge status={b.status} />
             <a href={`/sales/boq/${id}/pdf`} target="_blank" rel="noreferrer"><Button size="sm" variant="secondary"><FileDown className="h-4 w-4" /> PDF</Button></a>
             {c.can("boq:export") && <a href={`/sales/boq/${id}/export`}><Button size="sm" variant="secondary"><FileSpreadsheet className="h-4 w-4" /> Excel</Button></a>}
+            {editable && <Button asChild size="sm"><Link href={`/sales/boq/${id}/import`}>Import client&apos;s Excel</Link></Button>}
             {editable && (
               <FormDialog
                 title="Import items from Excel"
                 description="Columns: Category, Item, Specification, Unit, Quantity, Material Cost, Labour Cost, Other Cost, Selling Rate. Rows are added to the end."
-                trigger={<Button size="sm" variant="secondary">Import</Button>}
+                trigger={<Button size="sm" variant="secondary">Import DSC template</Button>}
                 fields={[{ name: "file", label: "Excel file (.xlsx)", type: "file", required: true, hint: "Download the template for the exact layout." }]}
                 action={importBoqItems.bind(null, id)}
                 submitLabel="Import"
