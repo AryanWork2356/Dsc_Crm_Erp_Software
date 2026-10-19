@@ -19,7 +19,8 @@ Later, when usage grows, move to **Cloudflare R2** (10 GB free, needs a card on 
 
 | Name | Value |
 |---|---|
-| `DATABASE_URL` | the Neon connection string |
+| `DATABASE_URL` | Neon's **pooled** connection string (Connect → Connection pooling **on**, host contains `-pooler`), with `&pgbouncer=true&connection_limit=1` added at the end |
+| `DIRECT_URL` | Neon's normal (direct, pooling **off**) connection string – used only to create/update tables during a deploy |
 | `AUTH_SECRET` | a long random string (run `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`) |
 | `APP_URL` | your Vercel address, e.g. `https://dsc-erp.vercel.app` |
 | `STORAGE_DRIVER` | `db` (later `s3` with the `S3_*` settings for Cloudflare R2) |
@@ -59,3 +60,9 @@ Then open your website, sign in, and:
 | WhatsApp Business messages | Settings → WhatsApp Connection (your Meta credentials) |
 | E-mail sending | not wired yet – add a sender in `src/lib/notify.ts` |
 | Android / iPhone store apps | see `Dsc_app/README.md` |
+
+
+## Speed (read this if screens feel slow)
+- The website's code runs in **Singapore** (`regions` in `vercel.json`), next to a Neon database in Singapore. If your database is elsewhere, change the region to match it, otherwise every page waits for dozens of long-distance database calls.
+- Neon's free plan puts the database to sleep after 5 idle minutes; the first request afterwards takes a few seconds. This is normal and only happens after a quiet spell.
+- Use the pooled address for `DATABASE_URL` and the direct address for `DIRECT_URL`, as in the table above.

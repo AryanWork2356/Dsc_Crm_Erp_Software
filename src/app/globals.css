@@ -49,3 +49,9 @@ body {
     display: none !important;
   }
 }
+
+/* top loading bar shown while a page loads */
+@keyframes loadbar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
