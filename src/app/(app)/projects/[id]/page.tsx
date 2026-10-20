@@ -18,6 +18,8 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { StageSelect } from "../../crm/leads/[id]/stage-select";
 import { projectFields } from "../project-fields";
+import { LocationForm } from "@/components/forms/location-form";
+import { setSiteLocation } from "@/app/(app)/workforce/location-actions";
 import { TaskStatusControl } from "../task-controls";
 import { addTaskComment, changeProjectStatus, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
 
@@ -127,6 +129,14 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
               </CardBody>
             </Card>
           </div>
+          {c.can("projects:view") && (
+            <Card>
+              <CardHeader><CardTitle>Site location (for attendance)</CardTitle></CardHeader>
+              <CardBody>
+                <LocationForm action={setSiteLocation.bind(null, id)} lat={p.siteLat} lng={p.siteLng} radius={p.geoRadiusM} radiusHint="Company default" canEdit={c.can("projects:edit")} />
+              </CardBody>
+            </Card>
+          )}
           {c.can("projects:delete") && (
             <ActionButton variant="ghost" className="text-red-600 hover:bg-red-50" action={async () => { "use server"; const r = await deleteProject(id); if (r.ok) redirect("/projects"); return r; }} confirm={{ title: "Delete this project?", body: "Only possible if there are no invoices, purchase orders, expenses or site records.", confirmLabel: "Delete project" }}>Delete project</ActionButton>
           )}

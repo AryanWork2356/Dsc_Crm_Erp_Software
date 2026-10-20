@@ -115,8 +115,9 @@ describe("attendance and wages", () => {
   it("a worker marks themself present from their phone, once a day", async () => {
     const w = await db.worker.findFirstOrThrow({ where: { code: "W-00001" } });
     await db.attendance.deleteMany({ where: { workerId: w.id, date: dateOnly(new Date().toISOString().slice(0, 10)) } });
+    await db.project.update({ where: { id: w.currentProjectId! }, data: { siteLat: 19.2, siteLng: 72.97 } });
     await loginAs("w-00001@workers.local");
-    const r1 = await checkIn(undefined, 19.2, 72.97);
+    const r1 = await checkIn(undefined, 19.2, 72.97, 8, Date.now());
     expect(r1.ok).toBe(true);
     const rec = await db.attendance.findFirstOrThrow({ where: { workerId: w.id }, orderBy: { date: "desc" } });
     expect(rec.method).toBe("LOCATION");

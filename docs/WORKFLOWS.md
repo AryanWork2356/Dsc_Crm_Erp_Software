@@ -174,3 +174,14 @@ Only people who may see margins (Owner, Management, Project Manager, Accounts) c
 ## 27. Screen language
 
 A globe button (top bar, and on the sign-in page) switches the whole screen between English, Hindi, Marathi and Gujarati. The choice is remembered on that device. The text is translated automatically in the browser by Google Translate, so wording can be imperfect, and the page text is sent to Google while a non-English language is on. Choosing English turns it off completely.
+
+## 28. Attendance by location
+
+- Self-marked attendance (workers on their phone, staff on the Dashboard) is accepted only when the phone is within the allowed distance of the site (project) or the office. Default 20 metres; each project can have its own distance.
+- Set the office under **Admin → Attendance Location**. Set a site under **Projects → the project → Overview → Site location** (stand there and press *Use my current location*).
+- The server checks the distance, rejects an unclear position (more than 50 m of doubt) and an old position (older than 2 minutes), and stores how far away the person was. A supervisor or HR can still mark by hand; those entries are recorded as Manual.
+- A company can switch the rule off (*Marking needs the location*). GPS can drift 10-30 m inside buildings: raise the distance if good people are refused.
+
+## 29. Portal logins
+
+Owner or Admin can press **Portal login** on a client (CRM → Clients) or a vendor (Procurement → Vendors) to create, or reset, the login that shows that client or vendor only their own records.

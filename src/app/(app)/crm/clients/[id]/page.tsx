@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { deleteClient, updateClient } from "../../actions";
+import { createPortalLogin } from "@/app/(app)/settings/actions";
 import { clientFields } from "../client-fields";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
 
@@ -42,7 +43,12 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
         back={{ href: "/crm/clients", label: "All clients" }}
         title={cl.name}
         subtitle={`${cl.code}${cl.companyName ? ` · ${cl.companyName}` : ""}`}
-        actions={c.can("clients:edit") && <FormDialog title="Edit client" wide trigger={<Button variant="secondary">Edit</Button>} fields={clientFields(pms, cl as unknown as Record<string, unknown>)} action={updateClient.bind(null, id)} />}
+        actions={
+          <>
+            {c.can("users:manage") && <FormDialog title={`Portal login – ${cl.name}`} description="Lets the client sign in and see only their own projects, quotations and invoices." trigger={<Button variant="secondary">Portal login</Button>} fields={[{ name: "email", label: "Email (login)", type: "email", required: true, defaultValue: cl.email }, { name: "password", label: "Password", type: "password", required: true, hint: "At least 8 characters. Creates the login, or sets a new password if one exists." }]} action={createPortalLogin.bind(null, "CLIENT", id)} submitLabel="Save login" />}
+            {c.can("clients:edit") && <FormDialog title="Edit client" wide trigger={<Button variant="secondary">Edit</Button>} fields={clientFields(pms, cl as unknown as Record<string, unknown>)} action={updateClient.bind(null, id)} />}
+          </>
+        }
       />
       {finance && (
         <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">

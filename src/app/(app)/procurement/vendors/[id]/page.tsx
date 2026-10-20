@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { deleteVendor, updateVendor } from "../../actions";
+import { createPortalLogin } from "@/app/(app)/settings/actions";
 import { vendorFields } from "../vendor-fields";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
 
@@ -44,6 +45,7 @@ export default async function VendorDetail({ params }: { params: Promise<{ id: s
         subtitle={`${v.code}${v.categories ? ` · ${v.categories}` : ""}`}
         actions={
           <>
+            {c.can("users:manage") && <FormDialog title={`Portal login – ${v.name}`} description="Lets the vendor sign in and see only their own purchase orders, bills and payments." trigger={<Button variant="secondary">Portal login</Button>} fields={[{ name: "email", label: "Email (login)", type: "email", required: true, defaultValue: v.email }, { name: "password", label: "Password", type: "password", required: true, hint: "At least 8 characters. Creates the login, or sets a new password if one exists." }]} action={createPortalLogin.bind(null, "VENDOR", id)} submitLabel="Save login" />}
             {c.can("vendors:edit") && <FormDialog title="Edit vendor" wide trigger={<Button variant="secondary">Edit</Button>} fields={vendorFields(v as unknown as Record<string, unknown>, money)} action={updateVendor.bind(null, id)} />}
             {c.can("purchase_orders:create") && <Link href={`/procurement/orders/new?vendorId=${id}`}><Button>New purchase order</Button></Link>}
           </>

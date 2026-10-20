@@ -11,6 +11,7 @@ import { projectScope } from "@/lib/scope";
 import { dayWageCost, readPayrollConfig } from "@/lib/payroll";
 import { formToObject, zDate, zNumPos, zOptDate, zOptStr, zPhone, zReqStr } from "@/lib/form";
 import { calendarDay, num } from "@/lib/utils";
+import { checkPresence, DEFAULT_RADIUS_M } from "@/lib/geo";
 
 // ───────────── WORKERS ─────────────
 const workerSchema = z.object({
@@ -308,36 +309,68 @@ export async function markEmployeeAttendance(fd: FormData) {
   });
 }
 
-/** Self check-in from the phone (workers) or dashboard (staff). Idempotent per day. */
-export async function checkIn(projectId?: string, lat?: number, lng?: number) {
+/**
+ * Self check-in from the phone (workers) or the dashboard (staff). Idempotent per day.
+ * `target` is a project id, or "office" for staff. When the company requires location, the phone must be
+ * within the allowed distance of that site/office (see lib/geo.ts).
+ */
+export async function checkIn(target?: string, lat?: number, lng?: number, accuracyM?: number, fixAt?: number) {
   return run(async () => {
     const c = await assertPerm("attendance:create");
     const day = calendarDay();
-    const method: AttendanceMethod = lat !== undefined && lng !== undefined ? "LOCATION" : "MOBILE";
     const user = await db.user.findUniqueOrThrow({ where: { id: c.userId } });
+    const settings = await db.companySettings.findUnique({ where: { companyId: c.companyId } });
+
+    // who is marking, and where do they have to be
+    let worker: Awaited<ReturnType<typeof db.worker.findFirst>> = null;
+    let employeeId: string | null = null;
+    let projectId: string | null = null;
     if (user.workerId) {
-      const w = await db.worker.findFirst({ where: { id: user.workerId, companyId: c.companyId, isActive: true } });
-      if (!w) throw new UserError("Your worker profile is inactive. Contact your supervisor.");
-      const pid = projectId ?? w.currentProjectId;
-      if (!pid) throw new UserError("You aren't assigned to a site yet. Ask your supervisor.");
-      const existing = await db.attendance.findUnique({ where: { workerId_date: { workerId: w.id, date: day } } });
-      if (existing && existing.status !== "ABSENT") return { message: "You're already marked present today" };
-      const cfg = await payrollCfg(c.companyId);
-      const wageCost = dayWageCost({ wageType: w.wageType, dailyWage: num(w.dailyWage), monthlyWage: num(w.monthlyWage) }, "PRESENT", 0, cfg);
-      const data = { companyId: c.companyId, date: day, workerId: w.id, projectId: pid, status: "PRESENT" as const, method, wageCost, latitude: lat ?? null, longitude: lng ?? null, markedById: c.userId };
-      if (existing) await db.attendance.update({ where: { id: existing.id }, data });
-      else await db.attendance.create({ data });
+      worker = await db.worker.findFirst({ where: { id: user.workerId, companyId: c.companyId, isActive: true } });
+      if (!worker) throw new UserError("Your worker profile is inactive. Contact your supervisor.");
+      projectId = target && target !== "office" ? target : worker.currentProjectId;
+      if (!projectId) throw new UserError("You aren't assigned to a site yet. Ask your supervisor.");
     } else {
       const emp = await db.employee.findFirst({ where: { companyId: c.companyId, userId: c.userId } });
       if (!emp) throw new UserError("No employee profile is linked to your login.");
-      const existing = await db.attendance.findUnique({ where: { employeeId_date: { employeeId: emp.id, date: day } } });
-      if (existing && existing.status !== "ABSENT") return { message: "You're already marked present today" };
-      const data = { companyId: c.companyId, date: day, employeeId: emp.id, projectId: projectId ?? null, status: "PRESENT" as const, method, wageCost: 0, latitude: lat ?? null, longitude: lng ?? null, markedById: c.userId };
+      employeeId = emp.id;
+      if (target && target !== "office") projectId = (await projectForMarking(c, target)).id;
+    }
+    const existing = worker
+      ? await db.attendance.findUnique({ where: { workerId_date: { workerId: worker.id, date: day } } })
+      : await db.attendance.findUnique({ where: { employeeId_date: { employeeId: employeeId!, date: day } } });
+    if (existing && existing.status !== "ABSENT" && existing.status !== "LEAVE") return { message: "You're already marked present today" };
+
+    // location check
+    let distance: number | null = null;
+    let accuracy: number | null = null;
+    const gave = lat !== undefined && lng !== undefined;
+    if (settings?.geoRequired ?? true) {
+      const proj = projectId ? await db.project.findFirst({ where: { id: projectId, companyId: c.companyId } }) : null;
+      const place = proj ? { name: `site ${proj.name}`, lat: proj.siteLat, lng: proj.siteLng, radius: proj.geoRadiusM ?? settings?.geoRadiusM ?? DEFAULT_RADIUS_M } : { name: "the office", lat: settings?.officeLat ?? null, lng: settings?.officeLng ?? null, radius: settings?.geoRadiusM ?? DEFAULT_RADIUS_M };
+      if (place.lat === null || place.lng === null) throw new UserError(`The location of ${place.name} is not set yet, so attendance can't be checked. Ask your manager to set it${proj ? " (Project → Overview → Site location)" : " (Admin → Attendance Location)"}.`);
+      const v = checkPresence(gave ? { lat: lat!, lng: lng!, accuracyM, at: fixAt } : null, { lat: place.lat, lng: place.lng }, place.radius);
+      if (!v.ok) throw new UserError(v.message);
+      distance = v.distanceM;
+      accuracy = v.accuracyM;
+    }
+
+    const method: AttendanceMethod = gave ? "LOCATION" : "MOBILE";
+    const geo = { latitude: gave ? lat! : null, longitude: gave ? lng! : null, distanceM: distance, accuracyM: accuracy };
+    if (worker) {
+      const cfg = await payrollCfg(c.companyId);
+      const wageCost = dayWageCost({ wageType: worker.wageType, dailyWage: num(worker.dailyWage), monthlyWage: num(worker.monthlyWage) }, "PRESENT", 0, cfg);
+      const data = { companyId: c.companyId, date: day, workerId: worker.id, projectId, status: "PRESENT" as const, method, wageCost, ...geo, markedById: c.userId };
+      if (existing) await db.attendance.update({ where: { id: existing.id }, data });
+      else await db.attendance.create({ data });
+    } else {
+      const data = { companyId: c.companyId, date: day, employeeId, projectId, status: "PRESENT" as const, method, wageCost: 0, ...geo, markedById: c.userId };
       if (existing) await db.attendance.update({ where: { id: existing.id }, data });
       else await db.attendance.create({ data });
     }
     revalidatePath("/workforce/attendance");
     revalidatePath("/worker");
+    revalidatePath("/dashboard");
     return { message: "Marked present. Have a good day!" };
   });
 }

@@ -322,6 +322,11 @@ model CompanySettings {
   companyId                  String   @unique
   company                    Company  @relation(fields: [companyId], references: [id])
   legalName                  String?
+  // attendance by location: office position, allowed distance (metres) and whether self-marking needs it
+  officeLat                  Float?
+  officeLng                  Float?
+  geoRadiusM                 Int      @default(20)
+  geoRequired                Boolean  @default(true)
   logoUrl                    String?
   address                    String?
   phone                      String?
@@ -620,6 +625,8 @@ model Attendance {
   wageCost    Decimal          @default(0) @db.Decimal(10, 2)
   latitude    Float?
   longitude   Float?
+  distanceM   Int? // how far from the site/office the phone was when marking
+  accuracyM   Int? // GPS accuracy the phone reported
   markedById  String?
   createdAt   DateTime         @default(now())
 
@@ -910,6 +917,10 @@ model Project {
   supervisorId     String?
   // outstation sites report earlier (SOP: 9:30 vs 10:00) – times are company settings
   outstation       Boolean       @default(false)
+  // where the site is, so self-marked attendance can be checked (see lib/geo.ts); radius falls back to the company setting
+  siteLat          Float?
+  siteLng          Float?
+  geoRadiusM       Int?
   contractValue    Decimal       @default(0) @db.Decimal(14, 2)
   budget           Decimal       @default(0) @db.Decimal(14, 2)
   status           ProjectStatus @default(PLANNING)

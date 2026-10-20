@@ -137,3 +137,32 @@ export async function resetPassword(id: string, fd: FormData) {
     return { message: "Password updated" };
   });
 }
+
+/**
+ * Gives a client company or a vendor its own login to the portal (they see only their own information).
+ * Creates the login, or sets a new password and e-mail if one already exists. Owner / Admin only.
+ */
+export async function createPortalLogin(kind: "CLIENT" | "VENDOR", id: string, fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("users:manage");
+    const d = z.object({ email: z.string().trim().toLowerCase().email("Enter a valid email"), password: z.string().min(8, "Use at least 8 characters") }).parse(formToObject(fd));
+    const rec = kind === "CLIENT"
+      ? await db.client.findFirst({ where: { id, companyId: c.companyId, deletedAt: null }, select: { name: true, phone: true } })
+      : await db.vendor.findFirst({ where: { id, companyId: c.companyId, deletedAt: null }, select: { name: true, phone: true } });
+    if (!rec) throw new UserError(kind === "CLIENT" ? "Client not found." : "Vendor not found.");
+    const link = kind === "CLIENT" ? { clientId: id } : { vendorId: id };
+    const existing = await db.user.findFirst({ where: { companyId: c.companyId, role: kind, ...link, deletedAt: null } });
+    const taken = await db.user.findFirst({ where: { companyId: c.companyId, email: d.email, deletedAt: null, ...(existing ? { id: { not: existing.id } } : {}) } });
+    if (taken) throw new UserError("Someone else already uses this email. Use a different one.");
+    const passwordHash = await hashPassword(d.password);
+    if (existing) {
+      await db.user.update({ where: { id: existing.id }, data: { email: d.email, passwordHash, isActive: true } });
+      await audit(c, { action: "UPDATE", entityType: "User", entityId: existing.id, summary: `Reset portal login for ${rec.name}` });
+      return { message: `Portal login updated for ${rec.name}` };
+    }
+    const u = await db.user.create({ data: { companyId: c.companyId, email: d.email, name: rec.name, phone: rec.phone, role: kind, ...link, passwordHash } });
+    await audit(c, { action: "CREATE", entityType: "User", entityId: u.id, summary: `Created ${kind.toLowerCase()} portal login for ${rec.name}`, newValue: { email: d.email, role: kind } });
+    revalidatePath("/settings/team");
+    return { message: `Portal login created for ${rec.name}` };
+  });
+}

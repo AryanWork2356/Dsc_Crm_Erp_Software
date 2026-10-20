@@ -12,6 +12,8 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Donut, HBars, MoneyBars } from "@/components/ui/charts";
+import { checkIn } from "@/app/(app)/workforce/actions";
+import { StaffCheckIn } from "./staff-check-in";
 
 export const metadata = { title: "Dashboard" };
 type SP = { period?: string; from?: string; to?: string };
@@ -22,7 +24,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   void maybeRunDaily(c.companyId); // once a day, first visitor triggers the reminders (never blocks or breaks the page)
   const sp = await searchParams;
   const exec = ["OWNER", "MANAGEMENT", "ADMIN"].includes(c.role);
-  return exec ? <Executive c={c} sp={sp} /> : <WorkDashboard c={c} />;
+  return (
+    <>
+      <MarkMe c={c} />
+      {exec ? <Executive c={c} sp={sp} /> : <WorkDashboard c={c} />}
+    </>
+  );
+}
+
+/** Staff mark themselves present here (the phone must be at the office or the chosen site). Hidden once marked. */
+async function MarkMe({ c }: { c: C }) {
+  if (!c.can("attendance:create")) return null;
+  const emp = await db.employee.findFirst({ where: { companyId: c.companyId, userId: c.userId }, select: { id: true } });
+  if (!emp) return null;
+  const [done, projects] = await Promise.all([
+    db.attendance.findUnique({ where: { employeeId_date: { employeeId: emp.id, date: calendarDay() } } }),
+    db.project.findMany({ where: { ...projectScope(c), deletedAt: null, status: { notIn: ["COMPLETED", "CANCELLED"] } }, select: { id: true, code: true, name: true }, orderBy: { code: "asc" }, take: 30 }),
+  ]);
+  if (done && done.status !== "ABSENT" && done.status !== "LEAVE") return <p className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200"><CheckCircle2 className="h-4 w-4" /> You are marked present today.</p>;
+  const places = [{ value: "office", label: "Office" }, ...projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))];
+  return (
+    <Card className="mb-5"><CardBody><p className="mb-2 text-sm font-semibold text-slate-900">Mark your attendance</p><StaffCheckIn places={places} action={checkIn} /></CardBody></Card>
+  );
 }
 
 type C = Awaited<ReturnType<typeof requirePerm>>;
