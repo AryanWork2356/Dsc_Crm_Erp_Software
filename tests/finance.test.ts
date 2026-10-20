@@ -269,7 +269,8 @@ describe("receivables, payables and cash flow", () => {
     expect(flow).toHaveLength(6);
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const agg = await db.payment.aggregate({ where: { companyId, date: { gte: start } }, _sum: { amount: true } });
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1); // other tests may add payments dated in the future
+    const agg = await db.payment.aggregate({ where: { companyId, date: { gte: start, lt: end } }, _sum: { amount: true } });
     expect(flow.reduce((s, m) => s + m.income, 0)).toBeCloseTo(Number(agg._sum.amount), 2);
     expect(flow.every((m) => m.expenses >= 0)).toBe(true);
   });

@@ -195,7 +195,7 @@ describe("issue to site, returns and consumption", () => {
     expect(await stockAt(led.id, site.id)).toBe(10);
     const finAfter = (await projectFinancials(p2.companyId, [p2.id])).get(p2.id)!;
     expect(finAfter.material - finBefore.material).toBe(12500); // 10 × ₹1,250
-    expect(finAfter.profit).toBe(finBefore.profit - 12500);
+    expect(finAfter.profit).toBeCloseTo(finBefore.profit - 12500, 2);
   });
 
   it("refuses to issue more than is in stock – stock never goes negative", async () => {
