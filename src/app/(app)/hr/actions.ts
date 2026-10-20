@@ -6,12 +6,12 @@ import { db } from "@/lib/db";
 import { assertPerm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { run, UserError } from "@/lib/action";
-import { nextNumber } from "@/lib/sequence";
 import { requestApproval } from "@/lib/workflow";
 import { computePayslip, leaveDaysInMonth, readPayrollConfig } from "@/lib/payroll";
 import { formToObject, zDate, zEmail, zNumPos, zOptDate, zOptStr, zPhone, zReqStr } from "@/lib/form";
 import { num, round2, startOfDay } from "@/lib/utils";
 import { evaluateLeave } from "@/lib/leave-policy";
+import { nextEmployeeCode } from "@/lib/employee-code";
 import { daysNotice } from "@/lib/material-notice";
 import { planRecoveries, saveRecoveries } from "@/lib/advances";
 
@@ -33,7 +33,7 @@ export async function createEmployee(fd: FormData) {
     const c = await assertPerm("employees:create");
     const d = empSchema.parse(formToObject(fd));
     const e = await db.$transaction(async (tx) => {
-      const code = await nextNumber(tx, c.companyId, "EMP", 3);
+      const code = await nextEmployeeCode(tx, c.companyId);
       const x = await tx.employee.create({ data: { ...d, companyId: c.companyId, code, managerId: d.managerId ?? null } });
       await audit(c, { action: "CREATE", entityType: "Employee", entityId: x.id, summary: `Onboarded employee ${code} – ${d.name}${d.designation ? ` (${d.designation})` : ""}` }, tx);
       return x;

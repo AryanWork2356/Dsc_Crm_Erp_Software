@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { requirePerm } from "@/lib/auth";
+import { ensureEmployees } from "@/lib/employee-code";
 import { db } from "@/lib/db";
 import { flatten, listParams } from "@/lib/list";
 import { formatDate, humanize } from "@/lib/utils";
@@ -18,6 +19,7 @@ export const metadata = { title: "Employees" };
 
 export default async function EmployeesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const c = await requirePerm("employees:view");
+  await ensureEmployees(c.companyId); // staff logins always have an employee record (attendance, leave, payroll need it)
   const sp = flatten(await searchParams);
   const lp = listParams(sp, "name", "asc", 25);
   const where: Prisma.EmployeeWhereInput = {

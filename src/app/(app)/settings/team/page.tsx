@@ -1,4 +1,5 @@
 import { requirePerm } from "@/lib/auth";
+import { ensureEmployees } from "@/lib/employee-code";
 import { db } from "@/lib/db";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { flatten, listParams } from "@/lib/list";
@@ -20,6 +21,7 @@ const roleOptions = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value
 
 export default async function TeamPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const c = await requirePerm("team:view");
+  await ensureEmployees(c.companyId);
   const sp = flatten(await searchParams);
   const lp = listParams(sp, "createdAt", "desc", 20);
   const canManage = c.can("users:manage");

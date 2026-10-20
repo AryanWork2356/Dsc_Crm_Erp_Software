@@ -11,7 +11,7 @@ export function employeeFields(managers: Opt[], e: Record<string, unknown> | nul
     { name: "designation", label: "Designation", defaultValue: d("designation") },
     { name: "department", label: "Department", defaultValue: d("department"), placeholder: "e.g. Projects, Sales, Finance" },
     { name: "joiningDate", label: "Joining date", type: "date", defaultValue: toDateInput(e?.joiningDate as Date | null) },
-    { name: "managerId", label: "Reports to", type: "select", options: managers.filter((m) => m.value !== (e?.id as string)), defaultValue: d("managerId") },
+    { name: "managerId", label: "Reports to", type: "select", options: managers.filter((m) => m.value !== (e?.id as string)), defaultValue: d("managerId"), hint: "Lists people already added. Add the senior person first; leave empty for the top person." },
     { name: "workLocation", label: "Work location", defaultValue: d("workLocation") },
     { name: "emergencyContact", label: "Emergency contact", defaultValue: d("emergencyContact") },
   ];

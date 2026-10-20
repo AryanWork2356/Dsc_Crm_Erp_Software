@@ -6,6 +6,7 @@ import { db } from "./db";
 import type { Ctx } from "./auth";
 import type { PermissionKey } from "./permissions";
 import { nextNumber } from "./sequence";
+import { nextEmployeeCode } from "./employee-code";
 import { audit } from "./audit";
 import { UserError } from "./action";
 import { zEmail, zGstin, zPan, zPhone } from "./form";
@@ -121,7 +122,7 @@ export const ENTITIES: Entity[] = [
     parse: (r) => parse(z.object({ Name: name, "Employee code": s, Email: zEmail.or(z.literal("").transform(() => undefined)), Phone: phone, Designation: s, Department: s, "Work location": s, "Joining date": date }), r),
     dedupe: (d) => (d["Employee code"] ? { where: { code: { equals: d["Employee code"] as string, mode: "insensitive" } }, label: `code ${d["Employee code"]}` } : d.Email ? { where: { email: { equals: d.Email as string, mode: "insensitive" } }, label: `email ${d.Email}` } : null),
     exists: async (c, where) => !!(await db.employee.findFirst({ where: { companyId: c.companyId, deletedAt: null, ...where } })),
-    create: async (tx, c, d) => { await tx.employee.create({ data: { companyId: c.companyId, code: (d["Employee code"] as string | undefined) ?? (await nextNumber(tx, c.companyId, "EMP", 3)), name: d.Name as string, email: d.Email as string | undefined, workLocation: d["Work location"] as string | undefined, phone: d.Phone as string | undefined, designation: d.Designation as string | undefined, department: d.Department as string | undefined, joiningDate: d["Joining date"] as Date | undefined } }); },
+    create: async (tx, c, d) => { await tx.employee.create({ data: { companyId: c.companyId, code: (d["Employee code"] as string | undefined) ?? (await nextEmployeeCode(tx, c.companyId)), name: d.Name as string, email: d.Email as string | undefined, workLocation: d["Work location"] as string | undefined, phone: d.Phone as string | undefined, designation: d.Designation as string | undefined, department: d.Department as string | undefined, joiningDate: d["Joining date"] as Date | undefined } }); },
   },
 ];
 

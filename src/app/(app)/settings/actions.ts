@@ -5,6 +5,7 @@ import { RoleKey } from "@prisma/client";
 import { db } from "@/lib/db";
 import { assertPerm, hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { nextEmployeeCode } from "@/lib/employee-code";
 import { run, UserError } from "@/lib/action";
 import { formToObject, zEmail, zGstin, zNumPos, zOptStr, zPan, zPhone, zReqStr } from "@/lib/form";
 
@@ -74,11 +75,10 @@ export async function createUser(fd: FormData) {
       const user = await tx.user.create({
         data: { companyId: c.companyId, name: d.name, email: d.email, phone: d.phone, role: d.role, passwordHash: await hashPassword(d.password) },
       });
-      const count = await tx.employee.count({ where: { companyId: c.companyId } });
       const staff = !["WORKER", "CLIENT", "VENDOR"].includes(d.role);
       if (staff) {
         await tx.employee.create({
-          data: { companyId: c.companyId, userId: user.id, code: `EMP-${String(count + 1).padStart(3, "0")}`, name: d.name, email: d.email, phone: d.phone },
+          data: { companyId: c.companyId, userId: user.id, code: await nextEmployeeCode(tx, c.companyId), name: d.name, email: d.email, phone: d.phone },
         });
       }
       await audit(c, { action: "CREATE", entityType: "User", entityId: user.id, summary: `Created user ${d.name} (${d.role})`, newValue: { email: d.email, role: d.role } }, tx);
