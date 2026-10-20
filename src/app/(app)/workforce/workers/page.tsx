@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ListFilters } from "@/components/list/list-filters";
 import { FormDialog, type FieldDef } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
+import { USE_CONTRACTORS } from "@/lib/features";
 import { createWorker, createWorkerLogin, deleteWorker, setWorkerActive, updateWorker } from "../actions";
 
 export const metadata = { title: "Workers" };
@@ -49,9 +50,9 @@ export default async function WorkersPage({ searchParams }: { searchParams: Prom
     { name: "phone", label: "Phone", type: "tel", defaultValue: w?.phone ?? null },
     { name: "trade", label: "Trade", type: "select", required: true, options: WORKER_TRADE_OPTS, defaultValue: w?.trade ?? "HELPER" },
     { name: "skill", label: "Skill notes", defaultValue: w?.skill ?? null },
-    { name: "contractorId", label: "Contractor (if any)", type: "select", options: contractors.map((x) => ({ value: x.id, label: x.name })), defaultValue: w?.contractorId ?? null },
+    ...(USE_CONTRACTORS ? [{ name: "contractorId", label: "Contractor (if any)", type: "select" as const, options: contractors.map((x) => ({ value: x.id, label: x.name })), defaultValue: w?.contractorId ?? null }] : []),
     { name: "currentProjectId", label: "Assigned site", type: "select", options: projects, defaultValue: w?.currentProjectId ?? null },
-    { name: "wageType", label: "Paid", type: "select", required: true, options: [{ value: "DAILY", label: "Per day" }, { value: "MONTHLY", label: "Per month" }, { value: "CONTRACT", label: "Through contractor" }], defaultValue: w?.wageType ?? "DAILY" },
+    { name: "wageType", label: "Paid", type: "select", required: true, options: [{ value: "DAILY", label: "Per day" }, { value: "MONTHLY", label: "Per month" }, ...(USE_CONTRACTORS || w?.wageType === "CONTRACT" ? [{ value: "CONTRACT", label: "Through contractor" }] : [])], defaultValue: w?.wageType ?? "DAILY" },
     ...(money ? [{ name: "dailyWage", label: "Daily wage (₹)", type: "number" as const, defaultValue: w ? num(w.dailyWage) : 0 }, { name: "monthlyWage", label: "Monthly wage (₹)", type: "number" as const, defaultValue: w ? num(w.monthlyWage) : 0 }] : []),
     { name: "joiningDate", label: "Joining date", type: "date", defaultValue: w?.joiningDate?.toISOString().slice(0, 10) ?? null },
     { name: "emergencyContact", label: "Emergency contact", defaultValue: w?.emergencyContact ?? null },
@@ -63,20 +64,20 @@ export default async function WorkersPage({ searchParams }: { searchParams: Prom
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Active workers" value={activeCount} />
         <StatCard label="Present today" value={todayPresent} tone="good" href="/workforce/attendance" />
-        <StatCard label="Contractors" value={contractors.length} href="/workforce/contractors" />
+        {USE_CONTRACTORS && <StatCard label="Contractors" value={contractors.length} href="/workforce/contractors" />}
       </div>
       <Card>
-        <ListFilters placeholder="Search name, ID or phone…" filters={[{ key: "trade", label: "Trade", options: WORKER_TRADE_OPTS }, { key: "contractor", label: "Contractor", options: contractors.map((x) => ({ value: x.id, label: x.name })) }, { key: "project", label: "Site", options: projects }, { key: "status", label: "Status", options: [{ value: "inactive", label: "Inactive" }, { value: "all", label: "All" }] }]} />
+        <ListFilters placeholder="Search name, ID or phone…" filters={[{ key: "trade", label: "Trade", options: WORKER_TRADE_OPTS }, ...(USE_CONTRACTORS ? [{ key: "contractor", label: "Contractor", options: contractors.map((x) => ({ value: x.id, label: x.name })) }] : []), { key: "project", label: "Site", options: projects }, { key: "status", label: "Status", options: [{ value: "inactive", label: "Inactive" }, { value: "all", label: "All" }] }]} />
         {rows.length === 0 ? <EmptyState title="No workers found" /> : (
           <>
             <Table>
-              <THead><tr><SortTh label="Worker" field="name" sp={sp} basePath="/workforce/workers" /><SortTh label="Trade" field="trade" sp={sp} basePath="/workforce/workers" /><Th>Contractor</Th><Th>Site</Th><Th>Phone</Th>{money && <Th right>Wage</Th>}<Th>Login</Th><Th>Status</Th>{canEdit && <Th right>Actions</Th>}</tr></THead>
+              <THead><tr><SortTh label="Worker" field="name" sp={sp} basePath="/workforce/workers" /><SortTh label="Trade" field="trade" sp={sp} basePath="/workforce/workers" />{USE_CONTRACTORS && <Th>Contractor</Th>}<Th>Site</Th><Th>Phone</Th>{money && <Th right>Wage</Th>}<Th>Login</Th><Th>Status</Th>{canEdit && <Th right>Actions</Th>}</tr></THead>
               <tbody>
                 {rows.map((w) => (
                   <Tr key={w.id}>
                     <Td><p className="font-medium text-slate-900">{w.name}</p><p className="text-xs text-slate-500">{w.code}{w.joiningDate ? ` · since ${formatDate(w.joiningDate)}` : ""}</p></Td>
                     <Td>{humanize(w.trade)}</Td>
-                    <Td>{w.contractor ? <Link className="text-brand-700 hover:underline" href={`/workforce/contractors/${w.contractorId}`}>{w.contractor.name}</Link> : "—"}</Td>
+                    {USE_CONTRACTORS && <Td>{w.contractor ? <Link className="text-brand-700 hover:underline" href={`/workforce/contractors/${w.contractorId}`}>{w.contractor.name}</Link> : "—"}</Td>}
                     <Td className="max-w-[180px] truncate text-xs">{w.currentProjectId ? pn.get(w.currentProjectId) ?? "—" : "—"}</Td>
                     <Td>{w.phone ?? "—"}</Td>
                     {money && <Td right>{w.wageType === "DAILY" ? `${formatINR(w.dailyWage)}/day` : w.wageType === "MONTHLY" ? `${formatINR(w.monthlyWage)}/mo` : "Contract"}</Td>}

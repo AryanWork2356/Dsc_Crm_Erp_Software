@@ -185,3 +185,7 @@ A globe button (top bar, and on the sign-in page) switches the whole screen betw
 ## 29. Portal logins
 
 Owner or Admin can press **Portal login** on a client (CRM → Clients) or a vendor (Procurement → Vendors) to create, or reset, the login that shows that client or vendor only their own records.
+
+## 30. Switched-off features
+
+`src/lib/features.ts` holds switches for things that are built but not used yet: contractors (`USE_CONTRACTORS`), the leads pipeline (`USE_LEADS`) and the Sales team role (`USE_SALES_TEAM`). All are `false`: the menu entries, worker contractor box and the Sales role choice are hidden. Nothing is deleted. Set a switch to `true` and redeploy to bring the feature back. Outside carpenters, electricians and painters are vendors.

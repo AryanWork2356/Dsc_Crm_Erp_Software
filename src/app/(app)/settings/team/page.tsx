@@ -1,4 +1,5 @@
 import { requirePerm } from "@/lib/auth";
+import { USE_SALES_TEAM } from "@/lib/features";
 import { ensureEmployees } from "@/lib/employee-code";
 import { db } from "@/lib/db";
 import { ROLE_LABELS } from "@/lib/permissions";
@@ -18,6 +19,8 @@ import type { Prisma, RoleKey } from "@prisma/client";
 export const metadata = { title: "Team & Users" };
 
 const roleOptions = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }));
+// "Sales" is not offered for new people while the company has no sales team (see lib/features.ts); editing a person who already has it still works
+const addRoleOptions = roleOptions.filter((o) => USE_SALES_TEAM || o.value !== "SALES");
 
 export default async function TeamPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const c = await requirePerm("team:view");
@@ -44,6 +47,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     { name: "phone", label: "Phone", type: "tel" },
     { name: "role", label: "Role", type: "select", required: true, options: roleOptions },
   ];
+  const addFields = baseFields.map((f) => (f.name === "role" ? { ...f, options: addRoleOptions } : f));
 
   return (
     <>
@@ -55,7 +59,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             <FormDialog
               title="Add user"
               trigger={<Button>Add user</Button>}
-              fields={[...baseFields, { name: "password", label: "Temporary password", type: "password", required: true, hint: "At least 8 characters. Ask them to change it after first login." }]}
+              fields={[...addFields, { name: "password", label: "Temporary password", type: "password", required: true, hint: "At least 8 characters. Ask them to change it after first login." }]}
               action={createUser}
               successMessage="User created"
             />
