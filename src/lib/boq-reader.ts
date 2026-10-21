@@ -11,9 +11,9 @@ import type { BoqCategory } from "@prisma/client";
 
 export type ReadItem = {
   sheet: string; row: number; sl: string; section: string; category: BoqCategory;
-  item: string; specification: string; unit: string; quantity: number; rate: number | null; remarks: string; flags: string[];
+  item: string; specification: string; unit: string; quantity: number; rate: number | null; remarks: string; code: string; hsn: string; flags: string[];
 };
-export type ReadSheet = { name: string; headerRow: number; columns: Record<string, string>; items: ReadItem[]; sections: string[]; skipped: number; warnings: string[]; measurement: boolean };
+export type ReadSheet = { name: string; headerRow: number; columns: Record<string, string>; items: ReadItem[]; sections: string[]; skipped: number; warnings: string[]; measurement: boolean; hidden: boolean };
 
 const norm = (v: unknown) => String(v ?? "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
@@ -26,6 +26,8 @@ const HEADERS: Record<string, string[]> = {
   rate: ["rate", "unit rate", "rate inr", "rate rs", "price", "unit price", "rate per unit"],
   amount: ["amount", "amt", "total", "total amount", "value", "amount inr", "amount rs", "total price"],
   remarks: ["remark", "remarks", "note", "notes", "comments"],
+  code: ["material code", "material codes", "item code", "mat code", "material no"],
+  hsn: ["hsn", "hsn no", "hsn code", "sac", "sac code", "hsn sac", "hsn sac code", "sac no"],
 };
 const find = (cell: string): string | null => {
   for (const [key, list] of Object.entries(HEADERS)) if (list.includes(cell)) return key;
@@ -37,13 +39,13 @@ const UNITS: Record<string, string> = {
   rft: "rft", "r ft": "rft", "rft.": "rft", "running feet": "rft", rmt: "rmt", rm: "rmt", mtr: "rmt", mtrs: "rmt", meter: "rmt", metre: "rmt", m: "rmt",
   nos: "nos", no: "nos", number: "nos", numbers: "nos", pcs: "nos", pc: "nos", each: "nos", ea: "nos", unit: "nos", units: "nos",
   set: "set", sets: "set", kg: "kg", kgs: "kg", ltr: "ltr", litre: "ltr", liter: "ltr", ltrs: "ltr", bag: "bag", box: "box", bags: "bag",
-  ls: "lumpsum", "l s": "lumpsum", lumpsum: "lumpsum", lumsum: "lumpsum", "lump sum": "lumpsum", "lum sum": "lumpsum", job: "lumpsum", day: "day", days: "day", hour: "hour", hr: "hour", hrs: "hour",
+  ls: "lumpsum", "l s": "lumpsum", lumpsum: "lumpsum", lumsum: "lumpsum", ft2: "sqft", m2: "sqm", sft2: "sqft", "lump sum": "lumpsum", "lum sum": "lumpsum", job: "lumpsum", day: "day", days: "day", hour: "hour", hr: "hour", hrs: "hour",
 };
 
 /** keyword → category, checked against the section heading first, then the sheet name */
 const CATEGORY_WORDS: [RegExp, BoqCategory][] = [
-  [/fire|alarm|smoke|detector|sprinkler|hooter/i, "ELECTRICAL"],
-  [/demolition|dismantl|civil|masonry|plaster|waterproof|screed|pcc/i, "CIVIL"],
+  [/fire|alarm|smoke|detector|sprinkler|hooter|speaker|amplifier|music|cctv|dvr/i, "ELECTRICAL"],
+  [/demoli|dismantl|civil|masonry|plaster|waterproof|screed|pcc/i, "CIVIL"],
   [/floor|tile|granite|marble|epoxy|vinyl|carpet|skirting/i, "FLOORING"],
   [/paint|polish|putty|texture|wall finish|wallpaper|wall\s*(&|and)\s*ceiling/i, "PAINTING"],
   [/false ceiling|ceiling|gypsum|grid/i, "FALSE_CEILING"],
@@ -90,12 +92,14 @@ function numberOf(t: string): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
-const TOTAL_LINE = /^(sub\s*-?\s*total\w*|total\w*|grand total|gst|igst|cgst|sgst|tax|summary|amount in words|note|notes|terms|remark|remarks|add|less|round)\b/i;
+const TOTAL_LINE = /\btotal\b|per sqft rate|^(sub\s*-?\s*total\w*|total\w*|grand total|gst|igst|cgst|sgst|tax|summary|amount in words|note|notes|terms|remark|remarks|add|less|round)\b/i;
 
 /** "Civil and Interiors Works BOQ" -> "Civil and Interiors Works": the scope name used on the quotation cover. */
 export function packageLabel(sheetName: string): string {
-  const t = sheetName.replace(/\s+/g, " ").trim().replace(/\s*\b(boq|sheet)\b\s*$/i, "").trim();
-  return t || sheetName.trim();
+  const t = sheetName.replace(/\s+/g, " ").trim();
+  // drop a trailing "BOQ" / "Sheet" only when a real name is left ("Common BOQ" stays as it is)
+  const short = t.replace(/\s*\b(boq|sheet)\b\s*$/i, "").trim();
+  return short.split(" ").length >= 3 ? short : t || sheetName.trim();
 }
 
 export async function readClientBoq(buf: Buffer): Promise<ReadSheet[]> {
@@ -103,7 +107,6 @@ export async function readClientBoq(buf: Buffer): Promise<ReadSheet[]> {
   await wb.xlsx.load(buf as never);
   const out: ReadSheet[] = [];
   for (const ws of wb.worksheets) {
-    if (ws.state && ws.state !== "visible") continue;
     const sheet = readSheet(ws);
     if (sheet) out.push(sheet);
   }
@@ -129,6 +132,13 @@ function readSheet(ws: ExcelJS.Worksheet): ReadSheet | null {
       const k = find(norm(textAt(r, c)));
       if (k && found[k] === undefined) found[k] = c;
     }
+    if (!found.item && found.sl && found.qty && (found.unit || found.rate || found.amount)) {
+      // a client may head the description column with the scope's name ("ELECTRICAL WORK"): it is the unrecognised text column just left of Qty
+      for (let c = found.qty - 1; c >= 1; c--) {
+        const h = norm(textAt(r, c));
+        if (h && !find(h)) { found.item = c; break; }
+      }
+    }
     if (found.item && found.qty && (found.unit || found.rate || found.amount)) { headerRow = r; cols = found; }
   }
   if (!headerRow) return null;
@@ -146,7 +156,7 @@ function readSheet(ws: ExcelJS.Worksheet): ReadSheet | null {
   const result: ReadSheet = {
     name: ws.name, headerRow,
     columns: { Description: letters(cols.item), Specification: letters(cols.spec), Unit: letters(cols.unit), Quantity: letters(cols.qty), Rate: letters(cols.rate), "Serial no.": letters(cols.sl) },
-    items: [], sections: [], skipped: 0, warnings: [],
+    items: [], sections: [], skipped: 0, warnings: [], hidden: !!ws.state && ws.state !== "visible",
     // a site measurement sheet (feet / inches / final qty), not a price list: shown but not ticked by default
     measurement: /\bm\s*-?\s*sheet\b|\bmeasure(ment)?s?\b/i.test(ws.name) || Array.from({ length: width }, (_, k) => norm(textAt(headerRow, k + 1))).some((h) => h === "final qty"),
   };
@@ -193,7 +203,7 @@ function readSheet(ws: ExcelJS.Worksheet): ReadSheet | null {
     result.items.push({
       sheet: ws.name, row: r, sl, section, category: fixturesSheet ? "FIXTURES" : pickCategory(section, name, ws.name), item: name.slice(0, 200),
       specification: itemText && spec ? spec : "", unit, quantity: Math.round(quantity * 1000) / 1000, rate: rate !== null && rate > 0 ? rate : null,
-      remarks: cols.remarks ? textAt(r, cols.remarks) : "", flags,
+      remarks: cols.remarks ? textAt(r, cols.remarks) : "", code: cols.code ? textAt(r, cols.code) : "", hsn: cols.hsn ? textAt(r, cols.hsn) : "", flags,
     });
   }
   if (!result.items.length) return null;

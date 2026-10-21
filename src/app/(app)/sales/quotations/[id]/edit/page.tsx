@@ -37,7 +37,7 @@ export default async function EditQuotation({ params }: { params: Promise<{ id: 
         initial={{
           clientId: q.clientId, leadId: q.leadId ?? undefined, title: q.title ?? undefined, date: toDateInput(q.date), validUntil: toDateInput(q.validUntil),
           terms: q.terms ?? undefined, paymentTerms: q.paymentTerms ?? undefined, placeOfSupply: q.placeOfSupply ?? undefined, clientPoNo: q.clientPoNo ?? undefined, clientPoDate: toDateInput(q.clientPoDate), vendorCode: q.vendorCode ?? undefined, notes: q.notes ?? undefined, discountPct: num(q.discountPct),
-          items: q.items.map((i) => ({ category: i.category, description: i.description, unit: i.unit, quantity: num(i.quantity), rate: num(i.rate), taxPercent: num(i.taxPercent), package: i.package ?? undefined, section: i.section ?? undefined, ref: i.ref ?? undefined, specification: i.specification ?? undefined, remarks: i.remarks ?? undefined })),
+          items: q.items.map((i) => ({ category: i.category, description: i.description, unit: i.unit, quantity: num(i.quantity), rate: num(i.rate), taxPercent: num(i.taxPercent), package: i.package ?? undefined, section: i.section ?? undefined, ref: i.ref ?? undefined, specification: i.specification ?? undefined, remarks: i.remarks ?? undefined, code: i.code ?? undefined, hsn: i.hsn ?? undefined })),
         }}
       />
     </>

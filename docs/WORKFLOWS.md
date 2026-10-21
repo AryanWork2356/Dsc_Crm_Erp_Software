@@ -197,3 +197,9 @@ When a BOQ is imported from the client's Excel, each row remembers the scope she
 Checked against DSC's real Frido Hyderabad workbook: FAS, speaker and sprinkler totals match to the rupee, civil within 0.35 (DSC does not round each line). Two lines differ because DSC's own file disagrees with itself: the electrical total leaves out the camera cable (283 x 110 has no amount in the sheet) and the fixture transport line says 40,000 as the rate but 50,000 as the amount. The app prices each line as quantity x rate and shows such lines.
 
 A measurement sheet in the client's file (for example "M - Sheet") is shown in the import preview but not ticked.
+
+## 32. A client BOQ with their own codes and no rates (Louis Philippe, Surat)
+
+Some clients (for example Aditya Birla Fashion & Retail) send a quantity list with **their own material code and HSN / SAC code on every line and no rates**; DSC adds the rates. The import reads those codes (columns "Material code(s)", "HSN / SAC") and the client's serial numbers, keeps them through saving, revising and the quotation, and the quotation Excel prints **Material code** and **HSN / SAC** columns on each scope sheet. A sheet whose description column is headed with the scope's name (ELECTRICAL WORK, CCTV WORKS, SPRINKLER WORKS) is recognised. Hidden sheets in the client's file and measurement sheets are shown in the preview but not ticked.
+
+Checked on the two real Surat files: 189 items on 8 scope sheets, codes and scopes intact through save, quotation and Excel. The client's own summary sheet (which had broken `#REF!` links) is not read; the cover page is built by the app. The "Benchmarked rate" column on the sprinkler sheet is not used yet.

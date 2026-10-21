@@ -85,73 +85,88 @@ function buildPackaged(wb: ExcelJS.Workbook, company: CompanyInfo, q: QuoteFull,
     order.set(key, [...(order.get(key) ?? []), k]);
   });
 
-  // ───── one sheet per scope ─────
-  const packs: { label: string; addr: string; value: number; ws: ExcelJS.Worksheet }[] = [];
-  for (const [label, idxs] of order) {
-    const ws = wb.addWorksheet(sheetName(label, used), { views: [{ showGridLines: false }] });
-    ws.columns = widths;
-    let r = letterhead(wb, ws, company, COLS);
-    ws.mergeCells(`A${r}:H${r}`);
-    ws.getCell(`A${r}`).value = `${label.toUpperCase()} – BOQ`;
-    ws.getCell(`A${r}`).font = { name: FONT, size: 13, bold: true, color: { argb: NAVY } };
-    r += 2;
-    ws.getRow(r).values = ["Sl. No.", "Work title", "Detailed specification", "UOM", "Quantity", "Rate (₹)", "Amount (₹)", "Remarks"];
-    headerRow(ws.getRow(r));
-    const head = r++;
-    // sections in the order the client wrote them
-    const sections = new Map<string, number[]>();
-    for (const k of idxs) sections.set(q.items[k].section?.trim() ?? "", [...(sections.get(q.items[k].section?.trim() ?? "") ?? []), k]);
-    const ranges: string[] = [];
-    let n = 0;
-    for (const [sec, ks] of sections) {
-      if (sec) {
-        ws.mergeCells(`A${r}:H${r}`);
-        ws.getCell(`A${r}`).value = sec;
-        ws.getCell(`A${r}`).font = { name: FONT, bold: true, color: { argb: NAVY } };
-        ws.getCell(`A${r}`).fill = solid(PALE);
-        r++;
-      }
-      const start = r;
-      for (const k of ks) {
-        const it = q.items[k];
-        const spec = it.specification?.trim() ?? "";
-        const title = spec && it.description.endsWith(` – ${spec}`) ? it.description.slice(0, -(spec.length + 3)) : it.description;
-        n++;
-        ws.getRow(r).values = [it.ref?.trim() || n, title, spec, unitText(it.unit), num(it.quantity), num(it.rate), { formula: `ROUND(E${r}*F${r},2)`, result: t.lines[k].amount }, it.remarks ?? ""];
-        ws.getRow(r).eachCell({ includeEmpty: true }, (cell, cn) => {
-          cell.border = box;
-          cell.font = { name: FONT, size: 10 };
-          cell.alignment = { vertical: "top", wrapText: cn === 2 || cn === 3 || cn === 8, horizontal: cn === 1 || cn === 4 ? "center" : cn >= 5 && cn <= 7 ? "right" : "left" };
-        });
-        ws.getCell(`E${r}`).numFmt = "#,##0.###";
-        ws.getCell(`F${r}`).numFmt = MONEY;
-        ws.getCell(`G${r}`).numFmt = MONEY;
-        r++;
-      }
-      ranges.push(`G${start}:G${r - 1}`);
-      if (sec) {
-        const sub = r2(ks.reduce((s, k) => s + t.lines[k].amount, 0));
-        ws.getCell(`F${r}`).value = "SUBTOTAL";
-        ws.getCell(`F${r}`).alignment = { horizontal: "right" };
-        ws.getCell(`G${r}`).value = { formula: `SUM(G${start}:G${r - 1})`, result: sub };
-        ws.getCell(`G${r}`).numFmt = MONEY;
-        for (let cn = 6; cn <= 7; cn++) { ws.getCell(r, cn).font = { name: FONT, bold: true, size: 10 }; ws.getCell(r, cn).border = box; }
-        r++;
-      }
-      r++;
-    }
-    const total = r2(idxs.reduce((s, k) => s + t.lines[k].amount, 0));
-    ws.getCell(`F${r}`).value = "TOTAL";
-    ws.getCell(`F${r}`).alignment = { horizontal: "right" };
-    ws.getCell(`G${r}`).value = { formula: `SUM(${ranges.join(",")})`, result: total };
-    ws.getCell(`G${r}`).numFmt = MONEY;
-    for (let cn = 6; cn <= 7; cn++) { ws.getCell(r, cn).font = { name: FONT, bold: true, size: 11, color: { argb: "FFFFFFFF" } }; ws.getCell(r, cn).fill = solid(NAVY); ws.getCell(r, cn).border = box; }
-    ws.views = [{ state: "frozen", ySplit: head, showGridLines: false }];
-    ws.pageSetup = { ...page, orientation: "landscape", printTitlesRow: `${head}:${head}` };
-    ws.headerFooter.oddFooter = `&L&8${company.name}&C&8Page &P of &N&R&8${q.number}`;
-    packs.push({ label, addr: `'${ws.name}'!G${r}`, value: total, ws });
-  }
-
+  // ───── one sheet per scope ─────
+  const packs: { label: string; addr: string; value: number; ws: ExcelJS.Worksheet }[] = [];
+  for (const [label, idxs] of order) {
+    // the client's material code and HSN / SAC code get their own columns when their file had them
+    const hasCode = idxs.some((k) => q.items[k].code);
+    const hasHsn = idxs.some((k) => q.items[k].hsn);
+    const keys = ["sl", ...(hasCode ? ["code"] : []), ...(hasHsn ? ["hsn"] : []), "title", "spec", "uom", "qty", "rate", "amt", "rem"] as const;
+    const heads: Record<(typeof keys)[number], string> = { sl: "Sl. No.", code: "Material code", hsn: "HSN / SAC", title: "Work title", spec: "Detailed specification", uom: "UOM", qty: "Quantity", rate: "Rate (₹)", amt: "Amount (₹)", rem: "Remarks" };
+    const wid: Record<(typeof keys)[number], number> = { sl: 8, code: 22, hsn: 11, title: 34, spec: 46, uom: 9, qty: 11, rate: 12, amt: 16, rem: 26 };
+    const at = (k: (typeof keys)[number]) => keys.indexOf(k) + 1;
+    const L = (k: (typeof keys)[number]) => String.fromCharCode(64 + at(k));
+    const lastL = String.fromCharCode(64 + keys.length);
+
+    const ws = wb.addWorksheet(sheetName(label, used), { views: [{ showGridLines: false }] });
+    ws.columns = keys.map((k) => ({ width: wid[k] }));
+    let r = letterhead(wb, ws, company, keys.length);
+    ws.mergeCells(`A${r}:${lastL}${r}`);
+    ws.getCell(`A${r}`).value = `${label.toUpperCase()} – BOQ`;
+    ws.getCell(`A${r}`).font = { name: FONT, size: 13, bold: true, color: { argb: NAVY } };
+    r += 2;
+    ws.getRow(r).values = keys.map((k) => heads[k]);
+    headerRow(ws.getRow(r));
+    const head = r++;
+    // sections in the order the client wrote them
+    const sections = new Map<string, number[]>();
+    for (const k of idxs) sections.set(q.items[k].section?.trim() ?? "", [...(sections.get(q.items[k].section?.trim() ?? "") ?? []), k]);
+    const ranges: string[] = [];
+    let n = 0;
+    for (const [sec, ks] of sections) {
+      if (sec) {
+        ws.mergeCells(`A${r}:${lastL}${r}`);
+        ws.getCell(`A${r}`).value = sec;
+        ws.getCell(`A${r}`).font = { name: FONT, bold: true, color: { argb: NAVY } };
+        ws.getCell(`A${r}`).fill = solid(PALE);
+        r++;
+      }
+      const start = r;
+      for (const k of ks) {
+        const it = q.items[k];
+        const spec = it.specification?.trim() ?? "";
+        const title = spec && it.description.endsWith(` – ${spec}`) ? it.description.slice(0, -(spec.length + 3)) : it.description;
+        n++;
+        const cell: Record<(typeof keys)[number], ExcelJS.CellValue> = {
+          sl: it.ref?.trim() || n, code: it.code ?? "", hsn: it.hsn ?? "", title, spec, uom: unitText(it.unit), qty: num(it.quantity), rate: num(it.rate),
+          amt: { formula: `ROUND(${L("qty")}${r}*${L("rate")}${r},2)`, result: t.lines[k].amount }, rem: it.remarks ?? "",
+        };
+        ws.getRow(r).values = keys.map((key) => cell[key]);
+        keys.forEach((key, i) => {
+          const x = ws.getCell(r, i + 1);
+          x.border = box;
+          x.font = { name: FONT, size: 10 };
+          x.alignment = { vertical: "top", wrapText: ["title", "spec", "rem", "code"].includes(key), horizontal: key === "sl" || key === "uom" || key === "hsn" ? "center" : ["qty", "rate", "amt"].includes(key) ? "right" : "left" };
+        });
+        ws.getCell(`${L("qty")}${r}`).numFmt = "#,##0.###";
+        ws.getCell(`${L("rate")}${r}`).numFmt = MONEY;
+        ws.getCell(`${L("amt")}${r}`).numFmt = MONEY;
+        r++;
+      }
+      ranges.push(`${L("amt")}${start}:${L("amt")}${r - 1}`);
+      if (sec) {
+        const sub = r2(ks.reduce((s, k) => s + t.lines[k].amount, 0));
+        ws.getCell(`${L("rate")}${r}`).value = "SUBTOTAL";
+        ws.getCell(`${L("rate")}${r}`).alignment = { horizontal: "right" };
+        ws.getCell(`${L("amt")}${r}`).value = { formula: `SUM(${L("amt")}${start}:${L("amt")}${r - 1})`, result: sub };
+        ws.getCell(`${L("amt")}${r}`).numFmt = MONEY;
+        for (const key of ["rate", "amt"] as const) { ws.getCell(r, at(key)).font = { name: FONT, bold: true, size: 10 }; ws.getCell(r, at(key)).border = box; }
+        r++;
+      }
+      r++;
+    }
+    const total = r2(idxs.reduce((s, k) => s + t.lines[k].amount, 0));
+    ws.getCell(`${L("rate")}${r}`).value = "TOTAL";
+    ws.getCell(`${L("rate")}${r}`).alignment = { horizontal: "right" };
+    ws.getCell(`${L("amt")}${r}`).value = { formula: `SUM(${ranges.join(",")})`, result: total };
+    ws.getCell(`${L("amt")}${r}`).numFmt = MONEY;
+    for (const key of ["rate", "amt"] as const) { ws.getCell(r, at(key)).font = { name: FONT, bold: true, size: 11, color: { argb: "FFFFFFFF" } }; ws.getCell(r, at(key)).fill = solid(NAVY); ws.getCell(r, at(key)).border = box; }
+    ws.views = [{ state: "frozen", ySplit: head, showGridLines: false }];
+    ws.pageSetup = { ...page, orientation: "landscape", printTitlesRow: `${head}:${head}` };
+    ws.headerFooter.oddFooter = `&L&8${company.name}&C&8Page &P of &N&R&8${q.number}`;
+    packs.push({ label, addr: `'${ws.name}'!${L("amt")}${r}`, value: total, ws });
+  }
+
   // ───── the cover ─────
   const ws = wb.addWorksheet("SUMMARY LIST", { views: [{ showGridLines: false }] });
   ws.columns = widths;

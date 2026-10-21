@@ -43,6 +43,8 @@ const itemSchema = z.object({
   package: z.string().trim().optional().nullable(),
   ref: z.string().trim().optional().nullable(),
   remarks: z.string().trim().optional().nullable(),
+  code: z.string().trim().optional().nullable(),
+  hsn: z.string().trim().optional().nullable(),
   measurements: z.object({ lines: z.array(measureLine).max(200, "Too many measurement lines on one item (max 200)") }).nullish(),
 });
 export type BoqItemInput = z.infer<typeof itemSchema>;
@@ -74,7 +76,7 @@ function itemRows(items: BoqItemInput[]) {
     return {
       sortOrder: idx, category: i.category, subcategory: i.subcategory || null, item: i.item, description: i.description || null,
       specification: i.specification || null, unit: i.unit, quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost,
-      otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId || null, package: i.package || null, ref: i.ref || null, remarks: i.remarks || null, estimatedCost: t.estimatedCost, total: t.total,
+      otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId || null, package: i.package || null, ref: i.ref || null, remarks: i.remarks || null, code: i.code || null, hsn: i.hsn || null, estimatedCost: t.estimatedCost, total: t.total,
       measurements: (i.measurements?.lines.length ? { lines: i.measurements.lines } : undefined) as Prisma.InputJsonValue | undefined,
     };
   });
@@ -180,7 +182,7 @@ export async function reviseBoq(id: string) {
       const x = await tx.boq.create({
         data: {
           companyId: c.companyId, number, revision: rev, projectId: b.projectId, quotationId: b.quotationId, title: b.title, notes: b.notes,
-          items: { create: b.items.map((i) => ({ sortOrder: i.sortOrder, category: i.category, subcategory: i.subcategory, item: i.item, description: i.description, specification: i.specification, unit: i.unit, quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost, otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId, supplierId: i.supplierId, package: i.package, ref: i.ref, remarks: i.remarks, estimatedCost: i.estimatedCost, total: i.total, measurements: (i.measurements ?? undefined) as Prisma.InputJsonValue | undefined })) },
+          items: { create: b.items.map((i) => ({ sortOrder: i.sortOrder, category: i.category, subcategory: i.subcategory, item: i.item, description: i.description, specification: i.specification, unit: i.unit, quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost, otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId, supplierId: i.supplierId, package: i.package, ref: i.ref, remarks: i.remarks, code: i.code, hsn: i.hsn, estimatedCost: i.estimatedCost, total: i.total, measurements: (i.measurements ?? undefined) as Prisma.InputJsonValue | undefined })) },
         },
       });
       await tx.boq.update({ where: { id }, data: { status: "REVISED" } });
@@ -319,7 +321,7 @@ const summarise = (sh: ReadSheet) => {
   const cats: Record<string, number> = {};
   for (const i of sh.items) cats[i.category] = (cats[i.category] ?? 0) + 1;
   return {
-    name: sh.name, measurement: sh.measurement, headerRow: sh.headerRow, columns: sh.columns, count: sh.items.length, skipped: sh.skipped, sections: sh.sections, warnings: sh.warnings,
+    name: sh.name, measurement: sh.measurement, hidden: sh.hidden, headerRow: sh.headerRow, columns: sh.columns, count: sh.items.length, skipped: sh.skipped, sections: sh.sections, warnings: sh.warnings,
     flagged: sh.items.filter((i) => i.flags.length).length, withRates: sh.items.filter((i) => i.rate !== null).length, categories: cats,
     sample: sh.items.slice(0, 12).map((i) => ({ row: i.row, sl: i.sl, category: i.category, item: i.item, unit: i.unit, quantity: i.quantity, rate: i.rate, flags: i.flags })),
   };
@@ -351,7 +353,7 @@ export async function importClientBoq(id: string, fd: FormData) {
     const existing = mode === "replace" ? 0 : b.items.length;
     if (existing + read.length > 2000) throw new UserError(`That would make ${existing + read.length} rows (max 2000). Import fewer sheets.`);
     const rows = itemRows(read.map((i) => ({
-      category: i.category, subcategory: i.section || undefined, package: packageLabel(i.sheet), ref: i.sl || undefined, remarks: i.remarks || undefined, item: i.item, description: i.flags.join(" · ") || undefined,
+      category: i.category, subcategory: i.section || undefined, package: packageLabel(i.sheet), ref: i.sl || undefined, remarks: i.remarks || undefined, code: i.code || undefined, hsn: i.hsn || undefined, item: i.item, description: i.flags.join(" · ") || undefined,
       specification: i.specification || undefined, unit: i.unit, quantity: i.quantity, materialCost: 0, labourCost: 0, otherCost: 0, sellingRate: keepRates && i.rate ? i.rate : 0, materialId: null, measurements: null,
     })));
     await db.$transaction(async (tx) => {

@@ -32,6 +32,8 @@ export type EditorItem = {
   package?: string;
   ref?: string;
   remarks?: string;
+  code?: string;
+  hsn?: string;
   auto?: boolean; // selling rate follows cost + profit % until someone types a selling rate by hand
 };
 

@@ -22,6 +22,8 @@ export type LineRow = {
   ref?: string;
   specification?: string;
   remarks?: string;
+  code?: string;
+  hsn?: string;
 };
 
 export type CatalogItem = { id: string; name: string; unit: string; rate: number };

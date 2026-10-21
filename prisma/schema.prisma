@@ -831,6 +831,8 @@ model QuotationItem {
   ref           String?
   specification String?
   remarks       String?
+  code          String?
+  hsn           String?
   unit          String      @default("nos")
   quantity      Decimal     @db.Decimal(12, 3)
   rate          Decimal     @db.Decimal(12, 2)
@@ -889,6 +891,8 @@ model BoqItem {
   package       String?
   ref           String?
   remarks       String?
+  code          String? // the client's material code
+  hsn           String? // HSN / SAC code
   item          String
   description   String?
   specification String?
