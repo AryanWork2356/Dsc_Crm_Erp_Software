@@ -16,6 +16,12 @@ export type LineRow = {
   taxPercent: number | "";
   materialId?: string;
   boqItemId?: string;
+  // layout of a client's own BOQ, carried through edits untouched so the Excel can follow it
+  package?: string;
+  section?: string;
+  ref?: string;
+  specification?: string;
+  remarks?: string;
 };
 
 export type CatalogItem = { id: string; name: string; unit: string; rate: number };

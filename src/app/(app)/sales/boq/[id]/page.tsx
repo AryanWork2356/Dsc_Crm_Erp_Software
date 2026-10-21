@@ -131,6 +131,7 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
           id: i.id, category: i.category, item: i.item, specification: i.specification ?? "", unit: i.unit, quantity: num(i.quantity),
           materialCost: num(i.materialCost), labourCost: num(i.labourCost), otherCost: num(i.otherCost), sellingRate: num(i.sellingRate), materialId: i.materialId,
           lines: parseMeasurements(i.measurements),
+          subcategory: i.subcategory ?? undefined, package: i.package ?? undefined, ref: i.ref ?? undefined, remarks: i.remarks ?? undefined,
         }))}
       />
     </>

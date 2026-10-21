@@ -800,6 +800,10 @@ model Quotation {
   terms          String?
   paymentTerms   String?
   placeOfSupply  String? // GST state code; blank = from the client's GSTIN
+  // the client's own references, printed on the cover (their purchase order and our vendor code with them)
+  clientPoNo     String?
+  clientPoDate   DateTime?
+  vendorCode     String?
   notes          String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -815,17 +819,23 @@ model Quotation {
 }
 
 model QuotationItem {
-  id          String      @id @default(cuid())
-  quotationId String
-  quotation   Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  sortOrder   Int         @default(0)
-  category    BoqCategory @default(OTHER)
-  description String
-  unit        String      @default("nos")
-  quantity    Decimal     @db.Decimal(12, 3)
-  rate        Decimal     @db.Decimal(12, 2)
-  taxPercent  Decimal     @default(18) @db.Decimal(5, 2)
-  amount      Decimal     @db.Decimal(14, 2)
+  id            String      @id @default(cuid())
+  quotationId   String
+  quotation     Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  sortOrder     Int         @default(0)
+  category      BoqCategory @default(OTHER)
+  description   String
+  // layout of the client's own BOQ, kept so the Excel can follow it: scope sheet, section heading, their serial no., spec and remark
+  package       String?
+  section       String?
+  ref           String?
+  specification String?
+  remarks       String?
+  unit          String      @default("nos")
+  quantity      Decimal     @db.Decimal(12, 3)
+  rate          Decimal     @db.Decimal(12, 2)
+  taxPercent    Decimal     @default(18) @db.Decimal(5, 2)
+  amount        Decimal     @db.Decimal(14, 2)
 }
 
 model QuotationRevision {
@@ -875,6 +885,10 @@ model BoqItem {
   sortOrder     Int         @default(0)
   category      BoqCategory @default(OTHER)
   subcategory   String?
+  // from a client's own BOQ: the scope sheet it came from (Civil, Electrical, Fixtures …), their serial number and remark
+  package       String?
+  ref           String?
+  remarks       String?
   item          String
   description   String?
   specification String?

@@ -27,6 +27,11 @@ export type EditorItem = {
   sellingRate: number | "";
   materialId?: string | null;
   lines: MeasureLine[]; // site measurement sheet; when not empty the quantity is calculated from it
+  // kept from a client's own BOQ and passed back on save untouched
+  subcategory?: string;
+  package?: string;
+  ref?: string;
+  remarks?: string;
   auto?: boolean; // selling rate follows cost + profit % until someone types a selling rate by hand
 };
 

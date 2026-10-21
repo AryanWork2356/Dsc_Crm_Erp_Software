@@ -21,6 +21,11 @@ const itemSchema = z.object({
   quantity: z.coerce.number({ message: "Enter a quantity" }).positive("Quantity must be above 0"),
   rate: z.coerce.number({ message: "Enter a rate" }).min(0, "Rate can't be negative"),
   taxPercent: z.coerce.number().min(0).max(100).default(18),
+  package: z.string().trim().optional().nullable(),
+  section: z.string().trim().optional().nullable(),
+  ref: z.string().trim().optional().nullable(),
+  specification: z.string().trim().optional().nullable(),
+  remarks: z.string().trim().optional().nullable(),
 });
 
 const headerSchema = z.object({
@@ -32,6 +37,9 @@ const headerSchema = z.object({
   terms: zOptStr,
   paymentTerms: zOptStr,
   placeOfSupply: zOptStr,
+  clientPoNo: zOptStr,
+  clientPoDate: zOptDate,
+  vendorCode: zOptStr,
   notes: zOptStr,
   discountPct: zNumPos().max(100, "Max 100%").default(0),
 });
@@ -58,7 +66,7 @@ async function load(c: Ctx, id: string) {
 
 function buildItemRows(items: z.infer<typeof itemSchema>[], discountPct: number) {
   const t = computeTotals(items.map((i) => ({ quantity: i.quantity, rate: i.rate, taxPercent: i.taxPercent })), { pct: discountPct });
-  return { t, rows: items.map((i, idx) => ({ sortOrder: idx, category: i.category, description: i.description, unit: i.unit, quantity: i.quantity, rate: i.rate, taxPercent: i.taxPercent, amount: t.lines[idx].amount })) };
+  return { t, rows: items.map((i, idx) => ({ sortOrder: idx, category: i.category, description: i.description, unit: i.unit, quantity: i.quantity, rate: i.rate, taxPercent: i.taxPercent, amount: t.lines[idx].amount, package: i.package || null, section: i.section || null, ref: i.ref || null, specification: i.specification || null, remarks: i.remarks || null })) };
 }
 
 export async function createQuotation(fd: FormData) {
@@ -79,7 +87,7 @@ export async function createQuotation(fd: FormData) {
       const x = await tx.quotation.create({
         data: {
           companyId: c.companyId, number, clientId: h.clientId, leadId: h.leadId ?? null, title: h.title, date: h.date, validUntil: h.validUntil,
-          preparedById: c.userId, terms: h.terms, paymentTerms: h.paymentTerms, placeOfSupply: h.placeOfSupply ?? null, notes: h.notes, discountPct: h.discountPct,
+          preparedById: c.userId, terms: h.terms, paymentTerms: h.paymentTerms, placeOfSupply: h.placeOfSupply ?? null, clientPoNo: h.clientPoNo ?? null, clientPoDate: h.clientPoDate ?? null, vendorCode: h.vendorCode ?? null, notes: h.notes, discountPct: h.discountPct,
           subtotal: t.subtotal, discountAmount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows },
         },
       });
@@ -109,7 +117,7 @@ export async function updateQuotation(id: string, fd: FormData) {
       await tx.quotation.update({
         where: { id },
         data: {
-          clientId: h.clientId, leadId: h.leadId ?? null, title: h.title, date: h.date, validUntil: h.validUntil, terms: h.terms, paymentTerms: h.paymentTerms, placeOfSupply: h.placeOfSupply ?? null, notes: h.notes,
+          clientId: h.clientId, leadId: h.leadId ?? null, title: h.title, date: h.date, validUntil: h.validUntil, terms: h.terms, paymentTerms: h.paymentTerms, placeOfSupply: h.placeOfSupply ?? null, clientPoNo: h.clientPoNo ?? null, clientPoDate: h.clientPoDate ?? null, vendorCode: h.vendorCode ?? null, notes: h.notes,
           discountPct: h.discountPct, subtotal: t.subtotal, discountAmount: t.discount, taxAmount: t.tax, total: t.total, status: "DRAFT",
           items: { create: rows },
         },
@@ -301,7 +309,7 @@ export async function createQuotationFromBoq(boqId: string, fd: FormData) {
         data: {
           companyId: c.companyId, number, clientId, boqId: boq.id, title: boq.title, preparedById: c.userId, terms: defaultTerms?.body, paymentTerms: settings?.defaultPaymentTerms,
           subtotal: t.subtotal, discountAmount: 0, taxAmount: t.tax, total: t.total,
-          items: { create: boq.items.map((i, idx) => ({ sortOrder: idx, category: i.category, description: [i.item, i.specification].filter(Boolean).join(" – "), unit: i.unit, quantity: i.quantity, rate: i.sellingRate, taxPercent: tax, amount: t.lines[idx].amount })) },
+          items: { create: boq.items.map((i, idx) => ({ sortOrder: idx, category: i.category, description: [i.item, i.specification].filter(Boolean).join(" – "), unit: i.unit, quantity: i.quantity, rate: i.sellingRate, taxPercent: tax, amount: t.lines[idx].amount, package: i.package, section: i.subcategory, ref: i.ref, specification: i.specification, remarks: i.remarks })) },
         },
       });
       await audit(c, { action: "CREATE", entityType: "Quotation", entityId: x.id, summary: `Created quotation ${number} from BOQ ${boq.number}` }, tx);

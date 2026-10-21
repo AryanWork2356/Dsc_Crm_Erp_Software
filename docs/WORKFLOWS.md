@@ -189,3 +189,11 @@ Owner or Admin can press **Portal login** on a client (CRM → Clients) or a ven
 ## 30. Switched-off features
 
 `src/lib/features.ts` holds switches for things that are built but not used yet: contractors (`USE_CONTRACTORS`), the leads pipeline (`USE_LEADS`) and the Sales team role (`USE_SALES_TEAM`). All are `false`: the menu entries, worker contractor box and the Sales role choice are hidden. Nothing is deleted. Set a switch to `true` and redeploy to bring the feature back. Outside carpenters, electricians and painters are vendors.
+
+## 31. Quotation in the client's own layout
+
+When a BOQ is imported from the client's Excel, each row remembers the scope sheet it came from (Civil, FAS, Electrical, Fixtures ...), the client's serial number (B-1, DE 01), the section heading and the remark. These survive saving the BOQ, revising it and making the quotation. The quotation's **Excel** then follows that shape: a cover page (*SUMMARY LIST*: client, date, quotation no., state code, client PO no. and date, vendor code, subject, one line per scope, GST, terms, signatory) and one sheet per scope with the client's serial numbers, section headings, a subtotal per section and a scope total. All amounts are live formulas. A quotation not made from a client's file keeps the plain *Quotation* + *BOQ details* layout.
+
+Checked against DSC's real Frido Hyderabad workbook: FAS, speaker and sprinkler totals match to the rupee, civil within 0.35 (DSC does not round each line). Two lines differ because DSC's own file disagrees with itself: the electrical total leaves out the camera cable (283 x 110 has no amount in the sheet) and the fixture transport line says 40,000 as the rate but 50,000 as the amount. The app prices each line as quantity x rate and shows such lines.
+
+A measurement sheet in the client's file (for example "M - Sheet") is shown in the import preview but not ticked.

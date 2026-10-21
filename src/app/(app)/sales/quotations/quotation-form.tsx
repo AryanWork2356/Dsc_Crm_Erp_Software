@@ -19,7 +19,7 @@ type Props = {
   defaultTax: number;
   initial: {
     clientId?: string; leadId?: string; title?: string; date: string; validUntil?: string;
-    terms?: string; paymentTerms?: string; placeOfSupply?: string; notes?: string; discountPct?: number; items: Omit<LineRow, "key">[];
+    terms?: string; paymentTerms?: string; placeOfSupply?: string; clientPoNo?: string; clientPoDate?: string; vendorCode?: string; notes?: string; discountPct?: number; items: Omit<LineRow, "key">[];
   };
   cancelHref: string;
 };
@@ -100,6 +100,9 @@ export function QuotationForm({ action, clients, leads, templates, defaultTax, i
               <Textarea name="terms" rows={6} value={terms} onChange={(e) => setTerms(e.target.value)} />
             </div>
           </Field>
+          <Field label="Client PO number" hint="If the client gave you a purchase order"><Input name="clientPoNo" defaultValue={initial.clientPoNo ?? ""} /></Field>
+          <Field label="Client PO date"><Input name="clientPoDate" type="date" defaultValue={initial.clientPoDate ?? ""} /></Field>
+          <Field label="Vendor code" hint="Our code in the client's books"><Input name="vendorCode" defaultValue={initial.vendorCode ?? ""} /></Field>
           <Field label="Place of supply (GST)" hint="Blank = state in the client's GSTIN"><Select name="placeOfSupply" defaultValue={initial.placeOfSupply ?? ""}><option value="">From the client&apos;s GSTIN</option>{STATE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
           <Field label="Payment terms" hint="Pick a schedule, then edit if needed.">
             <div className="mb-1.5 flex flex-wrap gap-1.5">

@@ -13,7 +13,7 @@ export type ReadItem = {
   sheet: string; row: number; sl: string; section: string; category: BoqCategory;
   item: string; specification: string; unit: string; quantity: number; rate: number | null; remarks: string; flags: string[];
 };
-export type ReadSheet = { name: string; headerRow: number; columns: Record<string, string>; items: ReadItem[]; sections: string[]; skipped: number; warnings: string[] };
+export type ReadSheet = { name: string; headerRow: number; columns: Record<string, string>; items: ReadItem[]; sections: string[]; skipped: number; warnings: string[]; measurement: boolean };
 
 const norm = (v: unknown) => String(v ?? "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
@@ -37,7 +37,7 @@ const UNITS: Record<string, string> = {
   rft: "rft", "r ft": "rft", "rft.": "rft", "running feet": "rft", rmt: "rmt", rm: "rmt", mtr: "rmt", mtrs: "rmt", meter: "rmt", metre: "rmt", m: "rmt",
   nos: "nos", no: "nos", number: "nos", numbers: "nos", pcs: "nos", pc: "nos", each: "nos", ea: "nos", unit: "nos", units: "nos",
   set: "set", sets: "set", kg: "kg", kgs: "kg", ltr: "ltr", litre: "ltr", liter: "ltr", ltrs: "ltr", bag: "bag", box: "box", bags: "bag",
-  ls: "lumpsum", "l s": "lumpsum", lumpsum: "lumpsum", "lump sum": "lumpsum", job: "lumpsum", day: "day", days: "day", hour: "hour", hr: "hour", hrs: "hour",
+  ls: "lumpsum", "l s": "lumpsum", lumpsum: "lumpsum", lumsum: "lumpsum", "lump sum": "lumpsum", "lum sum": "lumpsum", job: "lumpsum", day: "day", days: "day", hour: "hour", hr: "hour", hrs: "hour",
 };
 
 /** keyword → category, checked against the section heading first, then the sheet name */
@@ -45,8 +45,8 @@ const CATEGORY_WORDS: [RegExp, BoqCategory][] = [
   [/fire|alarm|smoke|detector|sprinkler|hooter/i, "ELECTRICAL"],
   [/demolition|dismantl|civil|masonry|plaster|waterproof|screed|pcc/i, "CIVIL"],
   [/floor|tile|granite|marble|epoxy|vinyl|carpet|skirting/i, "FLOORING"],
+  [/paint|polish|putty|texture|wall finish|wallpaper|wall\s*(&|and)\s*ceiling/i, "PAINTING"],
   [/false ceiling|ceiling|gypsum|grid/i, "FALSE_CEILING"],
-  [/paint|polish|putty|texture|wall finish|wallpaper|wall & ceiling|wall and ceiling/i, "PAINTING"],
   [/electric|wiring|cabling|conduit|switch|socket|db |earthing|cctv|data|speaker|audio|signage wiring/i, "ELECTRICAL"],
   [/light|led|lamp|luminaire/i, "LIGHTING"],
   [/plumb|sanitary|pipe|drain|cpvc|toilet|water supply/i, "PLUMBING"],
@@ -92,6 +92,12 @@ function numberOf(t: string): number | null {
 
 const TOTAL_LINE = /^(sub\s*-?\s*total\w*|total\w*|grand total|gst|igst|cgst|sgst|tax|summary|amount in words|note|notes|terms|remark|remarks|add|less|round)\b/i;
 
+/** "Civil and Interiors Works BOQ" -> "Civil and Interiors Works": the scope name used on the quotation cover. */
+export function packageLabel(sheetName: string): string {
+  const t = sheetName.replace(/\s+/g, " ").trim().replace(/\s*\b(boq|sheet)\b\s*$/i, "").trim();
+  return t || sheetName.trim();
+}
+
 export async function readClientBoq(buf: Buffer): Promise<ReadSheet[]> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf as never);
@@ -107,7 +113,12 @@ export async function readClientBoq(buf: Buffer): Promise<ReadSheet[]> {
 function readSheet(ws: ExcelJS.Worksheet): ReadSheet | null {
   const rowCount = Math.min(ws.rowCount, 4000);
   const width = Math.min(ws.columnCount || 1, 40);
-  const textAt = (r: number, c: number) => cellText(ws.getRow(r).getCell(c).value);
+  // a merged block (like "FINAL TOTAL" across B:G) echoes its text into every cell; only the first cell is real
+  const textAt = (r: number, c: number) => {
+    const cell = ws.getRow(r).getCell(c);
+    if (cell.isMerged && cell.master && cell.master.address !== cell.address) return "";
+    return cellText(cell.value);
+  };
 
   // 1. find the header row: needs a description-like AND a quantity-like column (plus unit or rate or amount)
   let headerRow = 0;
@@ -136,6 +147,8 @@ function readSheet(ws: ExcelJS.Worksheet): ReadSheet | null {
     name: ws.name, headerRow,
     columns: { Description: letters(cols.item), Specification: letters(cols.spec), Unit: letters(cols.unit), Quantity: letters(cols.qty), Rate: letters(cols.rate), "Serial no.": letters(cols.sl) },
     items: [], sections: [], skipped: 0, warnings: [],
+    // a site measurement sheet (feet / inches / final qty), not a price list: shown but not ticked by default
+    measurement: /\bm\s*-?\s*sheet\b|\bmeasure(ment)?s?\b/i.test(ws.name) || Array.from({ length: width }, (_, k) => norm(textAt(headerRow, k + 1))).some((h) => h === "final qty"),
   };
   // a sheet whose item column is headed "FIXTURES" is a fixtures list, whatever the words in each row say
   const fixturesSheet = ["fixtures", "fixture", "fixture description"].includes(norm(textAt(headerRow, cols.item)));

@@ -7,7 +7,7 @@ import { amountInWords, computeTotals } from "@/lib/money";
 import { loadCompany, type CompanyInfo } from "@/lib/pdf";
 import { placeLabel, splitTax } from "@/lib/gst";
 import { LOGO_PNG_BASE64 } from "@/lib/logo";
-import { BOQ_CATEGORIES } from "@/lib/enums";
+import { BOQ_CATEGORIES, UNIT_OPTS } from "@/lib/enums";
 import { formatDate, humanize, num } from "@/lib/utils";
 
 const NAVY = "FF14244A", GOLD = "FFC8872E", CREAM = "FFFAF6EE", PALE = "FFEEF3FB", GREY = "FF64748B", INK = "FF0F172A";
@@ -51,11 +51,232 @@ function headerRow(row: ExcelJS.Row) {
   row.height = 22;
 }
 
+type QuoteFull = NonNullable<Awaited<ReturnType<typeof findQuotation>>>;
+function findQuotation(id: string, companyId: string) {
+  return db.quotation.findFirst({ where: { id, companyId, deletedAt: null }, include: { client: true, items: { orderBy: { sortOrder: "asc" } } } });
+}
+
+// printed the way DSC writes them on its own sheets
+const UNIT_PRINT: Record<string, string> = { sqft: "Sq ft", sqm: "Sq m", rft: "Rft", rmt: "Rmt", nos: "Nos", set: "Set", lumpsum: "L.S.", kg: "Kg", ltr: "Ltr", bag: "Bag", box: "Box", day: "Day", hour: "Hour" };
+const UNIT_LABEL = new Map([...UNIT_OPTS.map((u) => [u.value, u.label] as [string, string]), ...Object.entries(UNIT_PRINT)]);
+const unitText = (u: string) => UNIT_LABEL.get(u) ?? u;
+
+/** Excel sheet names: at most 31 characters, none of  [ ] : * ? / \  and unique within the file. */
+function sheetName(raw: string, used: Set<string>): string {
+  const base = (raw.replace(/[\[\]:*?/\\']/g, " ").replace(/\s+/g, " ").trim() || "Sheet").slice(0, 31).trim();
+  let name = base;
+  for (let n = 2; used.has(name.toLowerCase()); n++) name = `${base.slice(0, 28).trim()} ${n}`;
+  used.add(name.toLowerCase());
+  return name;
+}
+
+/**
+ * A quotation that came from a client's own BOQ keeps that BOQ's shape: a cover page ("SUMMARY LIST") with the client,
+ * our references, one line per scope (Civil, FAS, Electrical, Fixtures …) and GST, then one sheet per scope with the
+ * client's own serial numbers and section headings, in their column order. Every amount is a live formula.
+ */
+function buildPackaged(wb: ExcelJS.Workbook, company: CompanyInfo, q: QuoteFull, t: ReturnType<typeof computeTotals>, gst: ReturnType<typeof splitTax>, page: Partial<ExcelJS.PageSetup>) {
+  const COLS = 8;
+  const widths = [{ width: 8 }, { width: 34 }, { width: 46 }, { width: 9 }, { width: 11 }, { width: 12 }, { width: 16 }, { width: 26 }];
+  const used = new Set<string>(["summary list"]);
+  const order = new Map<string, number[]>();
+  q.items.forEach((it, k) => {
+    const key = it.package?.trim() || "Additional items";
+    order.set(key, [...(order.get(key) ?? []), k]);
+  });
+
+  // ───── one sheet per scope ─────
+  const packs: { label: string; addr: string; value: number; ws: ExcelJS.Worksheet }[] = [];
+  for (const [label, idxs] of order) {
+    const ws = wb.addWorksheet(sheetName(label, used), { views: [{ showGridLines: false }] });
+    ws.columns = widths;
+    let r = letterhead(wb, ws, company, COLS);
+    ws.mergeCells(`A${r}:H${r}`);
+    ws.getCell(`A${r}`).value = `${label.toUpperCase()} – BOQ`;
+    ws.getCell(`A${r}`).font = { name: FONT, size: 13, bold: true, color: { argb: NAVY } };
+    r += 2;
+    ws.getRow(r).values = ["Sl. No.", "Work title", "Detailed specification", "UOM", "Quantity", "Rate (₹)", "Amount (₹)", "Remarks"];
+    headerRow(ws.getRow(r));
+    const head = r++;
+    // sections in the order the client wrote them
+    const sections = new Map<string, number[]>();
+    for (const k of idxs) sections.set(q.items[k].section?.trim() ?? "", [...(sections.get(q.items[k].section?.trim() ?? "") ?? []), k]);
+    const ranges: string[] = [];
+    let n = 0;
+    for (const [sec, ks] of sections) {
+      if (sec) {
+        ws.mergeCells(`A${r}:H${r}`);
+        ws.getCell(`A${r}`).value = sec;
+        ws.getCell(`A${r}`).font = { name: FONT, bold: true, color: { argb: NAVY } };
+        ws.getCell(`A${r}`).fill = solid(PALE);
+        r++;
+      }
+      const start = r;
+      for (const k of ks) {
+        const it = q.items[k];
+        const spec = it.specification?.trim() ?? "";
+        const title = spec && it.description.endsWith(` – ${spec}`) ? it.description.slice(0, -(spec.length + 3)) : it.description;
+        n++;
+        ws.getRow(r).values = [it.ref?.trim() || n, title, spec, unitText(it.unit), num(it.quantity), num(it.rate), { formula: `ROUND(E${r}*F${r},2)`, result: t.lines[k].amount }, it.remarks ?? ""];
+        ws.getRow(r).eachCell({ includeEmpty: true }, (cell, cn) => {
+          cell.border = box;
+          cell.font = { name: FONT, size: 10 };
+          cell.alignment = { vertical: "top", wrapText: cn === 2 || cn === 3 || cn === 8, horizontal: cn === 1 || cn === 4 ? "center" : cn >= 5 && cn <= 7 ? "right" : "left" };
+        });
+        ws.getCell(`E${r}`).numFmt = "#,##0.###";
+        ws.getCell(`F${r}`).numFmt = MONEY;
+        ws.getCell(`G${r}`).numFmt = MONEY;
+        r++;
+      }
+      ranges.push(`G${start}:G${r - 1}`);
+      if (sec) {
+        const sub = r2(ks.reduce((s, k) => s + t.lines[k].amount, 0));
+        ws.getCell(`F${r}`).value = "SUBTOTAL";
+        ws.getCell(`F${r}`).alignment = { horizontal: "right" };
+        ws.getCell(`G${r}`).value = { formula: `SUM(G${start}:G${r - 1})`, result: sub };
+        ws.getCell(`G${r}`).numFmt = MONEY;
+        for (let cn = 6; cn <= 7; cn++) { ws.getCell(r, cn).font = { name: FONT, bold: true, size: 10 }; ws.getCell(r, cn).border = box; }
+        r++;
+      }
+      r++;
+    }
+    const total = r2(idxs.reduce((s, k) => s + t.lines[k].amount, 0));
+    ws.getCell(`F${r}`).value = "TOTAL";
+    ws.getCell(`F${r}`).alignment = { horizontal: "right" };
+    ws.getCell(`G${r}`).value = { formula: `SUM(${ranges.join(",")})`, result: total };
+    ws.getCell(`G${r}`).numFmt = MONEY;
+    for (let cn = 6; cn <= 7; cn++) { ws.getCell(r, cn).font = { name: FONT, bold: true, size: 11, color: { argb: "FFFFFFFF" } }; ws.getCell(r, cn).fill = solid(NAVY); ws.getCell(r, cn).border = box; }
+    ws.views = [{ state: "frozen", ySplit: head, showGridLines: false }];
+    ws.pageSetup = { ...page, orientation: "landscape", printTitlesRow: `${head}:${head}` };
+    ws.headerFooter.oddFooter = `&L&8${company.name}&C&8Page &P of &N&R&8${q.number}`;
+    packs.push({ label, addr: `'${ws.name}'!G${r}`, value: total, ws });
+  }
+
+  // ───── the cover ─────
+  const ws = wb.addWorksheet("SUMMARY LIST", { views: [{ showGridLines: false }] });
+  ws.columns = widths;
+  let r = letterhead(wb, ws, company, COLS);
+  ws.mergeCells(`A${r}:F${r}`);
+  ws.getCell(`A${r}`).value = "QUOTATION";
+  ws.getCell(`A${r}`).font = { name: FONT, size: 20, bold: true, color: { argb: NAVY } };
+  r += 2;
+  const left: string[] = ["To,", q.client.companyName ?? q.client.name];
+  if (q.client.companyName && q.client.name) left.push(`Attn: ${q.client.name}`);
+  if (q.client.address) left.push(...q.client.address.split(/\n|,\s*/).filter(Boolean).reduce<string[]>((acc, part) => { const last = acc.at(-1); if (last && last.length + part.length < 56) acc[acc.length - 1] = `${last}, ${part}`; else acc.push(part); return acc; }, []));
+  if (q.client.email) left.push(`e-mail : ${q.client.email}`);
+  left.push(`State Name : ${placeLabel(gst.supplyState)}`);
+  if (q.client.gstin) left.push(`GSTIN/UIN : ${q.client.gstin}`);
+  const right: [string, string][] = [["Date :", formatDate(q.date)], ["Quotation No :", q.number + (q.revision > 1 ? ` (Rev ${q.revision})` : "")], ["State Code :", gst.supplyState ?? ""], ["Client PO No :", q.clientPoNo ?? ""], ["Order Date :", q.clientPoDate ? formatDate(q.clientPoDate) : ""], ["Vendor Code :", q.vendorCode ?? ""]];
+  const rows = Math.max(left.length, right.length);
+  for (let k = 0; k < rows; k++, r++) {
+    if (left[k] !== undefined) {
+      ws.mergeCells(`A${r}:E${r}`);
+      ws.getCell(`A${r}`).value = left[k];
+      ws.getCell(`A${r}`).font = { name: FONT, size: 10, bold: k < 2 };
+    }
+    if (right[k]) {
+      ws.getCell(`F${r}`).value = right[k][0];
+      ws.getCell(`F${r}`).font = { name: FONT, size: 10, bold: true, color: { argb: GREY } };
+      ws.getCell(`F${r}`).alignment = { horizontal: "right" };
+      ws.mergeCells(`G${r}:H${r}`);
+      ws.getCell(`G${r}`).value = right[k][1];
+      ws.getCell(`G${r}`).font = { name: FONT, size: 10 };
+    }
+  }
+  r++;
+  ws.mergeCells(`A${r}:H${r}`);
+  ws.getCell(`A${r}`).value = `SUB : ${q.title ?? ""}`;
+  ws.getCell(`A${r}`).font = { name: FONT, size: 11, bold: true };
+  ws.getCell(`A${r}`).alignment = { wrapText: true, vertical: "top" };
+  ws.getRow(r).height = 30;
+  r += 2;
+  ws.mergeCells(`A${r}:H${r}`);
+  ws.getCell(`A${r}`).value = "SUMMARY";
+  ws.getCell(`A${r}`).font = { name: FONT, size: 12, bold: true, color: { argb: NAVY } };
+  r++;
+  ws.getRow(r).values = ["Sl. No.", "Work category", "", "", "", "", "Amount (₹)", "Remarks"];
+  ws.mergeCells(`B${r}:F${r}`);
+  headerRow(ws.getRow(r));
+  r++;
+  const first = r;
+  packs.forEach((p, k) => {
+    ws.getRow(r).values = [k + 1, p.label.toUpperCase(), "", "", "", "", { formula: p.addr, result: p.value }, ""];
+    ws.mergeCells(`B${r}:F${r}`);
+    for (let cn = 1; cn <= COLS; cn++) { ws.getCell(r, cn).border = box; ws.getCell(r, cn).font = { name: FONT, size: 10 }; }
+    ws.getCell(`A${r}`).alignment = { horizontal: "center" };
+    ws.getCell(`G${r}`).numFmt = MONEY;
+    r++;
+  });
+  const last = r - 1;
+  const line2 = (label: string, value: number | { formula: string; result: number }, bold = false, fill?: string) => {
+    ws.mergeCells(`B${r}:F${r}`);
+    ws.getCell(`B${r}`).value = label;
+    ws.getCell(`B${r}`).alignment = { horizontal: "right" };
+    ws.getCell(`G${r}`).value = value;
+    ws.getCell(`G${r}`).numFmt = MONEY;
+    for (let cn = 2; cn <= COLS; cn++) {
+      const x = ws.getCell(r, cn);
+      x.font = { name: FONT, size: 10, bold, color: { argb: fill ? "FFFFFFFF" : INK } };
+      x.border = box;
+      if (fill) x.fill = solid(fill);
+    }
+    return r++;
+  };
+  const subRow = line2("TOTAL", { formula: `SUM(G${first}:G${last})`, result: t.subtotal }, true);
+  const discRow = t.discount > 0 ? line2(`Discount (${num(q.discountPct)}%)`, { formula: `-ROUND(G${subRow}*${num(q.discountPct)}/100,2)`, result: -t.discount }) : 0;
+  const taxStart = r;
+  for (const x of gst.rates) {
+    if (gst.type === "INTER") line2(`IGST @ ${x.rate}%`, x.igst);
+    else { line2(`CGST @ ${x.rate / 2}%`, x.cgst); line2(`SGST @ ${x.rate / 2}%`, x.sgst); }
+  }
+  line2("GRAND TOTAL WITH TAXES", { formula: `G${subRow}${discRow ? `+G${discRow}` : ""}${r > taxStart ? `+SUM(G${taxStart}:G${r - 1})` : ""}`, result: t.total }, true, NAVY);
+  r++;
+  ws.mergeCells(`A${r}:H${r}`);
+  ws.getCell(`A${r}`).value = `Amount in words: ${amountInWords(t.total)}`;
+  ws.getCell(`A${r}`).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
+  ws.getCell(`A${r}`).alignment = { wrapText: true, vertical: "top" };
+  ws.getRow(r).height = 30;
+  r += 2;
+  const block = (title: string, body?: string | null) => {
+    if (!body?.trim()) return;
+    ws.mergeCells(`A${r}:H${r}`);
+    ws.getCell(`A${r}`).value = title;
+    ws.getCell(`A${r}`).font = { name: FONT, bold: true, size: 11, color: { argb: NAVY } };
+    r++;
+    ws.mergeCells(`A${r}:H${r}`);
+    ws.getCell(`A${r}`).value = body;
+    ws.getCell(`A${r}`).font = { name: FONT, size: 10 };
+    ws.getCell(`A${r}`).alignment = { wrapText: true, vertical: "top" };
+    ws.getRow(r).height = Math.max(18, Math.ceil(body.length / 110) * 14 + body.split("\n").length * 2);
+    r += 2;
+  };
+  block("Remarks", [q.paymentTerms, q.terms, q.notes].filter((x) => x?.trim()).join("\n"));
+  block("Bank details", [company.bankName && `Bank: ${company.bankName}`, company.bankBranch && `Branch: ${company.bankBranch}`, company.bankAccountNo && `A/c No: ${company.bankAccountNo}`, company.bankIfsc && `IFSC: ${company.bankIfsc}`].filter(Boolean).join("     "));
+  r++;
+  ws.mergeCells(`F${r}:H${r}`);
+  ws.getCell(`F${r}`).value = `For ${company.name}`;
+  ws.getCell(`F${r}`).font = { name: FONT, size: 10 };
+  ws.getCell(`F${r}`).alignment = { horizontal: "right" };
+  r += 4;
+  ws.mergeCells(`F${r}:H${r}`);
+  ws.getCell(`F${r}`).value = "Authorised Signatory";
+  ws.getCell(`F${r}`).font = { name: FONT, size: 9, color: { argb: GREY } };
+  ws.getCell(`F${r}`).alignment = { horizontal: "right" };
+  ws.getCell(`F${r}`).border = { top: line(GREY) };
+  ws.pageSetup = page;
+  ws.headerFooter.oddFooter = `&L&8${company.name}&C&8Page &P of &N&R&8${q.number}`;
+
+  // the cover opens first, then each scope in the client's order
+  (ws as unknown as { orderNo: number }).orderNo = 0;
+  packs.forEach((p, k) => { (p.ws as unknown as { orderNo: number }).orderNo = k + 1; });
+  wb.views = [{ x: 0, y: 0, width: 10000, height: 20000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const c = await getCtx();
   if (!c || !c.can("quotations:view")) return new Response("Forbidden", { status: 403 });
-  const q = await db.quotation.findFirst({ where: { id, companyId: c.companyId, deletedAt: null }, include: { client: true, items: { orderBy: { sortOrder: "asc" } } } });
+  const q = await findQuotation(id, c.companyId);
   if (!q) return new Response("Not found", { status: 404 });
   if (c.role === "CLIENT" || c.role === "VENDOR") return new Response("Forbidden", { status: 403 }); // clients get the PDF from their portal
   if (c.role === "SALES" && q.preparedById !== c.userId) {
@@ -71,6 +292,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   wb.creator = company.name;
   wb.title = `Quotation ${q.number}`;
   const page: Partial<ExcelJS.PageSetup> = { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.7, header: 0.3, footer: 0.3 } };
+  const file = (b: ArrayBuffer) => new Response(new Uint8Array(b), {
+    headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="${q.number}.xlsx"`, "Cache-Control": "private, no-store" },
+  });
+
+  // made from a client's own BOQ: follow its shape (cover page + one sheet per scope)
+  if (q.items.some((i) => i.package)) {
+    buildPackaged(wb, company, q, t, gst, page);
+    await audit(c, { action: "EXPORT", entityType: "Quotation", entityId: id, summary: `Exported quotation ${q.number} to Excel (client layout)` });
+    return file((await wb.xlsx.writeBuffer()) as ArrayBuffer);
+  }
   const widths = [{ width: 6 }, { width: 52 }, { width: 9 }, { width: 11 }, { width: 14 }, { width: 8 }, { width: 17 }];
 
   // ───────── "BOQ details" (built first so the summary can point at its category sub-totals) ─────────
