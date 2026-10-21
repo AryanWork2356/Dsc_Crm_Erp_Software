@@ -18,8 +18,10 @@ export function TranslateLoader() {
   React.useEffect(() => {
     const code = langFromCookie(document.cookie);
     document.documentElement.lang = code;
-    if (code === "en") return;
 
+    // Any translator (ours, Chrome's own "Translate this page", an extension) rewrites text nodes. When React later removes
+    // or reorders such a node it throws and the whole screen goes blank. These guards make that harmless, so they are
+    // always on, whatever language is chosen.
     const proto = Node.prototype as Node & { __guarded?: boolean };
     if (!proto.__guarded) {
       proto.__guarded = true;
@@ -34,6 +36,8 @@ export function TranslateLoader() {
         return insert.call(this, node, ref) as T;
       };
     }
+
+    if (code === "en") return; // the Google translator is loaded only when a language is chosen
 
     window.googleTranslateElementInit = () => {
       if (window.google) new window.google.translate.TranslateElement({ pageLanguage: "en", includedLanguages: "hi,mr,gu", autoDisplay: false }, "google_translate_element");
