@@ -3,6 +3,7 @@ import { runReportReminders } from "./site-report-reminders";
 import { runTimeLimitReminders } from "./time-limits";
 import { runWeeklyDigest } from "./director-reports";
 import { syncResourceShortages } from "./resources";
+import { syncDeliveryRisks } from "./delivery-risk";
 
 const MIN_GAP_MS = 5 * 60 * 1000;
 const lastRun = new Map<string, number>();
@@ -19,6 +20,7 @@ export async function maybeRunReminders(companyId: string, now: Date = new Date(
   try {
     await runReportReminders(companyId, now);
     await syncResourceShortages(companyId, now); // a crew shortage becomes one action before the overdue check runs
+    await syncDeliveryRisks(companyId, now); // so does a delivery that is late or will arrive too late
     await runTimeLimitReminders(companyId, now);
     await runWeeklyDigest(companyId, now);
   } catch (e) {

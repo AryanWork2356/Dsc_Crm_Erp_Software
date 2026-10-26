@@ -19,3 +19,10 @@ Company decisions needed: none new in this batch.
 - Menus: Manpower added to the supervisor, engineer, project manager, management and admin menus.
 
 Company decisions needed: the extra days for out-of-city jobs (now 2), the 3-day look-ahead for crew shortages, who the resource coordinator is.
+
+## Batch 2B – deliveries, waste, extra work (done, 354 tests pass)
+- **Late deliveries** (Procurement → Deliveries): each PO line has a need-by date and the supplier's latest promised date (falling back to the order's delivery date). *Late* = the promise has passed; *too late* = the promise is after the day the site needs it. Each raises ONE action for procurement (and tells the project manager), needs a reason (our late request / supplier / transport / drawing change / site access / other / not known) and a recovery plan, and closes when the material arrives or the dates are corrected.
+- **Waste and reconciliation** (`/inventory/waste`): record waste, damage, supplier damage, rework or a reusable offcut with a reason and a named person to find out why (an action is raised). Everything except an offcut leaves the stock (refused if the location does not have that much); an offcut stays in stock. Per project and material the page shows issued − returned − waste − still at site = used, all from stock records.
+- **Extra work**: kinds Chargeable / Included in the contract / Emergency / DSC's own rework / Concession; scope check; DSC's own cost and margin, schedule impact; included work and own rework can never carry a price; emergency work and concessions need a director (someone other than the person who raised it) before they start; emergency work then keeps an action open until the client's written approval is recorded; completed work is verified by the project manager; Accounts links the invoice it was billed on (emergency work cannot be linked until the client's approval is on record). Exceptions page shows emergency work without approval and finished work not on an invoice.
+
+Company decisions needed: the day-count rules are written in `lib/delivery-risk.ts` and `lib/readiness.ts`; who may approve concessions (now Owner, Management, Admin).

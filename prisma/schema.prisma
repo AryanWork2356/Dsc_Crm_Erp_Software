@@ -1217,18 +1217,22 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id          String        @id @default(cuid())
-  poId        String
-  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
-  materialId  String?
-  description String
-  unit        String        @default("nos")
-  quantity    Decimal       @db.Decimal(12, 3)
-  receivedQty Decimal       @default(0) @db.Decimal(12, 3)
-  rate        Decimal       @db.Decimal(12, 2)
-  taxPercent  Decimal       @default(18) @db.Decimal(5, 2)
-  amount      Decimal       @db.Decimal(14, 2)
-  boqItemId   String?
+  id           String        @id @default(cuid())
+  poId         String
+  po           PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  materialId   String?
+  description  String
+  unit         String        @default("nos")
+  quantity     Decimal       @db.Decimal(12, 3)
+  receivedQty  Decimal       @default(0) @db.Decimal(12, 3)
+  rate         Decimal       @db.Decimal(12, 2)
+  taxPercent   Decimal       @default(18) @db.Decimal(5, 2)
+  amount       Decimal       @db.Decimal(14, 2)
+  boqItemId    String?
+  needBy       DateTime? // when the site needs it (falls back to the order's delivery date)
+  promisedEta  DateTime? // what the supplier last promised
+  delayReason  DelayReason?
+  recoveryNote String?
 }
 
 model MaterialReceipt {
@@ -1689,26 +1693,38 @@ enum AdditionalWorkStatus {
 
 /// Work outside the agreed scope. SOP: it cannot start until the client has approved it in writing.
 model AdditionalWork {
-  id            String               @id @default(cuid())
-  companyId     String
-  number        String
-  projectId     String
-  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title         String
-  description   String?
-  amount        Decimal              @default(0) @db.Decimal(14, 2)
-  status        AdditionalWorkStatus @default(DRAFT)
-  requestedById String
-  sentAt        DateTime?
-  decidedAt     DateTime?
-  decidedByName String? // who at the client approved / declined
-  decisionVia   String? // PORTAL | RECORDED
-  decisionNote  String?
-  approvalDocId String? // uploaded written approval (email, signed letter, WhatsApp screenshot)
-  startedAt     DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  id                   String               @id @default(cuid())
+  companyId            String
+  number               String
+  projectId            String
+  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title                String
+  description          String?
+  amount               Decimal              @default(0) @db.Decimal(14, 2)
+  status               AdditionalWorkStatus @default(DRAFT)
+  requestedById        String
+  sentAt               DateTime?
+  decidedAt            DateTime?
+  decidedByName        String? // who at the client approved / declined
+  decisionVia          String? // PORTAL | RECORDED
+  decisionNote         String?
+  approvalDocId        String? // uploaded written approval (email, signed letter, WhatsApp screenshot)
+  startedAt            DateTime?
+  completedAt          DateTime?
+  kind                 ExtraKind            @default(CHARGEABLE)
+  inOriginalScope      Boolean? // the scope check: is it already in the contract?
+  scopeNote            String?
+  costEstimate         Decimal              @default(0) @db.Decimal(14, 2) // DSC's own extra cost
+  scheduleImpactDays   Int                  @default(0)
+  internalApprovedById String?
+  internalApprovedAt   DateTime?
+  internalNote         String?
+  verifiedAt           DateTime?
+  verifiedById         String?
+  verifyNote           String?
+  billedInvoiceId      String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
   @@unique([companyId, number])
   @@index([companyId, projectId])
@@ -2011,4 +2027,54 @@ model ChecklistItem {
 
   @@unique([feasibilityId, kind, key])
   @@index([feasibilityId])
+}
+
+// ───────────────────────── DELIVERY RISK, WASTE, VARIATION KINDS ─────────────────────────
+enum DelayReason {
+  DSC_LATE_REQUEST
+  SUPPLIER_DELAY
+  TRANSPORT
+  SPEC_CHANGE
+  SITE_ACCESS
+  OTHER
+  UNKNOWN
+}
+
+enum ExtraKind {
+  CHARGEABLE // outside the contract: the client pays, needs the client's written approval
+  INCLUDED // already in the contract: nothing to charge
+  EMERGENCY // done first for safety or continuity; a director approves, the client's approval follows
+  OWN_REWORK // correcting DSC's own mistake: never charged
+  CONCESSION // DSC chooses to give it free: a director approves and the value is recorded
+}
+
+enum WasteKind {
+  WASTE
+  DAMAGED
+  SUPPLIER_DAMAGE
+  REWORK
+  OFFCUT_REUSABLE
+}
+
+/// Material lost, damaged, or set aside as a reusable offcut, with the reason and who is looking into it.
+model MaterialWaste {
+  id           String    @id @default(cuid())
+  companyId    String
+  projectId    String?
+  materialId   String
+  locationId   String?
+  kind         WasteKind @default(WASTE)
+  quantity     Decimal   @db.Decimal(14, 3)
+  unit         String
+  unitCost     Decimal   @default(0) @db.Decimal(12, 2)
+  costValue    Decimal   @default(0) @db.Decimal(14, 2)
+  reason       String
+  ownerId      String? // who is looking into why
+  actionNote   String?
+  date         DateTime  @db.Date
+  recordedById String
+  createdAt    DateTime  @default(now())
+
+  @@index([companyId, date])
+  @@index([projectId, materialId])
 }
