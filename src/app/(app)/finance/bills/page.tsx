@@ -51,6 +51,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
           { name: "dueDate", label: "Due date", type: "date" },
           { name: "amount", label: "Bill amount incl. GST (₹)", type: "number", required: true },
           { name: "notes", label: "Notes", type: "textarea" },
+          { name: "overrideReason", label: "Reason to go ahead (only if the app warns)", type: "textarea", full: true, hint: "If the bill looks like one already recorded, or is for material that has not arrived, say why it is right." },
         ]} action={createVendorBill} submitLabel="Save bill" />
       )} />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3"><StatCard label="Unpaid" value={formatINR(owed)} tone={owed ? "warn" : "good"} href="/finance/payables" /><StatCard label="Overdue" value={formatINR(late)} tone={late ? "bad" : "good"} /></div>

@@ -302,7 +302,28 @@ const billSchema = z.object({
   dueDate: zOptDate,
   amount: z.coerce.number({ message: "Enter the bill amount" }).positive("Amount must be above 0"),
   notes: zOptStr,
+  overrideReason: zOptStr,
 });
+
+/**
+ * Bill checks that are not hard errors but must not pass quietly:
+ *  1. a look-alike: same vendor, same amount, bill date within 7 days, different number (a re-sent or re-typed bill)
+ *  2. billing ahead of delivery: the total billed on the order is more than the value of what has been received (2 % allowed)
+ * The hard checks (same number twice, above the PO value, no certification, payment limits) stay in force as before.
+ */
+async function billWarnings(companyId: string, d: { vendorId: string; number: string; poId?: string; billDate: Date; amount: number }) {
+  const out: string[] = [];
+  const near = await db.vendorBill.findFirst({ where: { companyId, vendorId: d.vendorId, status: { not: "CANCELLED" }, number: { not: d.number }, amount: { gte: d.amount - 0.5, lte: d.amount + 0.5 }, billDate: { gte: new Date(d.billDate.getTime() - 7 * 86400000), lte: new Date(d.billDate.getTime() + 7 * 86400000) } }, select: { number: true } });
+  if (near) out.push(`Bill ${near.number} from this vendor has the same amount and nearly the same date. It may be the same bill.`);
+  if (d.poId) {
+    const items = await db.purchaseOrderItem.findMany({ where: { poId: d.poId }, select: { quantity: true, receivedQty: true, rate: true, taxPercent: true } });
+    const delivered = items.reduce((s, i) => s + Math.min(num(i.receivedQty), num(i.quantity)) * num(i.rate) * (1 + num(i.taxPercent) / 100), 0);
+    const billed = await db.vendorBill.aggregate({ where: { poId: d.poId, status: { not: "CANCELLED" } }, _sum: { amount: true } });
+    const after = num(billed._sum.amount) + d.amount;
+    if (after > delivered * 1.02 + 1) out.push(`Bills on this order would total ₹${Math.round(after).toLocaleString("en-IN")} but only ₹${Math.round(delivered).toLocaleString("en-IN")} of material has been received.`);
+  }
+  return out;
+}
 
 export async function createVendorBill(fd: FormData) {
   return run(async () => {
@@ -319,8 +340,12 @@ export async function createVendorBill(fd: FormData) {
       const billed = await db.vendorBill.aggregate({ where: { poId: po.id, status: { not: "CANCELLED" } }, _sum: { amount: true } });
       if (num(billed._sum.amount) + d.amount > num(po.total) * 1.02 + 0.01) throw new UserError(`Bills would total ₹${(num(billed._sum.amount) + d.amount).toLocaleString("en-IN")} against a PO of ₹${num(po.total).toLocaleString("en-IN")}.`);
     }
-    const b = await db.vendorBill.create({ data: { companyId: c.companyId, number: d.number, vendorId: d.vendorId, poId: d.poId ?? null, projectId, billDate: d.billDate, dueDate: d.dueDate, amount: d.amount, notes: d.notes } });
-    await audit(c, { action: "CREATE", entityType: "VendorBill", entityId: b.id, summary: `Recorded bill ${d.number} from ${vendor.name} – ₹${d.amount.toLocaleString("en-IN")}` });
+    // checks that need a written reason to get past (never silently): a look-alike bill, or billing for material that has not arrived
+    const warnings = await billWarnings(c.companyId, d);
+    const why = (d.overrideReason ?? "").trim();
+    if (warnings.length && why.length < 5) throw new UserError(`${warnings.join(" ")} If this is correct, write why in “Reason to go ahead”.`);
+    const b = await db.vendorBill.create({ data: { companyId: c.companyId, number: d.number, vendorId: d.vendorId, poId: d.poId ?? null, projectId, billDate: d.billDate, dueDate: d.dueDate, amount: d.amount, notes: warnings.length ? `${d.notes ? d.notes + " · " : ""}Checked with reason: ${why} (${warnings.join(" ")})` : d.notes } });
+    await audit(c, { action: "CREATE", entityType: "VendorBill", entityId: b.id, summary: `Recorded bill ${d.number} from ${vendor.name} – ₹${d.amount.toLocaleString("en-IN")}${warnings.length ? ` – went ahead despite: ${warnings.join(" ")} Reason: ${why}` : ""}` });
     refresh();
     return { message: "Vendor bill recorded" };
   });

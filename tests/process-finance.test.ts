@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getCtx } from "@/lib/auth";
 import { loginAs, logout, fd } from "./setup";
 import { createClientPO, setClientPoStatus, updateClientPO } from "@/app/(app)/crm/clients/po-actions";
-import { createInvoice, updateInvoice } from "@/app/(app)/finance/actions";
+import { createInvoice, createVendorBill, updateInvoice } from "@/app/(app)/finance/actions";
 import { addCollectionNote } from "@/app/(app)/finance/collection-actions";
 import { setEstimateToComplete } from "@/app/(app)/projects/actions";
 import { clientAccount, billedAgainstPo } from "@/lib/client-account";
@@ -238,5 +238,38 @@ describe("forecast final cost", () => {
     await loginAs("owner@dsc.demo");
     const rep = await exceptionReport((await getCtx())!);
     expect(rep.sections.find((s) => s.key === "forecast_loss")?.rows.some((r) => r.id === project.id)).toBe(true);
+  });
+});
+
+describe("vendor bill checks", () => {
+  const mkBill = (fields: Record<string, string | number>) => createVendorBill(fd({ billDate: iso(0), ...fields }));
+  async function vendorAndPo(received: number) {
+    const company = await db.company.findFirstOrThrow();
+    const by = (await db.user.findFirstOrThrow({ where: { email: "procurement@dsc.demo" } })).id;
+    const vendor = await db.vendor.create({ data: { companyId: company.id, code: `V-B${tag()}`, name: `Bill vendor ${tag()}` } });
+    const po = await db.purchaseOrder.create({ data: { companyId: company.id, number: `PO-B${tag()}`, vendorId: vendor.id, status: "SENT_TO_VENDOR", total: 118000, createdById: by, items: { create: [{ description: "Tiles", unit: "box", quantity: 100, receivedQty: received, rate: 1000, amount: 100000, taxPercent: 18 }] } } });
+    return { vendor, po };
+  }
+
+  it("a look-alike bill (same vendor, amount and nearly the same date) needs a written reason", async () => {
+    const { vendor } = await vendorAndPo(100);
+    await loginAs("accounts@dsc.demo");
+    expect((await mkBill({ vendorId: vendor.id, number: "INV-100", amount: 45000 })).ok).toBe(true);
+    const again = await mkBill({ vendorId: vendor.id, number: "INV-100-A", amount: 45000 });
+    expect(again.ok).toBe(false);
+    expect(again.ok === false && again.error).toMatch(/same bill/);
+    expect((await mkBill({ vendorId: vendor.id, number: "INV-100-A", amount: 45000, overrideReason: "Second delivery, same value" })).ok).toBe(true);
+    const kept = await db.vendorBill.findFirstOrThrow({ where: { vendorId: vendor.id, number: "INV-100-A" } });
+    expect(kept.notes).toMatch(/Second delivery/);
+  });
+
+  it("billing for material that has not arrived needs a reason; billing what arrived does not", async () => {
+    const { vendor, po } = await vendorAndPo(40); // 40 boxes arrived = ₹47,200 with GST
+    await loginAs("accounts@dsc.demo");
+    expect((await mkBill({ vendorId: vendor.id, poId: po.id, number: "A-1", amount: 47000 })).ok).toBe(true);
+    const ahead = await mkBill({ vendorId: vendor.id, poId: po.id, number: "A-2", amount: 30000 });
+    expect(ahead.ok).toBe(false);
+    expect(ahead.ok === false && ahead.error).toMatch(/has been received/);
+    expect((await mkBill({ vendorId: vendor.id, poId: po.id, number: "A-2", amount: 30000, overrideReason: "Advance billing agreed for the next lot" })).ok).toBe(true);
   });
 });

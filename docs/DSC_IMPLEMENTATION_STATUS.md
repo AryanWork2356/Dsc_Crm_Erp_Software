@@ -35,3 +35,12 @@ Company decisions needed: the day-count rules are written in `lib/delivery-risk.
 
 Company decisions needed: how soon after a missed promise Management should be told (now: shown on Exceptions); whether PO values are entered with or without GST (now: without).
 Not yet in this batch: vendor advances/work orders, bill checks (duplicate / arithmetic / mismatch), travel and site-transfer expenses. Bill reading (OCR) is **not built**.
+
+## Batch 3B and Phase 4 – bill checks, key numbers, guide (done, 378 tests pass, `next build` passes)
+- **Bill checks** (Finance → Vendor bills): as before, a repeated bill number, a bill above the PO (+2 %), no certification and payment limits are hard stops. New: a **look-alike** bill (same vendor, same amount, date within 7 days, different number) and **billing ahead of delivery** (bills on the order above the value received, +2 %) are refused unless "Reason to go ahead" (5+ letters) is written; the reason is kept on the bill and in the audit log. Verified (certified) and paid stay separate steps.
+- **Key numbers** (`/kpis`, Management & Growth): milestones on time, plan reliability (against the FIRST committed date), material ready when needed, crew who came as planned, extra work without client approval, projects forecast over budget, days from milestone to invoice, receivables past due. Each shows what it is based on and how it is counted; fewer than 5 records shows a dash. Targets are suggestions for DSC to approve. EBITDA, lead conversion and client satisfaction are **not shown** and the page says why.
+- `docs/DSC_USER_GUIDE.md`: one short section per role.
+
+Still not built (stated plainly): vendor advances / work orders with recovery, travel and site-transfer expense allocation (policy needs DSC approval), bill/PO reading (OCR), e-mail/WhatsApp sending, Tally, 2FA.
+
+Database changes in this branch (all additive, applied to the local test database only, **not** to the live database): `20261026_actions_baseline`, `20261027_manpower_feasibility`, `20261028_delivery_waste_variation`, `20261029_forecast_estimate`, `20261030_client_po_collections`. They must be applied to the live database before this branch is deployed.

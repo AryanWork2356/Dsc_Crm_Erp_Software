@@ -108,7 +108,7 @@ describe("vendor bills need the project manager's certification before payment",
   const make = async (number: string, projectId?: string) => {
     await loginAs("accounts@dsc.demo");
     const v = await db.vendor.findFirstOrThrow({ where: { name: { startsWith: "Havells" } } });
-    expect((await createVendorBill(fd({ vendorId: v.id, number, projectId, billDate: today, amount: 20000 }))).ok).toBe(true);
+    expect((await createVendorBill(fd({ vendorId: v.id, number, projectId, billDate: today, amount: 20000 + Math.floor(Math.random() * 5000) * 10 + 10 }))).ok).toBe(true);
     return db.vendorBill.findFirstOrThrow({ where: { number } });
   };
 
