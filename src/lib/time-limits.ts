@@ -116,6 +116,13 @@ export const RULES: Rule[] = [
     })),
   },
   {
+    key: "launch_overdue", title: "Project launch step not confirmed by its date", sop: "A new project is made ready in its first three days: vendors, stock, factory and site confirmed, each with an owner and a date.", defaultHours: 12, perm: "feasibility:view", managerRoles: ["MANAGEMENT", "OWNER"] as RoleKey[],
+    find: async (companyId, cutoff) => (await db.checklistItem.findMany({
+      where: { kind: "LAUNCH", status: { in: ["PENDING", "AT_RISK"] }, dueDate: { lt: cutoff }, feasibility: { companyId, projectId: { not: null }, project: { status: { in: ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT", "EXECUTION"] } } } },
+      include: { feasibility: { select: { projectId: true } } }, take: MAX,
+    })).map((i) => ({ id: i.id, title: i.label, link: `/feasibility/project/${i.feasibility.projectId}`, startedAt: i.dueDate!, ownerIds: ids(i.ownerId), ownerRoles: i.ownerId ? ([] as RoleKey[]) : (["PROJECT_MANAGER"] as RoleKey[]), projectId: i.feasibility.projectId })),
+  },
+  {
     // Serious actions are chased earlier: a critical one is overdue the moment it is due, a high one 6 hours before the grace period ends.
     key: "action_overdue", title: "Action or blocker past its due date", sop: "Every action has one owner and one date. When the date is missed the owner, then the project manager, then the directors are told.", defaultHours: 12, perm: "actions:view", managerRoles: ["MANAGEMENT", "OWNER"] as RoleKey[],
     find: async (companyId, cutoff) => {

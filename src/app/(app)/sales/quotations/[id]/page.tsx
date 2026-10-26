@@ -52,6 +52,7 @@ export default async function QuotationDetail({ params }: { params: Promise<{ id
         actions={
           <>
             <StatusBadge status={q.status} />
+            {c.can("feasibility:view") && <Link href={`/feasibility/quotation/${id}`}><Button variant="secondary" size="sm">Feasibility check</Button></Link>}
             <a href={`/sales/quotations/${id}/pdf`} target="_blank" rel="noreferrer"><Button variant="secondary" size="sm"><FileDown className="h-4 w-4" /> PDF</Button></a>
             {c.role !== "CLIENT" && <a href={`/sales/quotations/${id}/export`}><Button variant="secondary" size="sm"><FileDown className="h-4 w-4" /> Excel</Button></a>}
             {edit && ["DRAFT", "REJECTED"].includes(q.status) && <Link href={`/sales/quotations/${id}/edit`}><Button variant="secondary" size="sm">Edit</Button></Link>}

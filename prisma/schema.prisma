@@ -327,6 +327,7 @@ model CompanySettings {
   officeLng                  Float?
   geoRadiusM                 Int      @default(20)
   geoRequired                Boolean  @default(true)
+  resourceCoordinatorId      String? // who is told first when a crew is short (falls back to the project manager)
   logoUrl                    String?
   address                    String?
   phone                      String?
@@ -963,6 +964,9 @@ model Project {
   additionalWork   AdditionalWork[]
   closure          ProjectClosure?
   review           ProjectReview?
+  resourceNeeds    ResourceNeed[]
+  manpowerLogs     ManpowerLog[]
+  feasibility      Feasibility?
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -980,24 +984,33 @@ model ProjectMember {
 }
 
 model ProjectTask {
-  id           String     @id @default(cuid())
-  companyId    String
-  code         String
-  projectId    String
-  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name         String
-  description  String?
-  assignedToId String? // User id
-  workerId     String?
-  priority     Priority   @default(MEDIUM)
-  startDate    DateTime?
-  dueDate      DateTime?
-  baselineDue  DateTime? // the first committed due date; never changes (see DateChange)
-  status       TaskStatus @default(TODO)
-  progress     Int        @default(0)
-  dependsOnId  String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                String     @id @default(cuid())
+  companyId         String
+  code              String
+  projectId         String
+  project           Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  assignedToId      String? // User id
+  workerId          String?
+  priority          Priority   @default(MEDIUM)
+  startDate         DateTime?
+  dueDate           DateTime?
+  baselineDue       DateTime? // the first committed due date; never changes (see DateChange)
+  zone              String? // area of the site (Zone A, Hall, Kitchen …)
+  plannedQty        Decimal?   @db.Decimal(12, 3)
+  actualQty         Decimal?   @db.Decimal(12, 3)
+  qtyUnit           String?
+  requiredTrade     String?
+  requiredHeadcount Int?
+  blockedReason     String?
+  zoneReleased      Boolean    @default(false) // finished, inspected and safe: the next trade may start here
+  releasedAt        DateTime?
+  status            TaskStatus @default(TODO)
+  progress          Int        @default(0)
+  dependsOnId       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   comments TaskComment[]
 
@@ -1033,7 +1046,7 @@ model ProjectMilestone {
 
 // ───────────────────────── PROCUREMENT ─────────────────────────
 model Vendor {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   companyId     String
   code          String
   name          String
@@ -1046,10 +1059,13 @@ model Vendor {
   pan           String?
   bankDetails   String?
   categories    String?
+  tier          VendorTier @default(PRIMARY) // for labour/trade vendors: first choice, backup or emergency
+  trades        String? // e.g. "Carpenter, Electrician"
+  crewSize      Int? // how many people they can field at once (to spot over-commitment)
   rating        Int?
   notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
   deletedAt     DateTime?
 
   purchaseOrders PurchaseOrder[]
@@ -1882,4 +1898,117 @@ model DateChange {
 
   @@index([entityType, entityId])
   @@index([projectId])
+}
+
+// ───────────────────────── MANPOWER, FEASIBILITY, LAUNCH ─────────────────────────
+enum VendorTier {
+  PRIMARY
+  BACKUP
+  EMERGENCY
+}
+
+/// How many people of one trade a project needs over a period, and how many are confirmed.
+model ResourceNeed {
+  id             String   @id @default(cuid())
+  companyId      String
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trade          String
+  fromDate       DateTime @db.Date
+  toDate         DateTime @db.Date
+  required       Int
+  confirmed      Int      @default(0)
+  vendorId       String?
+  backupVendorId String?
+  confirmedNote  String? // who confirmed it and when (contact / evidence)
+  note           String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([companyId, fromDate])
+  @@index([projectId, trade])
+}
+
+/// What was planned and what actually turned up, per project, day and trade (recorded by the supervisor).
+model ManpowerLog {
+  id           String   @id @default(cuid())
+  companyId    String
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date         DateTime @db.Date
+  trade        String
+  planned      Int
+  present      Int
+  late         Int      @default(0)
+  vendorId     String?
+  reason       String? // why people were missing or late
+  replacement  String? // what was done about it
+  recordedById String
+  createdAt    DateTime @default(now())
+
+  @@unique([projectId, date, trade])
+  @@index([companyId, date])
+  @@index([vendorId, date])
+}
+
+enum FeasibilityDecision {
+  PENDING
+  ACCEPT
+  ACCEPT_WITH_CONDITIONS
+  RENEGOTIATE_OR_DECLINE
+}
+
+enum CheckStatus {
+  PENDING
+  CONFIRMED
+  AT_RISK
+  NOT_NEEDED
+}
+
+enum ChecklistKind {
+  FEASIBILITY
+  LAUNCH
+}
+
+/// The capacity check before a job is accepted, and the 3-day launch checklist after it. Belongs to a quotation, then its project.
+model Feasibility {
+  id                  String              @id @default(cuid())
+  companyId           String
+  quotationId         String?             @unique
+  projectId           String?             @unique
+  project             Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  decision            FeasibilityDecision @default(PENDING)
+  decidedById         String?
+  decidedAt           DateTime?
+  note                String?
+  /// the decision was taken although items were still open: who allowed it, why, and by when the gaps must be closed
+  exceptionNote       String?
+  exceptionApproverId String?
+  resolveBy           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  items               ChecklistItem[]
+
+  @@index([companyId])
+}
+
+model ChecklistItem {
+  id            String        @id @default(cuid())
+  feasibilityId String
+  feasibility   Feasibility   @relation(fields: [feasibilityId], references: [id], onDelete: Cascade)
+  kind          ChecklistKind
+  key           String
+  label         String
+  question      String?
+  status        CheckStatus   @default(PENDING)
+  ownerId       String?
+  dueDate       DateTime?
+  confirmedAt   DateTime?
+  confirmedById String?
+  evidence      String? // who/what confirmed it (a contact, a date, a document)
+  sortOrder     Int           @default(0)
+
+  @@unique([feasibilityId, kind, key])
+  @@index([feasibilityId])
 }

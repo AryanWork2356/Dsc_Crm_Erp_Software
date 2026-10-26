@@ -27,6 +27,9 @@ const vendorSchema = z.object({
   pan: zPan,
   bankDetails: zOptStr,
   categories: zOptStr,
+  tier: z.enum(["PRIMARY", "BACKUP", "EMERGENCY"]).default("PRIMARY"),
+  trades: zOptStr,
+  crewSize: z.coerce.number().int().min(1, "Crew size is at least 1").max(1000).optional(),
   rating: z.coerce.number().int().min(1, "Rating is 1 to 5").max(5, "Rating is 1 to 5").optional(),
   notes: zOptStr,
 });

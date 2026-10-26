@@ -20,6 +20,7 @@ import { StageSelect } from "../../crm/leads/[id]/stage-select";
 import { projectFields } from "../project-fields";
 import { LocationForm } from "@/components/forms/location-form";
 import { slippedDays } from "@/lib/baseline";
+import { HEALTH_LABEL, taskHealth } from "@/lib/task-health";
 import { setSiteLocation } from "@/app/(app)/workforce/location-actions";
 import { TaskStatusControl } from "../task-controls";
 import { addTaskComment, changeProjectStatus, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
@@ -75,6 +76,13 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     { name: "startDate", label: "Start", type: "date" as const, defaultValue: toDateInput(t?.startDate) },
     { name: "dueDate", label: "Due", type: "date" as const, defaultValue: toDateInput(t?.dueDate) },
     ...(t ? [{ name: "dateChangeReason", label: "Why is the due date changing?", type: "textarea" as const, hint: "Needed only if you change a date that was already set. It is recorded.", defaultValue: null }] : []),
+    { name: "zone", label: "Area / zone", placeholder: "e.g. Zone A, Hall, Kitchen", defaultValue: t?.zone ?? null },
+    { name: "requiredTrade", label: "Trade needed", placeholder: "e.g. Carpenter", defaultValue: t?.requiredTrade ?? null },
+    { name: "requiredHeadcount", label: "People needed", type: "number" as const, defaultValue: t?.requiredHeadcount ?? null },
+    { name: "plannedQty", label: "Planned quantity", type: "number" as const, defaultValue: t?.plannedQty ? Number(t.plannedQty) : null },
+    { name: "actualQty", label: "Done so far", type: "number" as const, defaultValue: t?.actualQty ? Number(t.actualQty) : null },
+    { name: "qtyUnit", label: "Unit", placeholder: "sqft, nos, rft", defaultValue: t?.qtyUnit ?? null },
+    ...(t ? [{ name: "blockedReason", label: "What is blocking it? (if blocked)", type: "textarea" as const, full: true, defaultValue: t.blockedReason ?? null }, { name: "zoneReleased", label: "Area released to the next trade", type: "checkbox" as const, defaultValue: t.zoneReleased, hint: "Tick when the work here is finished, inspected and safe" }] : []),
     { name: "dependsOnId", label: "Depends on", type: "select" as const, options: p.tasks.filter((x) => x.id !== t?.id).map((x) => ({ value: x.id, label: x.name })), defaultValue: t?.dependsOnId ?? null },
     { name: "description", label: "Details", type: "textarea" as const, defaultValue: t?.description ?? null },
   ];
@@ -87,6 +95,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         subtitle={<>{p.code} · <Link className="text-brand-700 hover:underline" href={`/crm/clients/${p.clientId}`}>{p.client.name}</Link> · {humanize(p.segment)}</>}
         actions={
           <>
+            {c.can("feasibility:view") && <Link href={`/feasibility/project/${id}`}><Button variant="secondary" size="sm">Readiness</Button></Link>}
             {canEdit ? (
               <StageSelect current={p.status} options={PROJECT_STATUS_OPTS} action={async (s) => { "use server"; return changeProjectStatus(id, s); }} />
             ) : <StatusBadge status={p.status} />}
@@ -159,9 +168,10 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                   <li key={t.id} className="px-5 py-4">
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-slate-900">{t.name} <span className="text-xs font-normal text-slate-400">{t.code}</span></p>
+                        <p className="font-medium text-slate-900">{t.name} <span className="text-xs font-normal text-slate-400">{t.code}</span> {(() => { const h = taskHealth({ status: t.status, dueDate: t.dueDate, startDate: t.startDate, progress: t.progress, dependsOn: t.dependsOnId ? p.tasks.find((x) => x.id === t.dependsOnId) ?? null : null }, today); return <Badge tone={h === "COMPLETE" ? "green" : h === "ON_TRACK" ? "blue" : h === "AT_RISK" ? "amber" : "red"}>{HEALTH_LABEL[h]}</Badge>; })()}</p>
                         <p className="mt-0.5 text-xs text-slate-500">
                           {t.assignedToId ? name.get(t.assignedToId) ?? "—" : "Unassigned"} · due <span className={cn(over && "font-medium text-red-600")}>{formatDate(t.dueDate)}</span>{over && " (overdue)"}
+                          {t.zone && <span> · {t.zone}{t.zoneReleased ? " (released)" : ""}</span>}{t.plannedQty && <span> · {Number(t.actualQty ?? 0)} / {Number(t.plannedQty)} {t.qtyUnit ?? ""}</span>}{t.requiredTrade && <span> · needs {t.requiredHeadcount ?? ""} {t.requiredTrade}</span>}{t.status === "BLOCKED" && t.blockedReason && <span className="text-red-600"> · blocked: {t.blockedReason}</span>}
                           {slippedDays(t.baselineDue, t.dueDate) > 0 && <span className="font-medium text-amber-700"> · moved +{slippedDays(t.baselineDue, t.dueDate)} days (first date {formatDate(t.baselineDue)})</span>}
                           {t.dependsOnId && ` · after “${p.tasks.find((x) => x.id === t.dependsOnId)?.name ?? "…"}”`}
                         </p>

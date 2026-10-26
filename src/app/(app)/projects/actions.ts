@@ -14,6 +14,7 @@ import { ensureClosure } from "@/lib/closure";
 import { formToObject, zNumPos, zOptDate, zOptStr, zReqStr } from "@/lib/form";
 import { humanize, num } from "@/lib/utils";
 import { applyDateChange } from "@/lib/baseline";
+import { dueIn, raiseAction, resolveActionsFor } from "@/lib/action-items";
 
 async function getProject(c: Ctx, id: string, tx: Tx | typeof db = db) {
   const p = await tx.project.findFirst({ where: { id, ...projectScope(c) } });
@@ -169,6 +170,14 @@ const taskSchema = z.object({
   startDate: zOptDate,
   dueDate: zOptDate,
   dependsOnId: zOptStr,
+  zone: zOptStr,
+  plannedQty: z.coerce.number().min(0).max(1e9).optional(),
+  actualQty: z.coerce.number().min(0).max(1e9).optional(),
+  qtyUnit: zOptStr,
+  requiredTrade: zOptStr,
+  requiredHeadcount: z.coerce.number().int().min(0).max(500).optional(),
+  blockedReason: zOptStr,
+  zoneReleased: z.boolean().default(false),
   dateChangeReason: zOptStr, // required when an already-committed due date is changed
 });
 
@@ -185,7 +194,7 @@ export async function createTask(projectId: string, fd: FormData) {
     const t = await db.$transaction(async (tx) => {
       const code = await nextNumber(tx, c.companyId, "TSK");
       const { dateChangeReason: _why, ...rest } = d;
-      const x = await tx.projectTask.create({ data: { ...rest, baselineDue: d.dueDate ?? null, companyId: c.companyId, projectId, code } });
+      const x = await tx.projectTask.create({ data: { ...rest, releasedAt: d.zoneReleased ? new Date() : null, baselineDue: d.dueDate ?? null, companyId: c.companyId, projectId, code } });
       await recalcProgress(tx, projectId);
       await audit(c, { action: "CREATE", entityType: "ProjectTask", entityId: x.id, summary: `Created task ${code} “${d.name}” in ${p.code}` }, tx);
       if (d.assignedToId && d.assignedToId !== c.userId) await notifyUsers([d.assignedToId], { companyId: c.companyId, type: "TASK_DEADLINE", title: `New task: ${d.name}`, body: `${p.name}${d.dueDate ? ` · due ${d.dueDate.toLocaleDateString("en-IN")}` : ""}`, link: `/projects/${projectId}?tab=tasks` }, tx);
@@ -209,7 +218,7 @@ export async function updateTask(taskId: string, fd: FormData) {
     await db.$transaction(async (tx) => {
       const { dateChangeReason, ...rest } = d;
       const due = await applyDateChange(tx, c, { entityType: "ProjectTask", entityId: taskId, projectId: t.projectId, field: "dueDate", label: `Due date of ${t.code}`, oldDate: t.dueDate, newDate: d.dueDate ?? t.dueDate, baseline: t.baselineDue, reason: dateChangeReason });
-      await tx.projectTask.update({ where: { id: taskId }, data: { ...rest, baselineDue: due.baseline, assignedToId: d.assignedToId ?? null, workerId: d.workerId ?? null, dependsOnId: d.dependsOnId ?? null } });
+      await tx.projectTask.update({ where: { id: taskId }, data: { ...rest, releasedAt: d.zoneReleased ? (t.releasedAt ?? new Date()) : null, baselineDue: due.baseline, assignedToId: d.assignedToId ?? null, workerId: d.workerId ?? null, dependsOnId: d.dependsOnId ?? null } });
       await audit(c, { action: "UPDATE", entityType: "ProjectTask", entityId: taskId, summary: `Updated task ${t.code}` }, tx);
       if (d.assignedToId && d.assignedToId !== t.assignedToId && d.assignedToId !== c.userId) await notifyUsers([d.assignedToId], { companyId: c.companyId, type: "TASK_DEADLINE", title: `Task assigned: ${d.name}`, link: `/projects/${t.projectId}?tab=tasks` }, tx);
     });
@@ -239,6 +248,13 @@ export async function setTaskStatus(taskId: string, status: string, progress?: n
     await db.$transaction(async (tx) => {
       await tx.projectTask.update({ where: { id: taskId }, data: { status: s, progress: pr } });
       await recalcProgress(tx, t.projectId);
+      if (s === "BLOCKED" && t.status !== "BLOCKED") {
+        const proj = await tx.project.findUnique({ where: { id: t.projectId }, select: { projectManagerId: true, code: true } });
+        const owner = proj?.projectManagerId ?? t.assignedToId ?? c.userId;
+        await raiseAction(tx, { companyId: c.companyId, title: `${proj?.code}: ${t.name} is blocked`, severity: "HIGH", ownerId: owner, createdById: c.userId, projectId: t.projectId, dueDate: dueIn("HIGH"), detail: t.blockedReason ?? "No reason written yet. Open the task and say what is blocking it.", sourceType: "ProjectTask", sourceId: t.id, sourceLabel: `task ${t.code}`, link: `/projects/${t.projectId}?tab=tasks` });
+      } else if (t.status === "BLOCKED" && s !== "BLOCKED") {
+        await resolveActionsFor(tx, c.companyId, "ProjectTask", t.id, c.userId, `Task moved to ${humanize(s)}.`);
+      }
       await audit(c, { action: "UPDATE", entityType: "ProjectTask", entityId: taskId, summary: `Task ${t.code}: ${humanize(t.status)} → ${humanize(s)} (${pr}%)` }, tx);
     });
     revalidatePath(`/projects/${t.projectId}`);
