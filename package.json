@@ -14,6 +14,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed-hosted": "tsx scripts/seed-hosted.ts",
     "setup:company": "tsx scripts/setup-company.ts",
+    "data:backup": "tsx scripts/data-tools.ts backup",
+    "data:backup-hosted": "tsx scripts/data-tools.ts backup --hosted",
     "data:clear": "tsx scripts/data-tools.ts clear",
     "data:clear-hosted": "tsx scripts/data-tools.ts clear --hosted",
     "data:restore": "tsx scripts/data-tools.ts restore",

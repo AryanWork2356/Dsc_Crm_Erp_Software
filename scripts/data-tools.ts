@@ -1,6 +1,8 @@
 /**
  * Save and clear the company data, or bring a saved copy back.
  *
+ *   npm run data:backup                 this computer's database: saves a full copy and changes nothing
+ *   npm run data:backup-hosted          the same for the ONLINE database (asks you to paste its address)
  *   npm run data:clear                  this computer's database: saves a full copy, then clears the demo data
  *   npm run data:clear-hosted           the same for the ONLINE database (asks you to paste its address)
  *   npm run data:restore -- <folder>    puts a saved copy back (this computer)
@@ -66,6 +68,20 @@ async function backup(prisma: PrismaClient): Promise<{ dir: string; counts: Reco
     if (back.length !== n) throw new Error(`Backup check failed for ${t}. Nothing was deleted.`);
   }
   return { dir, counts };
+}
+
+async function backupOnly(hosted: boolean) {
+  const { prisma, where } = await connect(hosted);
+  try {
+    console.log(`
+Database: ${where}`);
+    const { dir, counts } = await backup(prisma);
+    console.log(`Saved ${Object.values(counts).reduce((a, b) => a + b, 0)} rows from ${Object.keys(counts).length} tables to:
+  ${dir}
+Nothing was changed or removed.`);
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 async function clear(hosted: boolean, yes: boolean) {
@@ -136,9 +152,10 @@ async function main() {
   const hosted = rest.includes("--hosted");
   const yes = rest.includes("--yes");
   const arg = rest.find((a) => !a.startsWith("--")) ?? "";
-  if (cmd === "clear") await clear(hosted, yes);
+  if (cmd === "backup") await backupOnly(hosted);
+  else if (cmd === "clear") await clear(hosted, yes);
   else if (cmd === "restore") await restore(hosted, arg);
-  else throw new Error("Use: clear | restore");
+  else throw new Error("Use: backup | clear | restore");
 }
 
 main().catch((e) => {
