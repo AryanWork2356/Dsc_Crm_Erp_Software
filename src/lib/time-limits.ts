@@ -115,6 +115,28 @@ export const RULES: Rule[] = [
       id: t.id, title: `${t.code} ${t.name}`, link: `/projects/${t.projectId}`, startedAt: t.dueDate!, ownerIds: ids(t.assignedToId), ownerRoles: [] as RoleKey[], projectId: t.projectId,
     })),
   },
+  {
+    // Serious actions are chased earlier: a critical one is overdue the moment it is due, a high one 6 hours before the grace period ends.
+    key: "action_overdue", title: "Action or blocker past its due date", sop: "Every action has one owner and one date. When the date is missed the owner, then the project manager, then the directors are told.", defaultHours: 12, perm: "actions:view", managerRoles: ["MANAGEMENT", "OWNER"] as RoleKey[],
+    find: async (companyId, cutoff) => {
+      const H = 3600000;
+      const rows = await db.actionItem.findMany({
+        where: {
+          companyId, status: { in: ["OPEN", "IN_PROGRESS"] },
+          OR: [
+            { severity: { in: ["LOW", "MEDIUM"] }, dueDate: { lt: cutoff } },
+            { severity: "HIGH", dueDate: { lt: new Date(cutoff.getTime() + 6 * H) } },
+            { severity: "CRITICAL", dueDate: { lt: new Date(cutoff.getTime() + 12 * H) } },
+          ],
+        },
+        take: MAX,
+      });
+      return rows.map((a) => ({
+        id: a.id, title: `${a.number} ${a.title}`, link: a.link ?? "/actions", ownerIds: ids(a.ownerId), ownerRoles: [] as RoleKey[], projectId: a.projectId,
+        startedAt: new Date(a.dueDate.getTime() - (a.severity === "CRITICAL" ? 12 : a.severity === "HIGH" ? 6 : 0) * H),
+      }));
+    },
+  },
 ];
 
 export type Limits = Record<string, number>;

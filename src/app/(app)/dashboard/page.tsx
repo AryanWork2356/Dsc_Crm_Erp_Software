@@ -27,8 +27,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <MarkMe c={c} />
+      <MyActions c={c} />
       {exec ? <Executive c={c} sp={sp} /> : <WorkDashboard c={c} />}
     </>
+  );
+}
+
+/** The person's own open actions, latest due first: what needs them today. */
+async function MyActions({ c }: { c: C }) {
+  if (!c.can("actions:view")) return null;
+  const today = startOfDay();
+  const [rows, total] = await Promise.all([
+    db.actionItem.findMany({ where: { companyId: c.companyId, ownerId: c.userId, status: { in: ["OPEN", "IN_PROGRESS"] } }, orderBy: { dueDate: "asc" }, take: 5 }),
+    db.actionItem.count({ where: { companyId: c.companyId, ownerId: c.userId, status: { in: ["OPEN", "IN_PROGRESS"] } } }),
+  ]);
+  if (!rows.length) return null;
+  return (
+    <Card className="mb-5">
+      <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" /> Needs you ({total})</CardTitle><Link href="/actions" className="text-sm font-medium text-brand-700 hover:underline">All actions</Link></CardHeader>
+      <ul className="divide-y divide-slate-100">
+        {rows.map((a) => (
+          <li key={a.id}><Link href={a.link ?? "/actions"} className="flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-slate-50"><span className={cn("h-2 w-2 rounded-full", a.dueDate < today ? "bg-red-500" : a.severity === "CRITICAL" || a.severity === "HIGH" ? "bg-amber-500" : "bg-blue-500")} /><span className="flex-1 text-slate-800">{a.title}</span><span className={cn("text-xs", a.dueDate < today ? "font-medium text-red-600" : "text-slate-500")}>{formatDate(a.dueDate)}</span></Link></li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

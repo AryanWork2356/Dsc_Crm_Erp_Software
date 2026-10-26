@@ -16,6 +16,7 @@ export function projectFields(o: { clients: Opt[]; pms: Opt[]; staff: Opt[]; sho
     { name: "designerId", label: "Designer", type: "select", options: o.staff, defaultValue: v("designerId") },
     { name: "siteEngineerId", label: "Site engineer", type: "select", options: o.staff, defaultValue: v("siteEngineerId") },
     { name: "supervisorId", label: "Site supervisor", type: "select", options: o.staff, defaultValue: v("supervisorId") },
+    ...(p ? [{ name: "dateChangeReason", label: "Why is the completion date changing?", type: "textarea" as const, full: true, hint: "Needed only if you change a date that was already set. It is recorded.", defaultValue: null }] : []),
     { name: "outstation", label: "Outstation site", type: "checkbox", defaultValue: !!p?.outstation, hint: "Outstation sites send their morning update earlier (9:30 instead of 10:00)" },
   ];
   if (o.showMoney) {

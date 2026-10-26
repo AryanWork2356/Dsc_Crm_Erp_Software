@@ -13,6 +13,7 @@ import { recalcProgress } from "@/lib/project-progress";
 import { ensureClosure } from "@/lib/closure";
 import { formToObject, zNumPos, zOptDate, zOptStr, zReqStr } from "@/lib/form";
 import { humanize, num } from "@/lib/utils";
+import { applyDateChange } from "@/lib/baseline";
 
 async function getProject(c: Ctx, id: string, tx: Tx | typeof db = db) {
   const p = await tx.project.findFirst({ where: { id, ...projectScope(c) } });
@@ -35,6 +36,7 @@ const projectSchema = z.object({
   outstation: z.boolean().default(false),
   contractValue: zNumPos().default(0),
   budget: zNumPos().default(0),
+  dateChangeReason: zOptStr, // required when an already-committed date is changed
 });
 
 function checkDates(d: { startDate?: Date; plannedEndDate?: Date }) {
@@ -57,7 +59,8 @@ export async function createProject(fd: FormData) {
     if (!client) throw new UserError("Client not found.");
     const p = await db.$transaction(async (tx) => {
       const code = await nextNumber(tx, c.companyId, "PRJ");
-      const x = await tx.project.create({ data: { ...d, companyId: c.companyId, code, status: "PLANNING" } });
+      const { dateChangeReason: _why, ...rest } = d;
+      const x = await tx.project.create({ data: { ...rest, baselineEndDate: d.plannedEndDate ?? null, companyId: c.companyId, code, status: "PLANNING" } });
       await syncMembers(tx, x.id, d);
       await audit(c, { action: "CREATE", entityType: "Project", entityId: x.id, summary: `Created project ${code} – ${d.name}`, newValue: d }, tx);
       await notifyUsers([d.projectManagerId, d.siteEngineerId, d.supervisorId, d.designerId].filter((u): u is string => !!u && u !== c.userId), { companyId: c.companyId, type: "GENERAL", title: `You're on project ${d.name}`, link: `/projects/${x.id}` }, tx);
@@ -77,7 +80,8 @@ export async function updateProject(id: string, fd: FormData) {
     // people who can edit but can't see money may not change contract value / budget
     const money = c.can("margins:view") ? { contractValue: d.contractValue, budget: d.budget } : {};
     await db.$transaction(async (tx) => {
-      await tx.project.update({ where: { id }, data: { name: d.name, clientId: d.clientId, segment: d.segment, siteAddress: d.siteAddress, startDate: d.startDate, plannedEndDate: d.plannedEndDate, projectManagerId: d.projectManagerId ?? null, designerId: d.designerId ?? null, siteEngineerId: d.siteEngineerId ?? null, supervisorId: d.supervisorId ?? null, outstation: d.outstation, ...money } });
+      const end = await applyDateChange(tx, c, { entityType: "Project", entityId: id, projectId: id, field: "plannedEndDate", label: "Planned completion", oldDate: old.plannedEndDate, newDate: d.plannedEndDate ?? old.plannedEndDate, baseline: old.baselineEndDate, reason: d.dateChangeReason });
+      await tx.project.update({ where: { id }, data: { name: d.name, clientId: d.clientId, segment: d.segment, siteAddress: d.siteAddress, startDate: d.startDate, plannedEndDate: d.plannedEndDate, baselineEndDate: end.baseline, projectManagerId: d.projectManagerId ?? null, designerId: d.designerId ?? null, siteEngineerId: d.siteEngineerId ?? null, supervisorId: d.supervisorId ?? null, outstation: d.outstation, ...money } });
       await syncMembers(tx, id, d);
       const changed = "contractValue" in money && num(old.contractValue) !== d.contractValue;
       await audit(c, { action: "UPDATE", entityType: "Project", entityId: id, summary: changed ? `${c.name} changed contract value of ${old.code} from ₹${num(old.contractValue).toLocaleString("en-IN")} to ₹${d.contractValue.toLocaleString("en-IN")}` : `Updated project ${old.code}`, oldValue: { contractValue: num(old.contractValue), budget: num(old.budget) }, newValue: money }, tx);
@@ -165,6 +169,7 @@ const taskSchema = z.object({
   startDate: zOptDate,
   dueDate: zOptDate,
   dependsOnId: zOptStr,
+  dateChangeReason: zOptStr, // required when an already-committed due date is changed
 });
 
 export async function createTask(projectId: string, fd: FormData) {
@@ -179,7 +184,8 @@ export async function createTask(projectId: string, fd: FormData) {
     }
     const t = await db.$transaction(async (tx) => {
       const code = await nextNumber(tx, c.companyId, "TSK");
-      const x = await tx.projectTask.create({ data: { ...d, companyId: c.companyId, projectId, code } });
+      const { dateChangeReason: _why, ...rest } = d;
+      const x = await tx.projectTask.create({ data: { ...rest, baselineDue: d.dueDate ?? null, companyId: c.companyId, projectId, code } });
       await recalcProgress(tx, projectId);
       await audit(c, { action: "CREATE", entityType: "ProjectTask", entityId: x.id, summary: `Created task ${code} “${d.name}” in ${p.code}` }, tx);
       if (d.assignedToId && d.assignedToId !== c.userId) await notifyUsers([d.assignedToId], { companyId: c.companyId, type: "TASK_DEADLINE", title: `New task: ${d.name}`, body: `${p.name}${d.dueDate ? ` · due ${d.dueDate.toLocaleDateString("en-IN")}` : ""}`, link: `/projects/${projectId}?tab=tasks` }, tx);
@@ -201,7 +207,9 @@ export async function updateTask(taskId: string, fd: FormData) {
     await getProject(c, t.projectId);
     if (d.dependsOnId === taskId) throw new UserError("A task can't depend on itself.");
     await db.$transaction(async (tx) => {
-      await tx.projectTask.update({ where: { id: taskId }, data: { ...d, assignedToId: d.assignedToId ?? null, workerId: d.workerId ?? null, dependsOnId: d.dependsOnId ?? null } });
+      const { dateChangeReason, ...rest } = d;
+      const due = await applyDateChange(tx, c, { entityType: "ProjectTask", entityId: taskId, projectId: t.projectId, field: "dueDate", label: `Due date of ${t.code}`, oldDate: t.dueDate, newDate: d.dueDate ?? t.dueDate, baseline: t.baselineDue, reason: dateChangeReason });
+      await tx.projectTask.update({ where: { id: taskId }, data: { ...rest, baselineDue: due.baseline, assignedToId: d.assignedToId ?? null, workerId: d.workerId ?? null, dependsOnId: d.dependsOnId ?? null } });
       await audit(c, { action: "UPDATE", entityType: "ProjectTask", entityId: taskId, summary: `Updated task ${t.code}` }, tx);
       if (d.assignedToId && d.assignedToId !== t.assignedToId && d.assignedToId !== c.userId) await notifyUsers([d.assignedToId], { companyId: c.companyId, type: "TASK_DEADLINE", title: `Task assigned: ${d.name}`, link: `/projects/${t.projectId}?tab=tasks` }, tx);
     });

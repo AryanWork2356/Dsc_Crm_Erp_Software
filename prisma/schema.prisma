@@ -928,6 +928,7 @@ model Project {
   siteAddress      String?
   startDate        DateTime?
   plannedEndDate   DateTime?
+  baselineEndDate  DateTime? // the first committed completion date; never changes (see DateChange)
   actualEndDate    DateTime?
   projectManagerId String?
   designerId       String?
@@ -991,6 +992,7 @@ model ProjectTask {
   priority     Priority   @default(MEDIUM)
   startDate    DateTime?
   dueDate      DateTime?
+  baselineDue  DateTime? // the first committed due date; never changes (see DateChange)
   status       TaskStatus @default(TODO)
   progress     Int        @default(0)
   dependsOnId  String?
@@ -1816,4 +1818,68 @@ model StoredFile {
   data      Bytes
   size      Int
   createdAt DateTime @default(now())
+}
+
+// ───────────────────────── ACTIONS, BLOCKERS AND DATE HISTORY ─────────────────────────
+enum ActionSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+/// One thing that must be done or fixed, with one owner and a due date (a blocker, a shortage, a late delivery …).
+model ActionItem {
+  id           String         @id @default(cuid())
+  companyId    String
+  number       String
+  title        String
+  detail       String?
+  severity     ActionSeverity @default(MEDIUM)
+  status       ActionStatus   @default(OPEN)
+  ownerId      String
+  createdById  String
+  projectId    String?
+  /// what raised it, when it was raised by the app itself (for example "ResourceNeed", "PurchaseOrderItem")
+  sourceType   String?
+  sourceId     String?
+  sourceLabel  String?
+  link         String?
+  dueDate      DateTime
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolution   String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([companyId, number])
+  @@index([companyId, status, dueDate])
+  @@index([projectId])
+  @@index([ownerId, status])
+  @@index([companyId, sourceType, sourceId])
+}
+
+/// Every change to a committed date after its first value: who, when, from what to what, and why.
+model DateChange {
+  id          String    @id @default(cuid())
+  companyId   String
+  entityType  String // "Project" | "ProjectTask"
+  entityId    String
+  projectId   String?
+  field       String
+  oldDate     DateTime?
+  newDate     DateTime?
+  reason      String
+  changedById String
+  createdAt   DateTime  @default(now())
+
+  @@index([entityType, entityId])
+  @@index([projectId])
 }

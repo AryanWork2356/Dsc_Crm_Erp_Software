@@ -46,6 +46,8 @@ export default async function SiteReportsPage() {
     orderBy: { code: "asc" },
   });
   const ids = projects.map((p) => p.id);
+  // nothing to show: tell the person WHY (not named on any project, or the project is not live yet)
+  const namedOnAny = projects.length ? true : (await db.project.count({ where: projectScope(c) })) > 0;
   const days = pastWorkingDays(6, now);
   const since = calendarDay(days[days.length - 1] ?? istParts(now).date);
   const reports = await db.dailyReport.findMany({ where: { companyId: c.companyId, projectId: { in: ids }, reportDate: { gte: since } }, orderBy: { submittedAt: "desc" } });
@@ -73,7 +75,11 @@ export default async function SiteReportsPage() {
       />
 
       {projects.length === 0 ? (
-        <EmptyState title="No live sites yet" hint="Reports appear here once a project reaches the Execution stage and has a supervisor assigned." />
+        namedOnAny ? (
+          <EmptyState title="None of your projects is live yet" hint="Reports appear here once a project reaches the Execution stage. Ask your project manager to move it forward." />
+        ) : (
+          <EmptyState title="You are not named on any project yet" hint="Ask the Owner, Management or Admin to open the project and choose you as Site supervisor or Site engineer (Projects → the project → Edit). It then appears here by itself." />
+        )
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((p) => (

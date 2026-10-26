@@ -268,7 +268,7 @@ export async function convertQuotationToProject(id: string, fd: FormData) {
       const project = await tx.project.create({
         data: {
           companyId: c.companyId, code, name: d.name || q.title || `${client.name} – ${lead?.projectType ?? "Interior"}`, clientId: q.clientId,
-          segment: lead?.segment ?? "RESIDENTIAL", siteAddress: d.siteAddress ?? lead?.location ?? client.address, startDate: d.startDate, plannedEndDate: d.plannedEndDate,
+          segment: lead?.segment ?? "RESIDENTIAL", siteAddress: d.siteAddress ?? lead?.location ?? client.address, startDate: d.startDate, plannedEndDate: d.plannedEndDate, baselineEndDate: d.plannedEndDate ?? null,
           projectManagerId: d.projectManagerId, designerId: d.designerId, contractValue, status: "APPROVED", quotationId: q.id,
         },
       });

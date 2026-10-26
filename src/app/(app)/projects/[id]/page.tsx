@@ -19,6 +19,7 @@ import { ActionButton } from "@/components/forms/action-button";
 import { StageSelect } from "../../crm/leads/[id]/stage-select";
 import { projectFields } from "../project-fields";
 import { LocationForm } from "@/components/forms/location-form";
+import { slippedDays } from "@/lib/baseline";
 import { setSiteLocation } from "@/app/(app)/workforce/location-actions";
 import { TaskStatusControl } from "../task-controls";
 import { addTaskComment, changeProjectStatus, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
@@ -73,6 +74,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     { name: "priority", label: "Priority", type: "select" as const, options: PRIORITY_OPTS, defaultValue: t?.priority ?? "MEDIUM" },
     { name: "startDate", label: "Start", type: "date" as const, defaultValue: toDateInput(t?.startDate) },
     { name: "dueDate", label: "Due", type: "date" as const, defaultValue: toDateInput(t?.dueDate) },
+    ...(t ? [{ name: "dateChangeReason", label: "Why is the due date changing?", type: "textarea" as const, hint: "Needed only if you change a date that was already set. It is recorded.", defaultValue: null }] : []),
     { name: "dependsOnId", label: "Depends on", type: "select" as const, options: p.tasks.filter((x) => x.id !== t?.id).map((x) => ({ value: x.id, label: x.name })), defaultValue: t?.dependsOnId ?? null },
     { name: "description", label: "Details", type: "textarea" as const, defaultValue: t?.description ?? null },
   ];
@@ -101,7 +103,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard label="Progress" value={`${p.progress}%`} sub={<Progress value={p.progress} className="mt-2" />} />
-            <StatCard label="Planned completion" value={formatDate(p.plannedEndDate)} tone={late ? "bad" : "default"} />
+            <StatCard label="Planned completion" value={formatDate(p.plannedEndDate)} tone={late ? "bad" : "default"} sub={slippedDays(p.baselineEndDate, p.plannedEndDate) > 0 ? `First date ${formatDate(p.baselineEndDate)}: moved +${slippedDays(p.baselineEndDate, p.plannedEndDate)} days` : p.baselineEndDate ? `Baseline ${formatDate(p.baselineEndDate)}` : undefined} />
             {money && <StatCard label="Contract value" value={formatINR(p.contractValue)} />}
             {money && fin && <StatCard label="Margin so far" value={fin.actualCost > 0 ? `${fin.marginPct.toFixed(1)}%` : "—"} tone={fin.actualCost > 0 && fin.marginPct < 15 ? "bad" : "good"} sub={`Actual cost ${formatINR(fin.actualCost)}`} />}
           </div>
@@ -160,6 +162,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                         <p className="font-medium text-slate-900">{t.name} <span className="text-xs font-normal text-slate-400">{t.code}</span></p>
                         <p className="mt-0.5 text-xs text-slate-500">
                           {t.assignedToId ? name.get(t.assignedToId) ?? "—" : "Unassigned"} · due <span className={cn(over && "font-medium text-red-600")}>{formatDate(t.dueDate)}</span>{over && " (overdue)"}
+                          {slippedDays(t.baselineDue, t.dueDate) > 0 && <span className="font-medium text-amber-700"> · moved +{slippedDays(t.baselineDue, t.dueDate)} days (first date {formatDate(t.baselineDue)})</span>}
                           {t.dependsOnId && ` · after “${p.tasks.find((x) => x.id === t.dependsOnId)?.name ?? "…"}”`}
                         </p>
                       </div>
