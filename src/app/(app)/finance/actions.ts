@@ -13,6 +13,7 @@ import { settleInvoice } from "@/lib/invoice-settle";
 import { computeTotals } from "@/lib/money";
 import { projectScope } from "@/lib/scope";
 import { formToObject, zDate, zOptDate, zOptStr, zReqStr } from "@/lib/form";
+import { billedAgainstPo } from "@/lib/client-account";
 import { num, round2 } from "@/lib/utils";
 
 function refresh() {
@@ -38,6 +39,8 @@ const invoiceSchema = z.object({
   placeOfSupply: zOptStr,
   notes: zOptStr,
   discountPct: z.coerce.number().min(0).max(100).default(0),
+  clientPoId: zOptStr,
+  overPoReason: zOptStr,
 });
 
 function parseLines(raw: unknown) {
@@ -55,6 +58,25 @@ function parseLines(raw: unknown) {
 async function invoiceRows(items: z.infer<typeof lineSchema>[], discountPct: number) {
   const t = computeTotals(items.map((i) => ({ quantity: i.quantity, rate: i.rate, taxPercent: i.taxPercent })), { pct: discountPct });
   return { t, rows: items.map((i, idx) => ({ description: i.description, unit: i.unit, quantity: i.quantity, rate: i.rate, taxPercent: i.taxPercent, amount: t.lines[idx].amount })) };
+}
+
+/**
+ * An invoice may be billed against one of the client's open purchase orders. Billing can never quietly go above the PO value:
+ * either the PO is amended, or the person writes why it may (recorded on the invoice).
+ */
+async function checkPo(c: Ctx, d: { clientId: string; clientPoId?: string; overPoReason?: string }, netThisInvoice: number, exceptInvoiceId?: string) {
+  if (!d.clientPoId) return { clientPoId: null as string | null, overPoNote: null as string | null };
+  const po = await db.clientPO.findFirst({ where: { id: d.clientPoId, companyId: c.companyId, clientId: d.clientId } });
+  if (!po) throw new UserError("That purchase order is not this client's.");
+  if (po.status !== "OPEN") throw new UserError(`PO ${po.number} is ${po.status.toLowerCase()}. Choose an open PO.`);
+  const after = (await billedAgainstPo(po.id, exceptInvoiceId)) + netThisInvoice;
+  const value = num(po.amount);
+  if (after > value + 0.5) {
+    const reason = (d.overPoReason ?? "").trim();
+    if (reason.length < 5) throw new UserError(`This takes billing against PO ${po.number} to ₹${round2(after).toLocaleString("en-IN")}, which is ₹${round2(after - value).toLocaleString("en-IN")} above the PO value of ₹${value.toLocaleString("en-IN")}. Get an amended PO, or write why it may go above it.`);
+    return { clientPoId: po.id, overPoNote: reason };
+  }
+  return { clientPoId: po.id, overPoNote: null as string | null };
 }
 
 async function checkProjectClient(c: Ctx, projectId: string | undefined, clientId: string) {
@@ -75,10 +97,11 @@ export async function createInvoice(fd: FormData) {
     if (!client) throw new UserError("Client not found.");
     await checkProjectClient(c, d.projectId, d.clientId);
     const { t, rows } = await invoiceRows(items, d.discountPct);
+    const po = await checkPo(c, d, t.subtotal - t.discount);
     const inv = await db.$transaction(async (tx) => {
       const number = await nextDocNumber(tx, c.companyId, "invoice");
       const x = await tx.invoice.create({
-        data: { companyId: c.companyId, number, clientId: d.clientId, projectId: d.projectId ?? null, quotationId: d.quotationId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, placeOfSupply: d.placeOfSupply ?? null, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } },
+        data: { companyId: c.companyId, number, clientId: d.clientId, projectId: d.projectId ?? null, quotationId: d.quotationId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, placeOfSupply: d.placeOfSupply ?? null, clientPoId: po.clientPoId, overPoNote: po.overPoNote, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } },
       });
       await audit(c, { action: "CREATE", entityType: "Invoice", entityId: x.id, summary: `Created invoice ${number} for ${client.name} – ₹${t.total.toLocaleString("en-IN")}` }, tx);
       return x;
@@ -99,9 +122,10 @@ export async function updateInvoice(id: string, fd: FormData) {
     if (old.status !== "DRAFT") throw new UserError("Only draft invoices can be edited. Issued invoices are locked – cancel and re-issue if needed.");
     await checkProjectClient(c, d.projectId, d.clientId);
     const { t, rows } = await invoiceRows(items, d.discountPct);
+    const po = await checkPo(c, d, t.subtotal - t.discount, id);
     await db.$transaction(async (tx) => {
       await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
-      await tx.invoice.update({ where: { id }, data: { clientId: d.clientId, projectId: d.projectId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, placeOfSupply: d.placeOfSupply ?? null, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } } });
+      await tx.invoice.update({ where: { id }, data: { clientId: d.clientId, projectId: d.projectId ?? null, issueDate: d.issueDate, dueDate: d.dueDate, paymentTerms: d.paymentTerms, placeOfSupply: d.placeOfSupply ?? null, clientPoId: po.clientPoId, overPoNote: po.overPoNote, notes: d.notes, subtotal: t.subtotal, discount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } } });
       await audit(c, { action: "UPDATE", entityType: "Invoice", entityId: id, summary: num(old.total) !== t.total ? `${c.name} changed invoice ${old.number} from ₹${num(old.total).toLocaleString("en-IN")} to ₹${t.total.toLocaleString("en-IN")}` : `Updated invoice ${old.number}`, oldValue: { total: num(old.total) }, newValue: { total: t.total } }, tx);
     });
     refresh();

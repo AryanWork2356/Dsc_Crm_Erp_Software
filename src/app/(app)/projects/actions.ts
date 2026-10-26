@@ -97,6 +97,20 @@ export async function updateProject(id: string, fd: FormData) {
 
 const ORDER: ProjectStatus[] = ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT", "EXECUTION", "QUALITY_CHECK", "SNAGGING", "HANDOVER", "COMPLETED"];
 
+/** What is still to be spent on a project beyond what is booked and what is on order. Needs access to costs. */
+export async function setEstimateToComplete(id: string, fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("projects:edit");
+    if (!c.can("margins:view")) throw new UserError("You don't have access to project costs.");
+    const d = z.object({ amount: zNumPos("Enter 0 or more"), note: zOptStr }).parse(formToObject(fd));
+    const old = await getProject(c, id);
+    await db.project.update({ where: { id }, data: { estimateToComplete: d.amount, estimateNote: d.note ?? null, estimateUpdatedAt: new Date(), estimateUpdatedById: c.userId } });
+    await audit(c, { action: "UPDATE", entityType: "Project", entityId: id, summary: `${c.name} changed the estimate still to spend on ${old.code} from ₹${num(old.estimateToComplete).toLocaleString("en-IN")} to ₹${d.amount.toLocaleString("en-IN")}${d.note ? `: ${d.note}` : ""}`, oldValue: { estimateToComplete: num(old.estimateToComplete) }, newValue: { estimateToComplete: d.amount } });
+    revalidatePath(`/projects/${id}`);
+    return { message: "Saved: the forecast is updated" };
+  });
+}
+
 export async function changeProjectStatus(id: string, status: string) {
   return run(async () => {
     const c = await assertPerm("projects:edit");

@@ -18,6 +18,13 @@ import { num, round2 } from "./utils";
  *   (Stock bought into a warehouse is inventory, not project cost, until it is issued.)
  *
  *   Profit = Revenue − Actual cost,  Margin % = Profit / Revenue
+ *
+ *   FORECAST FINAL COST = Actual booked cost
+ *                       + Committed (what is still to be delivered on the project's open purchase orders: ordered − received, at the order rate, before GST)
+ *                       + Estimate still to spend (typed by the project manager)
+ *   A purchase order is counted once: the part not yet delivered is 'committed'; once it is delivered to the site it is actual cost
+ *   (and the supplier's bill against that order is never added again). Stock that has arrived in a warehouse but has not been issued to
+ *   the project is not a project cost yet: include what you will issue in the estimate still to spend.
  *   Billing: Billed = invoices issued (excl. GST), Collected = payments received, Outstanding = invoice totals − payments
  */
 
@@ -39,14 +46,21 @@ export type ProjectFinancials = {
   collected: number;
   outstanding: number;
   overBudget: boolean;
+  committed: number; // undelivered value of open purchase orders
+  estimateToComplete: number;
+  forecastFinal: number;
+  forecastVariance: number; // forecast final − budget
+  forecastMarginPct: number;
+  forecastOverBudget: boolean;
+  forecastLoss: boolean; // forecast final cost is above the contract value
 };
 
 export async function projectFinancials(companyId: string, projectIds: string[]): Promise<Map<string, ProjectFinancials>> {
   const out = new Map<string, ProjectFinancials>();
   if (projectIds.length === 0) return out;
 
-  const [projects, boqs, issues, siteReceipts, attendance, billsNoPo, expenses, invoices, contractorPay] = await Promise.all([
-    db.project.findMany({ where: { companyId, id: { in: projectIds } }, select: { id: true, contractValue: true, budget: true } }),
+  const [projects, boqs, issues, siteReceipts, attendance, billsNoPo, expenses, invoices, contractorPay, poLines] = await Promise.all([
+    db.project.findMany({ where: { companyId, id: { in: projectIds } }, select: { id: true, contractValue: true, budget: true, estimateToComplete: true } }),
     db.boq.findMany({ where: { companyId, deletedAt: null, projectId: { in: projectIds }, status: { not: "REVISED" } }, select: { projectId: true, status: true, revision: true, items: { select: { estimatedCost: true } } } }),
     db.$queryRaw<{ project_id: string; value: number }[]>`
       SELECT mi."projectId" AS project_id, COALESCE(SUM(it.quantity * it."unitCost"), 0)::float AS value
@@ -66,6 +80,7 @@ export async function projectFinancials(companyId: string, projectIds: string[])
     db.expense.groupBy({ by: ["projectId", "category"], where: { companyId, projectId: { in: projectIds }, approved: true }, _sum: { amount: true } }),
     db.invoice.findMany({ where: { companyId, deletedAt: null, projectId: { in: projectIds }, status: { notIn: ["DRAFT", "CANCELLED", "PENDING_APPROVAL"] } }, select: { projectId: true, subtotal: true, discount: true, total: true, paid: true } }),
     db.contractorPayment.groupBy({ by: ["projectId"], where: { companyId, projectId: { in: projectIds } }, _sum: { amount: true } }),
+    db.purchaseOrderItem.findMany({ where: { po: { companyId, projectId: { in: projectIds }, status: { in: ["APPROVED", "SENT_TO_VENDOR", "PARTIALLY_RECEIVED"] } } }, select: { quantity: true, receivedQty: true, rate: true, po: { select: { projectId: true } } } }),
   ]);
 
   const mapNum = <T extends { project_id: string; value: number }>(rows: T[]) => new Map(rows.map((r) => [r.project_id, num(r.value)]));
@@ -95,12 +110,17 @@ export async function projectFinancials(companyId: string, projectIds: string[])
     const billedGross = inv.reduce((s, i) => s + num(i.total), 0);
     const collected = round2(inv.reduce((s, i) => s + num(i.paid), 0));
     const variance = round2(actualCost - budget);
+    const committed = round2(poLines.filter((l) => l.po.projectId === p.id).reduce((s, l) => s + Math.max(0, num(l.quantity) - num(l.receivedQty)) * num(l.rate), 0));
+    const estimateToComplete = num(p.estimateToComplete);
+    const forecastFinal = round2(actualCost + committed + estimateToComplete);
 
     out.set(p.id, {
       projectId: p.id, contractValue, budget, estimatedProfit: round2(contractValue - budget),
       material, labour, vendor, other, actualCost, variance, variancePct: budget > 0 ? round2((variance / budget) * 100) : 0,
       profit, marginPct: contractValue > 0 ? round2((profit / contractValue) * 100) : 0,
       billed, collected, outstanding: round2(billedGross - collected), overBudget: budget > 0 && actualCost > budget,
+      committed, estimateToComplete, forecastFinal, forecastVariance: round2(forecastFinal - budget), forecastMarginPct: contractValue > 0 ? round2(((contractValue - forecastFinal) / contractValue) * 100) : 0,
+      forecastOverBudget: budget > 0 && forecastFinal > budget, forecastLoss: contractValue > 0 && forecastFinal > contractValue,
     });
   }
   return out;

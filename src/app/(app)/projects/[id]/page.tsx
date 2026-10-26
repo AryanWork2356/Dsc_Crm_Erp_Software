@@ -23,7 +23,7 @@ import { slippedDays } from "@/lib/baseline";
 import { HEALTH_LABEL, taskHealth } from "@/lib/task-health";
 import { setSiteLocation } from "@/app/(app)/workforce/location-actions";
 import { TaskStatusControl } from "../task-controls";
-import { addTaskComment, changeProjectStatus, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
+import { addTaskComment, changeProjectStatus, setEstimateToComplete, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
 
 const ACTIVE = ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT", "EXECUTION", "QUALITY_CHECK", "SNAGGING", "HANDOVER"];
 
@@ -279,7 +279,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
 
       {tab === "documents" && <DocumentsPanel c={c} entityType="PROJECT" entityId={id} />}
 
-      {tab === "financials" && money && fin && <Financials fin={fin} canSync={canEdit} onSync={syncBudgetFromBoq.bind(null, id)} />}
+      {tab === "financials" && money && fin && <Financials fin={fin} canSync={canEdit} onSync={syncBudgetFromBoq.bind(null, id)} estimate={{ note: p.estimateNote, at: p.estimateUpdatedAt, canSet: canEdit, save: setEstimateToComplete.bind(null, id) }} />}
     </>
   );
 }
@@ -333,7 +333,7 @@ function Timeline({ p, today }: { p: { startDate: Date | null; plannedEndDate: D
   );
 }
 
-function Financials({ fin, canSync, onSync }: { fin: NonNullable<Awaited<ReturnType<typeof oneProjectFinancials>>>; canSync: boolean; onSync: () => Promise<import("@/lib/action").ActionResult> }) {
+function Financials({ fin, canSync, onSync, estimate }: { fin: NonNullable<Awaited<ReturnType<typeof oneProjectFinancials>>>; canSync: boolean; onSync: () => Promise<import("@/lib/action").ActionResult>; estimate: { note: string | null; at: Date | null; canSet: boolean; save: (fd: FormData) => Promise<import("@/lib/action").ActionResult> } }) {
   const buckets = [
     { label: "Material", v: fin.material, c: "bg-brand-700" }, { label: "Labour", v: fin.labour, c: "bg-teal-600" },
     { label: "Vendors / sub-contract", v: fin.vendor, c: "bg-amber-500" }, { label: "Other expenses", v: fin.other, c: "bg-slate-400" },
@@ -347,6 +347,23 @@ function Financials({ fin, canSync, onSync }: { fin: NonNullable<Awaited<ReturnT
         <StatCard label="Actual cost" value={formatINR(fin.actualCost)} tone={fin.overBudget ? "bad" : "default"} sub={fin.budget > 0 ? `${fin.variance > 0 ? "+" : ""}${formatINR(fin.variance)} vs budget (${fin.variancePct.toFixed(1)}%)` : undefined} />
         <StatCard label="Gross profit" value={formatINR(fin.profit)} tone={fin.marginPct < 15 && fin.actualCost > 0 ? "bad" : "good"} sub={`Margin ${fin.marginPct.toFixed(1)}%`} />
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Forecast final cost</CardTitle>
+          {estimate.canSet && <FormDialog title="Estimate still to spend" description="What do you still expect to spend on this project beyond what is booked and what is already on order?" trigger={<Button size="sm" variant="secondary">Update the estimate</Button>} fields={[{ name: "amount", label: "Still to spend (₹, excl. GST)", type: "number", required: true, defaultValue: fin.estimateToComplete }, { name: "note", label: "What is it for?", type: "textarea", full: true, defaultValue: estimate.note }]} action={estimate.save} />}
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div><dt className="text-xs text-slate-500">Actual cost booked</dt><dd className="tabular text-lg font-semibold">{formatINR(fin.actualCost)}</dd></div>
+            <div><dt className="text-xs text-slate-500">+ Still to be delivered on open orders</dt><dd className="tabular text-lg font-semibold">{formatINR(fin.committed)}</dd></div>
+            <div><dt className="text-xs text-slate-500">+ Estimate still to spend{estimate.at ? ` (${formatDate(estimate.at)})` : ""}</dt><dd className="tabular text-lg font-semibold">{formatINR(fin.estimateToComplete)}</dd></div>
+            <div><dt className="text-xs text-slate-500">= Forecast final cost</dt><dd className={cn("tabular text-lg font-bold", fin.forecastOverBudget ? "text-red-600" : "text-slate-900")}>{formatINR(fin.forecastFinal)}</dd></div>
+          </dl>
+          <p className="text-sm">{fin.budget > 0 ? <>Against the budget of {formatINR(fin.budget)}: <b className={fin.forecastVariance > 0 ? "text-red-600" : "text-emerald-700"}>{fin.forecastVariance > 0 ? "+" : ""}{formatINR(fin.forecastVariance)}</b>. </> : <span className="text-amber-700">No budget is set, so the overrun cannot be shown. </span>}Forecast margin <b className={fin.forecastLoss ? "text-red-600" : ""}>{fin.forecastMarginPct.toFixed(1)}%</b>{fin.forecastLoss && <span className="font-medium text-red-600"> – the forecast cost is above the contract value</span>}.</p>
+          {estimate.note && <p className="text-xs text-slate-500">Estimate note: {estimate.note}</p>}
+          <p className="text-xs text-slate-500">An order is counted once: what is still to arrive is &quot;on open orders&quot;; once delivered to the site it is actual cost, and the supplier&apos;s bill for that order is never added again. Material that has arrived in a warehouse but is not yet issued to this project is not a project cost yet, so include what you will issue in the estimate.</p>
+        </CardBody>
+      </Card>
       <Card>
         <CardHeader><CardTitle>Where the money went</CardTitle>{canSync && <ActionButton size="sm" variant="secondary" action={onSync}>Set budget from BOQ</ActionButton>}</CardHeader>
         <CardBody className="space-y-4">

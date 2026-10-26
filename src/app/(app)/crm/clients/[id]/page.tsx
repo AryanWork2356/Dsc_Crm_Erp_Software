@@ -15,6 +15,7 @@ import { deleteClient, updateClient } from "../../actions";
 import { createPortalLogin } from "@/app/(app)/settings/actions";
 import { clientFields } from "../client-fields";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
+import { ClientOrders } from "./client-orders";
 
 export default async function ClientDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -71,6 +72,7 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
               {cl.notes && <p className="mt-4 whitespace-pre-wrap border-t border-slate-100 pt-4 text-sm text-slate-700">{cl.notes}</p>}
             </CardBody>
           </Card>
+          <ClientOrders c={c} clientId={id} />
           <Card>
             <CardHeader><CardTitle>Projects</CardTitle></CardHeader>
             <CardBody className="py-2">

@@ -12,18 +12,25 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { cancelInvoice, deletePayment, recordPayment, submitInvoice } from "../../actions";
+import { addCollectionNote } from "../../collection-actions";
+import { userOptions } from "@/lib/lookups";
 
 export default async function InvoiceDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const c = await requirePerm("invoices:view");
   const inv = await db.invoice.findFirst({
     where: { id, companyId: c.companyId, deletedAt: null },
-    include: { client: true, project: { select: { id: true, code: true, name: true } }, quotation: { select: { id: true, number: true } }, items: true, payments: { orderBy: { date: "desc" } } },
+    include: { client: true, clientPo: { select: { id: true, number: true } }, project: { select: { id: true, code: true, name: true } }, quotation: { select: { id: true, number: true } }, items: true, payments: { orderBy: { date: "desc" } } },
   });
   if (!inv) notFound();
   const pending = inv.status === "PENDING_APPROVAL" ? await db.approval.findFirst({ where: { companyId: c.companyId, entityType: "Invoice", entityId: id, status: "PENDING" } }) : null;
   const balance = num(inv.total) - num(inv.paid);
   const issued = !["DRAFT", "PENDING_APPROVAL", "CANCELLED"].includes(inv.status);
+  const notes = issued ? await db.collectionNote.findMany({ where: { companyId: c.companyId, invoiceId: id }, orderBy: { createdAt: "desc" }, take: 30 }) : [];
+  const team = c.can("invoices:edit") && issued ? await userOptions(c.companyId, ["MANAGEMENT", "ACCOUNTS", "PROJECT_MANAGER", "SALES"]) : [];
+  const names = new Map(team.map((t) => [t.value, t.label]));
+  const owners = notes.length ? await db.user.findMany({ where: { id: { in: [...new Set(notes.flatMap((n) => [n.ownerId, n.createdById]))] } }, select: { id: true, name: true } }) : [];
+  for (const o of owners) names.set(o.id, o.name);
   const late = issued && balance > 0.005 && inv.dueDate && inv.dueDate < startOfDay();
 
   return (
@@ -86,8 +93,41 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
         </div>
         <div className="space-y-5">
           <Card><CardHeader><CardTitle>Collection</CardTitle></CardHeader><CardBody><Progress value={num(inv.total) ? (num(inv.paid) / num(inv.total)) * 100 : 0} /><p className="mt-2 text-sm text-slate-600">{formatINR(inv.paid)} of {formatINR(inv.total)} received</p></CardBody></Card>
+          {issued && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Follow-ups</CardTitle>
+                {c.can("invoices:edit") && (
+                  <FormDialog title={`Follow-up – ${inv.number}`} description="A promised date is only a promise: the invoice stays unpaid until the payment is recorded." trigger={<Button size="sm" variant="secondary">Add follow-up</Button>}
+                    fields={[
+                      { name: "channel", label: "How", type: "select", options: [{ value: "CALL", label: "Phone call" }, { value: "WHATSAPP", label: "WhatsApp" }, { value: "EMAIL", label: "E-mail" }, { value: "VISIT", label: "Visit" }, { value: "OTHER", label: "Other" }], defaultValue: "CALL" },
+                      { name: "note", label: "What was said", type: "textarea", required: true, full: true },
+                      { name: "promisedDate", label: "Client promised to pay on", type: "date" },
+                      { name: "promisedAmount", label: "Promised amount (₹)", type: "number" },
+                      { name: "nextAction", label: "Next follow-up (what)", required: balance > 0.005 },
+                      { name: "nextActionDate", label: "Next follow-up (date)", type: "date", required: balance > 0.005 },
+                      { name: "ownerId", label: "Who follows up", type: "select", options: team, defaultValue: c.userId },
+                    ]}
+                    action={addCollectionNote.bind(null, id)} submitLabel="Save" />
+                )}
+              </CardHeader>
+              {notes.length === 0 ? <EmptyState title="No follow-up recorded yet" hint="Record each call or visit, with the next step and its date." /> : (
+                <ul className="divide-y divide-slate-100">
+                  {notes.map((n) => (
+                    <li key={n.id} className="space-y-0.5 px-5 py-3 text-sm">
+                      <p className="text-slate-900">{n.note}</p>
+                      <p className="text-xs text-slate-500">{formatDate(n.createdAt)} · {humanize(n.channel)} · {names.get(n.createdById) ?? "—"}</p>
+                      {n.promisedDate && <p className="text-xs text-amber-700">Promised {n.promisedAmount ? `${formatINR(n.promisedAmount)} ` : ""}by {formatDate(n.promisedDate)}{n.promisedDate < startOfDay() && balance > 0.005 ? " – not received" : ""}</p>}
+                      {n.nextAction && <p className="text-xs text-slate-600">Next: {n.nextAction}{n.nextActionDate ? ` on ${formatDate(n.nextActionDate)}` : ""} ({names.get(n.ownerId) ?? "—"})</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
           <Card><CardHeader><CardTitle>Details</CardTitle></CardHeader><CardBody>
-            <DetailGrid items={[{ label: "Invoice date", value: formatDate(inv.issueDate) }, { label: "Due date", value: formatDate(inv.dueDate) }, { label: "Payment terms", value: inv.paymentTerms }, { label: "Quotation", value: inv.quotation ? <Link className="text-brand-700 hover:underline" href={`/sales/quotations/${inv.quotation.id}`}>{inv.quotation.number}</Link> : null }, { label: "Client GSTIN", value: inv.client.gstin }]} />
+            <DetailGrid items={[{ label: "Invoice date", value: formatDate(inv.issueDate) }, { label: "Due date", value: formatDate(inv.dueDate) }, { label: "Payment terms", value: inv.paymentTerms }, { label: "Client PO", value: inv.clientPo ? <Link className="text-brand-700 hover:underline" href={`/crm/clients/${inv.clientId}`}>{inv.clientPo.number}</Link> : null }, { label: "Quotation", value: inv.quotation ? <Link className="text-brand-700 hover:underline" href={`/sales/quotations/${inv.quotation.id}`}>{inv.quotation.number}</Link> : null }, { label: "Client GSTIN", value: inv.client.gstin }]} />
+            {inv.overPoNote && <p className="mt-4 border-t border-slate-100 pt-4 text-sm text-amber-700">Above the PO value: {inv.overPoNote}</p>}
             {inv.notes && <p className="mt-4 whitespace-pre-wrap border-t border-slate-100 pt-4 text-sm text-slate-700">{inv.notes}</p>}
           </CardBody></Card>
         </div>

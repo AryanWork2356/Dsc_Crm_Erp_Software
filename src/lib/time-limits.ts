@@ -66,9 +66,18 @@ export const RULES: Rule[] = [
   },
   {
     key: "invoice_followup", title: "Invoice sent – payment follow-up due", sop: "Accounts Receivable: first follow-up within 3 days of submitting the invoice, then weekly until paid.", defaultHours: 72, perm: "invoices:view", managerRoles: ["MANAGEMENT"],
-    find: async (companyId, cutoff) => (await db.invoice.findMany({ where: { companyId, deletedAt: null, status: { in: ["SENT", "PARTIALLY_PAID", "OVERDUE"] }, issueDate: { lt: cutoff } }, include: { client: { select: { name: true } } }, take: MAX }))
-      .filter((i) => num(i.total) - num(i.paid) > 0.5)
-      .map((i) => ({ id: i.id, title: `${i.number} – ${i.client.name}`, detail: `${formatINR(num(i.total) - num(i.paid))} still to collect`, link: `/finance/invoices/${i.id}`, startedAt: i.issueDate, ownerIds: [], ownerRoles: ["ACCOUNTS"] as RoleKey[], projectId: i.projectId })),
+    // the clock restarts at each recorded follow-up: it runs from the date of the next follow-up that was promised (or, if none, a week after the call)
+    find: async (companyId, cutoff) => {
+      const invoices = (await db.invoice.findMany({ where: { companyId, deletedAt: null, status: { in: ["SENT", "PARTIALLY_PAID", "OVERDUE"] }, issueDate: { lt: cutoff } }, include: { client: { select: { name: true } } }, take: MAX })).filter((i) => num(i.total) - num(i.paid) > 0.5);
+      const notes = await db.collectionNote.findMany({ where: { companyId, invoiceId: { in: invoices.map((i) => i.id) } }, orderBy: { createdAt: "desc" } });
+      const latest = new Map<string, (typeof notes)[number]>();
+      for (const n of notes) if (!latest.has(n.invoiceId)) latest.set(n.invoiceId, n);
+      return invoices.map((i) => {
+        const n = latest.get(i.id);
+        const startedAt = n ? (n.nextActionDate ?? new Date(n.createdAt.getTime() + 4 * 86400000)) : i.issueDate;
+        return { id: i.id, title: `${i.number} – ${i.client.name}`, detail: `${formatINR(num(i.total) - num(i.paid))} still to collect${n ? ` · last follow-up ${n.createdAt.toLocaleDateString("en-IN")}` : " · no follow-up recorded yet"}`, link: `/finance/invoices/${i.id}`, startedAt, ownerIds: n?.ownerId ? [n.ownerId] : [], ownerRoles: ["ACCOUNTS"] as RoleKey[], projectId: i.projectId };
+      }).filter((x) => x.startedAt.getTime() < cutoff.getTime());
+    },
   },
   {
     key: "bill_certify", title: "Vendor bill waiting for certification", sop: "Accounts Payable: bills verified within 2 days – no bill is processed without the project manager's certification and supporting documents.", defaultHours: 48, perm: "bill_certification:view", managerRoles: ["MANAGEMENT"],

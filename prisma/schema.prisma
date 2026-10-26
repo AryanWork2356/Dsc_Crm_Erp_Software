@@ -657,14 +657,15 @@ model Client {
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  leads      Lead[]
-  projects   Project[]
-  quotations Quotation[]
-  invoices   Invoice[]
-  tickets    SupportTicket[]
-  siteVisits SiteVisit[]
-  boqs       Boq[]
-  rateCard   ClientRateCard?
+  leads          Lead[]
+  projects       Project[]
+  quotations     Quotation[]
+  invoices       Invoice[]
+  tickets        SupportTicket[]
+  siteVisits     SiteVisit[]
+  boqs           Boq[]
+  rateCard       ClientRateCard?
+  purchaseOrders ClientPO[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -919,36 +920,40 @@ model BoqItem {
 
 // ───────────────────────── PROJECTS ─────────────────────────
 model Project {
-  id               String        @id @default(cuid())
-  companyId        String
-  code             String
-  name             String
-  clientId         String
-  client           Client        @relation(fields: [clientId], references: [id])
-  segment          SegmentType   @default(RESIDENTIAL)
-  siteAddress      String?
-  startDate        DateTime?
-  plannedEndDate   DateTime?
-  baselineEndDate  DateTime? // the first committed completion date; never changes (see DateChange)
-  actualEndDate    DateTime?
-  projectManagerId String?
-  designerId       String?
-  siteEngineerId   String?
-  supervisorId     String?
+  id                  String        @id @default(cuid())
+  companyId           String
+  code                String
+  name                String
+  clientId            String
+  client              Client        @relation(fields: [clientId], references: [id])
+  segment             SegmentType   @default(RESIDENTIAL)
+  siteAddress         String?
+  startDate           DateTime?
+  plannedEndDate      DateTime?
+  baselineEndDate     DateTime? // the first committed completion date; never changes (see DateChange)
+  actualEndDate       DateTime?
+  projectManagerId    String?
+  designerId          String?
+  siteEngineerId      String?
+  supervisorId        String?
   // outstation sites report earlier (SOP: 9:30 vs 10:00) – times are company settings
-  outstation       Boolean       @default(false)
+  outstation          Boolean       @default(false)
   // where the site is, so self-marked attendance can be checked (see lib/geo.ts); radius falls back to the company setting
-  siteLat          Float?
-  siteLng          Float?
-  geoRadiusM       Int?
-  contractValue    Decimal       @default(0) @db.Decimal(14, 2)
-  budget           Decimal       @default(0) @db.Decimal(14, 2)
-  status           ProjectStatus @default(PLANNING)
-  progress         Int           @default(0)
-  quotationId      String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  deletedAt        DateTime?
+  siteLat             Float?
+  siteLng             Float?
+  geoRadiusM          Int?
+  contractValue       Decimal       @default(0) @db.Decimal(14, 2)
+  budget              Decimal       @default(0) @db.Decimal(14, 2)
+  estimateToComplete  Decimal       @default(0) @db.Decimal(14, 2) // what is still to be spent beyond actual cost and open purchase orders
+  estimateNote        String?
+  estimateUpdatedAt   DateTime?
+  estimateUpdatedById String?
+  status              ProjectStatus @default(PLANNING)
+  progress            Int           @default(0)
+  quotationId         String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
 
   tasks            ProjectTask[]
   milestones       ProjectMilestone[]
@@ -1318,6 +1323,9 @@ model Invoice {
   paid          Decimal       @default(0) @db.Decimal(14, 2)
   paymentTerms  String?
   placeOfSupply String? // GST state code; blank = from the client's GSTIN
+  clientPoId    String? // the client's purchase order this invoice is billed against
+  clientPo      ClientPO?     @relation(fields: [clientPoId], references: [id])
+  overPoNote    String? // why it was allowed to go above the PO amount
   notes         String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -2077,4 +2085,54 @@ model MaterialWaste {
 
   @@index([companyId, date])
   @@index([projectId, materialId])
+}
+
+// ───────────────────────── CLIENT PURCHASE ORDERS AND COLLECTIONS ─────────────────────────
+enum ClientPoStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+/// The client's own purchase order against our quotation. Invoices are billed against it, so "left to bill" and "left to collect" are known.
+model ClientPO {
+  id          String         @id @default(cuid())
+  companyId   String
+  clientId    String
+  client      Client         @relation(fields: [clientId], references: [id])
+  number      String // the client's PO number
+  poDate      DateTime?      @db.Date
+  amount      Decimal        @db.Decimal(14, 2) // excluding GST
+  scopes      String? // what it covers, e.g. "Civil and interiors, FAS"
+  projectId   String?
+  quotationId String?
+  documentId  String? // the uploaded PO
+  status      ClientPoStatus @default(OPEN)
+  note        String?
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  invoices    Invoice[]
+
+  @@unique([companyId, clientId, number])
+  @@index([companyId, status])
+}
+
+/// One follow-up on an unpaid invoice: what was said, what the client promised, and what happens next. Never changes the invoice's paid state.
+model CollectionNote {
+  id             String    @id @default(cuid())
+  companyId      String
+  invoiceId      String
+  channel        String    @default("CALL") // CALL | WHATSAPP | EMAIL | VISIT | OTHER
+  note           String
+  promisedAmount Decimal?  @db.Decimal(14, 2)
+  promisedDate   DateTime? @db.Date
+  nextAction     String?
+  nextActionDate DateTime? @db.Date
+  ownerId        String // who follows up next
+  createdById    String
+  createdAt      DateTime  @default(now())
+
+  @@index([invoiceId, createdAt])
+  @@index([companyId, nextActionDate])
 }
