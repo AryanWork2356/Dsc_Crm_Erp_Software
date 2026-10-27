@@ -6,6 +6,7 @@ import { Bell, LogOut, Search } from "lucide-react";
 import { initials } from "@/lib/utils";
 import { InstallApp } from "./pwa";
 import { LanguageSwitcher } from "./language";
+import { HelpButton } from "./help-button";
 
 export function Topbar({
   name,
@@ -41,6 +42,7 @@ export function Topbar({
         />
       </form>
       <div className="ml-auto flex items-center gap-3">
+        <HelpButton />
         <LanguageSwitcher />
         <InstallApp />
         <Link href="/notifications" className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
