@@ -11,65 +11,119 @@ export type NavGroup = { label?: string; icon: string; items: NavItem[]; href?: 
  */
 export const NAV: NavGroup[] = [
   { label: "Dashboard", icon: "layout-dashboard", href: "/dashboard", items: [], perm: "dashboard:view" },
-  { label: "Actions & Blockers", icon: "check-square", href: "/actions", items: [], perm: "actions:view" },
-  { label: "Approvals", icon: "check-square", href: "/approvals", items: [], perm: "approvals:view" },
-  { label: "Time Limits", icon: "timer", href: "/time-limits", items: [], perm: "dashboard:view" },
-  // ── the four workspaces ──
   {
-    label: "Site & Projects",
+    label: "My Work",
+    icon: "check-square",
+    items: [
+      { label: "Actions & Blockers", href: "/actions", perm: "actions:view" },
+      { label: "Approvals", href: "/approvals", perm: "approvals:view" },
+      { label: "Time Limits", href: "/time-limits", perm: "dashboard:view" },
+      { label: "Notifications", href: "/notifications", perm: "notifications:view" },
+    ],
+  },
+  {
+    label: "Clients",
+    icon: "users",
+    items: [
+      { label: "Clients", href: "/crm/clients", perm: "clients:view" },
+      { label: "Leads", href: "/crm/leads", perm: "leads:view" },
+      { label: "Follow-ups", href: "/crm/follow-ups", perm: "leads:view" },
+      { label: "Site Visits", href: "/crm/site-visits", perm: "sitevisits:view" },
+    ],
+  },
+  {
+    label: "Sales",
+    icon: "file-text",
+    items: [
+      { label: "Bill of Quantities", href: "/sales/boq", perm: "boq:view" },
+      { label: "Quotations", href: "/sales/quotations", perm: "quotations:view" },
+      { label: "Client rates", href: "/sales/rates", perm: "margins:view" },
+    ],
+  },
+  {
+    label: "Projects",
     icon: "folder-kanban",
     items: [
       { label: "All Projects", href: "/projects", perm: "projects:view" },
-      { label: "Daily Site Reports", href: "/site-reports", perm: "site_reports:view" },
       { label: "Tasks", href: "/projects/tasks", perm: "tasks:view" },
-      { label: "Manpower", href: "/resources", perm: "resources:view" },
-      { label: "Transfers", href: "/transfers", perm: "transfers:view" },
+      { label: "Daily Site Reports", href: "/site-reports", perm: "site_reports:view" },
       { label: "Extra Work", href: "/extra-work", perm: "extra_work:view" },
-      { label: "Bills to Certify", href: "/bills-to-certify", perm: "bill_certification:view" },
+    ],
+  },
+  {
+    label: "Workforce",
+    icon: "hard-hat",
+    items: [
+      { label: "Manpower", href: "/resources", perm: "resources:view" },
       { label: "Attendance", href: "/workforce/attendance", perm: "attendance:view" },
       { label: "Workers", href: "/workforce/workers", perm: "workers:view" },
+      { label: "Contractors", href: "/workforce/contractors", perm: "contractors:view" },
+      { label: "Labour Cost", href: "/workforce/labour", perm: "salary:view" },
+    ],
+  },
+  {
+    label: "Closing & Quality",
+    icon: "life-buoy",
+    items: [
       { label: "Project Closure", href: "/closure", perm: "closure:view" },
       { label: "Scorecards", href: "/scorecards", perm: "scorecards:view" },
       { label: "Customer Support", href: "/support", perm: "support:view" },
     ],
   },
   {
-    label: "Commercial & Operations",
+    label: "Procurement",
     icon: "shopping-cart",
     items: [
-      { label: "Clients", href: "/crm/clients", perm: "clients:view" },
-      { label: "Leads", href: "/crm/leads", perm: "leads:view" },
-      { label: "Follow-ups", href: "/crm/follow-ups", perm: "leads:view" },
-      { label: "Site Visits", href: "/crm/site-visits", perm: "sitevisits:view" },
-      { label: "Bill of Quantities", href: "/sales/boq", perm: "boq:view" },
-      { label: "Quotations", href: "/sales/quotations", perm: "quotations:view" },
-      { label: "Client rates", href: "/sales/rates", perm: "margins:view" },
       { label: "Purchase Requests", href: "/procurement/requests", perm: "purchase_requests:view" },
       { label: "Purchase Orders", href: "/procurement/orders", perm: "purchase_orders:view" },
       { label: "Vendors", href: "/procurement/vendors", perm: "vendors:view" },
       { label: "Deliveries", href: "/procurement/deliveries", perm: "purchase_orders:view" },
-      { label: "Stock", href: "/inventory/stock", perm: "inventory:view" },
-      { label: "Materials", href: "/inventory/materials", perm: "materials:view" },
-      { label: "Material Receipts", href: "/inventory/receipts", perm: "inventory:view" },
-      { label: "Issues & Returns", href: "/inventory/issues", perm: "inventory:view" },
-      { label: "Stock Ledger", href: "/inventory/movements", perm: "inventory:view" },
-      { label: "Waste & Reconciliation", href: "/inventory/waste", perm: "inventory:view" },
-      { label: "Locations", href: "/inventory/locations", perm: "inventory:view" },
-      { label: "Contractors", href: "/workforce/contractors", perm: "contractors:view" },
     ],
   },
   {
-    label: "Finance & People",
+    label: "Warehouse",
+    icon: "boxes",
+    items: [
+      { label: "Stock", href: "/inventory/stock", perm: "inventory:view" },
+      { label: "Materials", href: "/inventory/materials", perm: "materials:view" },
+      { label: "Locations", href: "/inventory/locations", perm: "inventory:view" },
+      { label: "Stock Ledger", href: "/inventory/movements", perm: "inventory:view" },
+    ],
+  },
+  {
+    label: "Site Material",
+    icon: "boxes",
+    items: [
+      { label: "Material Receipts", href: "/inventory/receipts", perm: "inventory:view" },
+      { label: "Issues & Returns", href: "/inventory/issues", perm: "inventory:view" },
+      { label: "Waste & Reconciliation", href: "/inventory/waste", perm: "inventory:view" },
+      { label: "Transfers", href: "/transfers", perm: "transfers:view" },
+    ],
+  },
+  {
+    label: "Client Billing",
     icon: "wallet",
     items: [
       { label: "Overview", href: "/finance", perm: "finance:view" },
       { label: "Invoices", href: "/finance/invoices", perm: "invoices:view" },
       { label: "Payments Received", href: "/finance/payments", perm: "payments:view" },
       { label: "Receivables", href: "/finance/receivables", perm: "invoices:view" },
+    ],
+  },
+  {
+    label: "Vendor Payments",
+    icon: "wallet",
+    items: [
+      { label: "Bills to Certify", href: "/bills-to-certify", perm: "bill_certification:view" },
       { label: "Vendor Bills", href: "/finance/bills", perm: "vendor_bills:view" },
       { label: "Payables", href: "/finance/payables", perm: "vendor_bills:view" },
       { label: "Expenses", href: "/finance/expenses", perm: "expenses:view" },
-      { label: "Labour Cost", href: "/workforce/labour", perm: "salary:view" },
+    ],
+  },
+  {
+    label: "HR",
+    icon: "user-cog",
+    items: [
       { label: "Employees", href: "/hr/employees", perm: "employees:view" },
       { label: "Leave", href: "/hr/leaves", perm: "leaves:view" },
       { label: "Payroll", href: "/hr/payroll", perm: "salary:view" },
@@ -79,21 +133,26 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: "Management & Growth",
+    label: "Management",
     icon: "bar-chart",
     items: [
       { label: "Exceptions", href: "/exceptions", perm: "exceptions:view" },
       { label: "Key numbers", href: "/kpis", perm: "exceptions:view" },
       { label: "Director Reports", href: "/director-reports", perm: "finance:view" },
       { label: "Reports", href: "/reports", perm: "reports:view" },
+    ],
+  },
+  { label: "Documents", icon: "folder-open", href: "/documents", items: [], perm: "documents:view" },
+  {
+    label: "Communication",
+    icon: "message-circle",
+    items: [
       { label: "WhatsApp", href: "/whatsapp", perm: "whatsapp:view" },
       { label: "Marketing", href: "/marketing", perm: "marketing:view" },
     ],
   },
-  { label: "Documents", icon: "folder-open", href: "/documents", items: [], perm: "documents:view" },
-  { label: "Notifications", icon: "bell", href: "/notifications", items: [], perm: "notifications:view" },
   {
-    label: "Admin",
+    label: "People & Company",
     icon: "settings",
     items: [
       { label: "Team & Users", href: "/settings/team", perm: "team:view" },
@@ -101,11 +160,17 @@ export const NAV: NavGroup[] = [
       { label: "Roles & Permissions", href: "/settings/roles", perm: "settings:view" },
       { label: "Import Data", href: "/settings/import", perm: "settings:view" },
       { label: "Terms Templates", href: "/settings/terms", perm: "settings:view" },
-      { label: "WhatsApp Connection", href: "/settings/whatsapp", perm: "settings:manage" },
-      { label: "Time Limits", href: "/settings/time-limits", perm: "settings:manage" },
+      { label: "Audit Log", href: "/settings/audit", perm: "audit:view" },
+    ],
+  },
+  {
+    label: "Rules & Automation",
+    icon: "timer",
+    items: [
+      { label: "Time Limit Rules", href: "/settings/time-limits", perm: "settings:manage" },
       { label: "Attendance Location", href: "/settings/attendance", perm: "settings:manage" },
       { label: "Automation", href: "/settings/automation", perm: "settings:manage" },
-      { label: "Audit Log", href: "/settings/audit", perm: "audit:view" },
+      { label: "WhatsApp Connection", href: "/settings/whatsapp", perm: "settings:manage" },
     ],
   },
 ];

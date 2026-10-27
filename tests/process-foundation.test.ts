@@ -194,11 +194,16 @@ describe("the exceptions report", () => {
   });
 });
 
-describe("navigation is grouped into the four workspaces", () => {
-  it("has the four workspace groups, and every page is still reachable", () => {
-    const labels = NAV.map((g) => g.label);
-    expect(labels).toEqual(expect.arrayContaining(["Site & Projects", "Commercial & Operations", "Finance & People", "Management & Growth"]));
+describe("the left menu is split into small sections", () => {
+  it("every section has between 2 and 6 items, and every page is still reachable", () => {
+    const sections = NAV.filter((g) => g.items.length > 0);
+    expect(sections.length).toBeGreaterThanOrEqual(12);
+    for (const g of sections) {
+      expect(g.items.length, g.label).toBeGreaterThanOrEqual(2);
+      expect(g.items.length, g.label).toBeLessThanOrEqual(6);
+    }
     const hrefs = NAV.flatMap((g) => [g.href, ...g.items.map((i) => i.href)]);
-    for (const h of ["/projects", "/site-reports", "/sales/boq", "/sales/quotations", "/procurement/orders", "/inventory/stock", "/finance/invoices", "/hr/payroll", "/director-reports", "/actions", "/exceptions", "/crm/clients", "/workforce/attendance"]) expect(hrefs).toContain(h);
+    for (const h of ["/projects", "/site-reports", "/sales/boq", "/sales/quotations", "/procurement/orders", "/inventory/stock", "/finance/invoices", "/hr/payroll", "/director-reports", "/actions", "/exceptions", "/kpis", "/crm/clients", "/workforce/attendance", "/resources", "/inventory/waste", "/bills-to-certify", "/documents"]) expect(hrefs).toContain(h);
+    expect(new Set(hrefs.filter(Boolean)).size).toBe(hrefs.filter(Boolean).length); // no page is listed twice
   });
 });
