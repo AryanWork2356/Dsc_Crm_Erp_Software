@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { requestMeta } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { fullLoginId } from "@/lib/issued-password";
 import { notifyRoles } from "@/lib/notify";
 
 export type ForgotState = { done?: boolean; error?: string } | undefined;
@@ -13,8 +14,9 @@ export type ForgotState = { done?: boolean; error?: string } | undefined;
  * Everyone gets the same answer whether or not the login ID exists, so nobody can use this to find out who works here.
  */
 export async function requestPasswordReset(_prev: ForgotState, fd: FormData): Promise<ForgotState> {
-  const email = String(fd.get("email") ?? "").trim().toLowerCase();
-  if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Type your login ID (it looks like name.surname@dscinterior.com)." };
+  const typed = String(fd.get("email") ?? "").trim();
+  if (!typed) return { error: "Type your login ID (for example gopals)." };
+  const email = fullLoginId(typed);
   const meta = await requestMeta();
   if (!rateLimit(`forgot-ip:${meta.ip ?? "?"}`, 6, 15 * 60 * 1000) || !rateLimit(`forgot:${email}`, 3, 60 * 60 * 1000)) return { error: "Too many requests. Please wait a while, or phone your Admin." };
   const u = await db.user.findFirst({ where: { email, isActive: true, deletedAt: null } });

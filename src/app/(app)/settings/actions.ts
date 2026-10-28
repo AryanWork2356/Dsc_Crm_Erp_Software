@@ -134,7 +134,7 @@ export async function resetPassword(id: string, fd: FormData) {
     if (!user) throw new UserError("User not found.");
     guardRole(c.role, user.role);
     // left empty: the app makes one in the company style (Name@number). Nobody is asked to change it.
-    const temporary = d.password ?? issuedPassword(user.name, user.role);
+    const temporary = d.password ?? issuedPassword(user.name);
     await db.user.update({ where: { id }, data: { passwordHash: await hashPassword(temporary), mustChangePassword: false, resetRequestedAt: null } });
     await audit(c, { action: "UPDATE", entityType: "User", entityId: id, summary: `Password reset for ${user.name}` });
     revalidatePath("/settings/team");

@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { loginAs, logout, fd } from "./setup";
 import { passwordProblem } from "@/lib/password-rules";
-import { givenName, issuedPassword } from "@/lib/issued-password";
+import { fullLoginId, givenName, issuedPassword, loginIdFor } from "@/lib/issued-password";
 import { changeMyPassword } from "@/app/change-password/actions";
 import { requestPasswordReset } from "@/app/forgot-password/actions";
 import { login } from "@/app/login/actions";
@@ -37,24 +37,40 @@ describe("password rules", () => {
   });
 });
 
-describe("passwords the company gives out", () => {
-  it("are the first name, then @, then a number; money and management roles get a longer number and a !", () => {
+describe("passwords and login IDs the company gives out", () => {
+  it("a password is the first three letters of the name, @, and two digits", () => {
     expect(givenName("Gopal Sharma")).toBe("Gopal");
     expect(givenName("Mohd. Shamshad Alam")).toBe("Shamshad");
     expect(givenName("Mohd Kaif")).toBe("Kaif");
-    expect(givenName("Test login: Project Manager")).toBe("ProjectManager");
-    for (let i = 0; i < 50; i++) {
-      expect(issuedPassword("Krishna Maurya", "SITE_SUPERVISOR")).toMatch(/^Krishna@\d{5}$/);
-      expect(issuedPassword("Dinesh Sharma", "OWNER")).toMatch(/^Dinesh@\d{6}!$/);
-      expect(issuedPassword("Sakshi Singh", "HR")).toMatch(/^Sakshi@\d{6}!$/);
-      expect(issuedPassword("Shravani Bhalerkar", "ACCOUNTS")).toMatch(/^Shravani@\d{6}!$/);
+    expect(givenName("Test login: Project Manager")).toBe("Projectmanager");
+    for (let i = 0; i < 100; i++) {
+      expect(issuedPassword("Krishna Maurya")).toMatch(/^Kri@\d{2}$/);
+      expect(issuedPassword("Mohd Kaif")).toMatch(/^Kai@\d{2}$/);
+      expect(issuedPassword("Dinesh Sharma")).toMatch(/^Din@\d{2}$/);
     }
-    expect(new Set(Array.from({ length: 30 }, () => issuedPassword("Amit Jha", "SITE_SUPERVISOR"))).size).toBeGreaterThan(20); // the number is random
+  });
+
+  it("a login ID is the first name plus the first letter of the surname; a clash adds the next surname letter", () => {
+    const taken = new Set<string>();
+    expect(loginIdFor("Gopal Sharma", taken)).toBe("gopals@dscinterior.com");
+    expect(loginIdFor("Gopal Shukla", taken)).toBe("gopalsh@dscinterior.com");
+    expect(loginIdFor("Gopal Shah", taken)).toBe("gopalsha@dscinterior.com");
+    expect(loginIdFor("Gopal Shah", taken)).toBe("gopalshah@dscinterior.com");
+    expect(loginIdFor("Gopal Shah", taken)).toBe("gopalshah2@dscinterior.com"); // letters used up: a number
+    expect(loginIdFor("Mohd. Shamshad Alam", new Set())).toBe("shamshada@dscinterior.com");
+    expect(loginIdFor("Mohd Kaif", new Set())).toBe("kaif@dscinterior.com");
+    expect(loginIdFor("Arya", new Set())).toBe("arya@dscinterior.com");
+  });
+
+  it("typing only the short ID is enough at sign-in", () => {
+    expect(fullLoginId("Gopals")).toBe("gopals@dscinterior.com");
+    expect(fullLoginId("  gopals  ")).toBe("gopals@dscinterior.com");
+    expect(fullLoginId("pm@dsc.demo")).toBe("pm@dsc.demo");
   });
 
   it("are accepted at sign-in, and nobody is sent to change them", async () => {
     const { email } = await newUser("SITE_SUPERVISOR", false);
-    const pw = issuedPassword("Krishna Maurya", "SITE_SUPERVISOR");
+    const pw = issuedPassword("Krishna Maurya");
     await db.user.updateMany({ where: { email }, data: { passwordHash: await bcrypt.hash(pw, 4) } });
     const r = await redirected(login(undefined, fd({ email, password: pw })));
     expect(r).toContain("NEXT_REDIRECT");
@@ -104,7 +120,8 @@ describe("forgot password", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: u.id } })).resetRequestedAt).not.toBeNull();
     const owner = await db.user.findFirstOrThrow({ where: { role: "OWNER", isActive: true } });
     expect(await db.notification.count({ where: { userId: owner.id, title: { contains: "Password reset asked" } } })).toBeGreaterThan(0);
-    expect((await requestPasswordReset(undefined, fd({ email: "not-an-email" })))?.error).toMatch(/login ID/);
+    expect((await requestPasswordReset(undefined, fd({ email: "   " })))?.error).toMatch(/login ID/);
+    expect(await requestPasswordReset(undefined, fd({ email: u.email.split("@")[0] }))).toEqual({ done: true }); // the short ID works here too
   });
 
   it("the Admin resets it: a password in the company style is made, nobody must change it, and the request is cleared", async () => {
@@ -115,7 +132,7 @@ describe("forgot password", () => {
     expect(r.ok).toBe(true);
     const msg = r.ok ? r.message ?? "" : "";
     const temp = /: (\S+)\s/.exec(msg)?.[1] ?? "";
-    expect(temp).toMatch(/^Pw@\d{5}$/); // first name of "Pw tester …", then @ and a number
+    expect(temp).toMatch(/^Pw@\d{2}$/); // first letters of "Pw tester …", then @ and two digits
     const after = await db.user.findUniqueOrThrow({ where: { id: u.id } });
     expect(after.mustChangePassword).toBe(false);
     expect(after.resetRequestedAt).toBeNull();
@@ -134,5 +151,36 @@ describe("forgot password", () => {
     const r = await createUser(fd({ name: "Added Person", email, role: "SITE_SUPERVISOR", password: "Given1234x" }));
     expect(r.ok).toBe(true);
     expect((await db.user.findFirstOrThrow({ where: { email } })).mustChangePassword).toBe(false);
+  });
+});
+
+describe("sign-in with the short ID, and the lock after wrong passwords", () => {
+  it("the short ID works, and so does the full one", async () => {
+    const { u } = await newUser("SITE_SUPERVISOR", false);
+    const short = u.email.split("@")[0];
+    await db.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash("Pwt@42", 4) } });
+    expect(await redirected(login(undefined, fd({ email: short, password: "Pwt@42" })))).toContain("NEXT_REDIRECT");
+    expect(await redirected(login(undefined, fd({ email: u.email, password: "Pwt@42" })))).toContain("NEXT_REDIRECT");
+  });
+
+  it("5 wrong passwords lock the login for 15 minutes, the Owner is told, and the right password then waits", async () => {
+    const { u, email } = await newUser("SITE_SUPERVISOR", false);
+    await db.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash("Pwt@42", 4) } });
+    for (let i = 1; i <= 4; i++) {
+      const r = await login(undefined, fd({ email, password: `wrong${i}` }));
+      expect(r?.error).toMatch(/Incorrect/);
+    }
+    expect((await db.user.findUniqueOrThrow({ where: { id: u.id } })).failedLogins).toBe(4);
+    await login(undefined, fd({ email, password: "wrong5" })); // the 5th
+    const locked = await db.user.findUniqueOrThrow({ where: { id: u.id } });
+    expect(locked.lockedUntil && locked.lockedUntil.getTime() > Date.now()).toBe(true);
+    const owner = await db.user.findFirstOrThrow({ where: { role: "OWNER", isActive: true } });
+    expect(await db.notification.count({ where: { userId: owner.id, title: { contains: `Login locked: ${u.name}` } } })).toBeGreaterThan(0);
+    // even the right password is refused while locked
+    expect((await login(undefined, fd({ email, password: "Pwt@42" })))?.error).toMatch(/locked/);
+    // after the time passes it works again, and the count starts over
+    await db.user.update({ where: { id: u.id }, data: { lockedUntil: new Date(Date.now() - 1000) } });
+    expect(await redirected(login(undefined, fd({ email, password: "Pwt@42" })))).toContain("NEXT_REDIRECT");
+    expect((await db.user.findUniqueOrThrow({ where: { id: u.id } })).failedLogins).toBe(0);
   });
 });

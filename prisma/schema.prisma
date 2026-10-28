@@ -403,6 +403,8 @@ model User {
   passwordHash       String
   mustChangePassword Boolean   @default(false) // set when the Admin or the setup tool issued the password: the person must choose their own first
   passwordChangedAt  DateTime?
+  failedLogins       Int       @default(0) // wrong passwords in a row; 5 locks the login for 15 minutes
+  lockedUntil        DateTime?
   resetRequestedAt   DateTime? // the person pressed 'Forgot password' on the sign-in page; cleared when the Admin resets it
   role               RoleKey
   isActive           Boolean   @default(true)

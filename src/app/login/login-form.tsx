@@ -14,10 +14,10 @@ export function LoginForm({ next }: { next?: string }) {
     <form action={formAction} className="mt-7 space-y-5">
       {next && <input type="hidden" name="next" value={next} />}
       <div>
-        <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">Email</label>
+        <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">Login ID</label>
         <div className="relative">
           <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input id="email" name="email" type="email" autoComplete="username" required autoFocus placeholder="you@company.com" className={input} />
+          <input id="email" name="email" type="text" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" required autoFocus placeholder="for example gopals" className={input} />
         </div>
       </div>
       <div>

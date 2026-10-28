@@ -10,12 +10,12 @@
  *   Supplier Contractor and Client Details.xlsx     suppliers, contractors and clients
  *
  * What it does
- *   - creates a login (ID + new random password) and an employee record for every person who has an app role;
+ *   - creates a login (short ID + password) and an employee record for every person who has an app role;
  *   - people with no matching app role get an employee record only (no login) and are listed for confirmation;
  *   - creates the clients, suppliers and contractors (contractors are vendors);
  *   - renames the old test logins (@dsc.demo) to "Test login: <role>" and gives each a NEW random password, so the
  *     well-known demo password stops working on the online system. The logins themselves are kept.
- *   - passwords are the company style: first name, @, a number (Gopal@48271); Owner, directors, Admin, Accounts and HR also get a longer number and a ! . Nobody is asked to change it; the Admin can reset any.
+ *   - login IDs and passwords are short: ID = first name + first letter of surname (gopals); password = first 3 letters of the name, @, two digits (Gop@47). Nobody is asked to change it; the Admin can reset any.
  *   - add --reissue to give EVERY staff login a new password in that style (use it once, to replace the first random ones).
  *   - writes ONE confidential Excel file with every ID and password. Passwords are stored only as hashes in the database,
  *     so this file is the only place they exist. Keep the file somewhere private: it is the company's record of the passwords.
@@ -28,7 +28,7 @@ import bcrypt from "bcryptjs";
 import ExcelJS from "exceljs";
 import { PrismaClient, type RoleKey } from "@prisma/client";
 import { assertDscDatabase } from "./lib/guard";
-import { issuedPassword } from "../src/lib/issued-password";
+import { issuedPassword, loginIdFor } from "../src/lib/issued-password";
 
 const DATA = path.resolve(process.cwd(), "..", "Dsc_app", "real-data");
 const DOMAIN = "dscinterior.com";
@@ -56,23 +56,18 @@ async function connect(hosted: boolean) {
   return { prisma: new PrismaClient({ datasources: { db: { url: url.toString() } } }), where: `${url.hostname} (database ${url.pathname.slice(1)})`, host: url.hostname };
 }
 
-/** The Owner and directors already had logins (under the old @dsc.demo address). They keep those IDs and get their real names back. */
-const OWNERS: Record<string, { name: string; designation: string }> = {
-  "dinesh@dsc.demo": { name: "Dinesh Sharma", designation: "Owner" },
-  "gopal@dsc.demo": { name: "Gopal Sharma", designation: "Director" },
-  "director@dsc.demo": { name: "Satish Sharma", designation: "Director" },
-};
-const OWNER_NAMES = new Set(Object.values(OWNERS).map((o) => o.name));
-
-function loginId(name: string, taken: Set<string>): string {
-  const t = name.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
-  if (t[0] === "mohd" && t.length > 2) t.shift();
-  const base = t.length > 1 ? `${t[0]}.${t[t.length - 1]}` : t[0];
-  let id = `${base}@${DOMAIN}`;
-  for (let n = 2; taken.has(id); n++) id = `${base}${n}@${DOMAIN}`;
-  taken.add(id);
-  return id;
-}
+/**
+ * People with special accounts. Found by their old login (if they had one) or by name, given their real name and role,
+ * and created if they do not exist yet. Dinesh is the Owner; Gopal and Satish are directors; Aryan is the host (Owner-level).
+ */
+const SPECIAL: { name: string; designation: string; role: RoleKey; legacy: string }[] = [
+  { name: "Dinesh Sharma", designation: "Owner", role: "OWNER", legacy: "dinesh@dsc.demo" },
+  { name: "Gopal Sharma", designation: "Project Director", role: "MANAGEMENT", legacy: "gopal@dsc.demo" },
+  { name: "Satish Sharma", designation: "Director", role: "MANAGEMENT", legacy: "director@dsc.demo" },
+  { name: "Aryan Shetty", designation: "Host", role: "OWNER", legacy: "aryan1@dsc.in" },
+];
+const SPECIAL_NAMES = new Set(SPECIAL.map((x) => x.name));
+const isTestName = (n: string) => n.startsWith("Test login:");
 
 const clean = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim();
 const cellText = (v: ExcelJS.CellValue): string => (v && typeof v === "object" && "richText" in v ? v.richText.map((r) => r.text).join("") : v && typeof v === "object" && "text" in v ? String((v as { text: unknown }).text) : clean(v));
@@ -127,10 +122,10 @@ async function main() {
     const existing = await prisma.user.findMany({ where: { companyId: cid }, select: { email: true, role: true, id: true, name: true, mustChangePassword: true, passwordChangedAt: true } });
     const taken = new Set(existing.map((u) => u.email.toLowerCase()));
 
-    const cred: { sr: number; name: string; designation: string; role: string; id: string; pw: string }[] = [];
+    const issued = new Map<string, string>(); // user id → the password issued in this run
     const noLogin: { name: string; designation: string; why: string }[] = [];
     const confirm: { name: string; designation: string; note: string }[] = [];
-    let newUsers = 0, newEmployees = 0, skipped = 0, removed = 0, changed = 0;
+    let newUsers = 0, newEmployees = 0, skipped = 0, removed = 0, changed = 0, idsChanged = 0;
 
     const nextEmp = async (tx: Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0]) => {
       for (let i = 0; i < 500; i++) {
@@ -141,7 +136,7 @@ async function main() {
       throw new Error("No free employee code");
     };
 
-    // 1. staff
+    // 1. staff: new people are created; people already there get their role and job brought up to date
     for (const p of people) {
       if (p.confirm) confirm.push({ name: p.name, designation: p.designation ?? "(none written)", note: p.confirm });
       // people DSC does not want in the app: any employee record without a login is removed (hidden), nothing else is touched
@@ -151,78 +146,93 @@ async function main() {
         if (gone.length) { removed++; console.log(`  ${dry ? "would remove" : "removed"} ${p.name} (not set up, as asked)`); }
         continue;
       }
-      // a person who is already here (as an employee, or as a login that data:clear kept) is never created twice
-      if (OWNER_NAMES.has(p.name)) { skipped++; continue; } // already has a login: handled with the Owner and directors below
+      if (SPECIAL_NAMES.has(p.name)) { skipped++; continue; } // set up with the Owner and directors below
       const have = await prisma.user.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null, role: { notIn: ["WORKER", "CLIENT", "VENDOR"] } }, include: { employee: true } });
       if (have && p.role) {
         const roleChanged = have.role !== p.role;
         if (roleChanged || (have.employee && have.employee.designation !== p.designation)) {
-          const pw = roleChanged ? issuedPassword(p.name, p.role) : null; // the password style depends on the role, so a new role gets a new password
           if (!dry) {
-            await prisma.user.update({ where: { id: have.id }, data: { ...(roleChanged ? { role: p.role, passwordHash: await bcrypt.hash(pw!, 11), mustChangePassword: false } : {}) } });
+            if (roleChanged) await prisma.user.update({ where: { id: have.id }, data: { role: p.role } });
             if (have.employee) await prisma.employee.update({ where: { id: have.employee.id }, data: { designation: p.designation } });
           }
           changed++;
-          console.log(`  ${dry ? "would change" : "changed"} ${p.name}: ${ROLE_LABEL[have.role] ?? have.role} → ${ROLE_LABEL[p.role] ?? p.role}${roleChanged ? " (new password)" : " (job title only)"}`);
-          if (pw) cred.push({ sr: p.sr, name: p.name, designation: p.designation ?? "", role: ROLE_LABEL[p.role] ?? p.role, id: have.email, pw });
+          console.log(`  ${dry ? "would change" : "changed"} ${p.name}: ${ROLE_LABEL[have.role] ?? have.role} → ${ROLE_LABEL[p.role] ?? p.role}${roleChanged ? "" : " (job title only)"}`);
         }
         skipped++;
         continue;
       }
       const already = (await prisma.employee.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null }, select: { id: true } })) ?? (await prisma.user.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null }, select: { id: true } }));
       if (already) { skipped++; continue; }
-      const id = p.role ? loginId(p.name, taken) : null;
-      const pw = p.role ? issuedPassword(p.name, p.role) : null;
       if (!p.role) noLogin.push({ name: p.name, designation: p.designation ?? "(none written)", why: p.confirm ?? "" });
-      if (dry) { console.log(`  would add ${p.name} (${p.designation ?? "-"}) ${p.role ? `as ${ROLE_LABEL[p.role]} → ${id}` : "– employee record only"}`); continue; }
+      if (dry) { console.log(`  would add ${p.name} (${p.designation ?? "-"}) ${p.role ? `as ${ROLE_LABEL[p.role]}` : "– employee record only"}`); continue; }
       await prisma.$transaction(async (tx) => {
-        const user = p.role && id && pw ? await tx.user.create({ data: { companyId: cid, email: id, name: p.name, role: p.role, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false } }) : null;
+        const email = p.role ? loginIdFor(p.name, taken) : null;
+        const pw = p.role ? issuedPassword(p.name) : null;
+        const user = p.role && email && pw ? await tx.user.create({ data: { companyId: cid, email, name: p.name, role: p.role, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false } }) : null;
+        if (user && pw) issued.set(user.id, pw);
         const code = await nextEmp(tx);
-        await tx.employee.create({ data: { companyId: cid, userId: user?.id ?? null, code, name: p.name, email: id, designation: p.designation, status: "ACTIVE" } });
+        await tx.employee.create({ data: { companyId: cid, userId: user?.id ?? null, code, name: p.name, email, designation: p.designation, status: "ACTIVE" } });
         if (user) newUsers++;
         newEmployees++;
       });
-      if (p.role && id && pw) cred.push({ sr: p.sr, name: p.name, designation: p.designation ?? "", role: ROLE_LABEL[p.role] ?? p.role, id, pw });
     }
 
-    // 2a. the Owner and directors: keep their IDs, restore their real names, and make sure they have an employee record
-    const owners: { name: string; designation: string; id: string; pw: string | null }[] = [];
-    for (const u of existing.filter((x) => OWNERS[x.email.toLowerCase()])) {
-      const o = OWNERS[u.email.toLowerCase()];
-      const fresh = !u.mustChangePassword && !u.passwordChangedAt; // still on the old shared password
-      const pw = fresh ? issuedPassword(o.name, u.role) : null;
-      if (!dry) {
-        await prisma.user.update({ where: { id: u.id }, data: { name: o.name, ...(pw ? { passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false } : {}) } });
-        const emp = await prisma.employee.findFirst({ where: { companyId: cid, userId: u.id } });
-        if (emp) await prisma.employee.update({ where: { id: emp.id }, data: { name: o.name, designation: o.designation } });
-        else await prisma.$transaction(async (tx) => { const code = await nextEmp(tx); await tx.employee.create({ data: { companyId: cid, userId: u.id, code, name: o.name, email: u.email, designation: o.designation, status: "ACTIVE" } }); });
+    // 2. the Owner, the directors and the host: real names, right roles, an employee record each (created if they do not exist yet)
+    for (const sp of SPECIAL) {
+      const u = (await prisma.user.findFirst({ where: { companyId: cid, deletedAt: null, OR: [{ email: sp.legacy }, { name: sp.name }] }, include: { employee: true } })) ?? null;
+      if (dry) { console.log(`  would ${u ? "update" : "create"} ${sp.name} (${sp.designation}) as ${ROLE_LABEL[sp.role]}`); continue; }
+      if (u) {
+        await prisma.user.update({ where: { id: u.id }, data: { name: sp.name, role: sp.role, isActive: true } });
+        if (u.employee) await prisma.employee.update({ where: { id: u.employee.id }, data: { name: sp.name, designation: sp.designation } });
+        else await prisma.$transaction(async (tx) => { const code = await nextEmp(tx); await tx.employee.create({ data: { companyId: cid, userId: u.id, code, name: sp.name, email: u.email, designation: sp.designation, status: "ACTIVE" } }); });
+      } else {
+        await prisma.$transaction(async (tx) => {
+          const email = loginIdFor(sp.name, taken);
+          const pw = issuedPassword(sp.name);
+          const user = await tx.user.create({ data: { companyId: cid, email, name: sp.name, role: sp.role, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false } });
+          issued.set(user.id, pw);
+          const code = await nextEmp(tx);
+          await tx.employee.create({ data: { companyId: cid, userId: user.id, code, name: sp.name, email, designation: sp.designation, status: "ACTIVE" } });
+          newUsers++; newEmployees++;
+        });
       }
-      owners.push({ name: o.name, designation: o.designation, id: u.email, pw });
     }
 
-    // 2. the old test logins: kept, renamed, and given a new password so the well-known one stops working
-    const tests: { name: string; role: string; id: string; pw: string }[] = [];
-    for (const u of existing.filter((x) => x.email.toLowerCase().endsWith("@dsc.demo") && !OWNERS[x.email.toLowerCase()] && !x.name.startsWith("Test login:")).sort((a, b) => a.email.localeCompare(b.email))) { // already done once: leave them alone
-      const label = ROLE_LABEL[u.role] ?? u.role;
-      const pw = issuedPassword(`Test login: ${label}`, u.role);
-      if (!dry) await prisma.user.update({ where: { id: u.id }, data: { name: `Test login: ${label}`, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false } });
-      tests.push({ name: `Test login: ${label}`, role: label, id: u.email, pw });
+    // 3. the old test logins (@dsc.demo): kept, named "Test login: <role>", and never offered in a list of people
+    if (!dry) {
+      for (const u of await prisma.user.findMany({ where: { companyId: cid, deletedAt: null, email: { endsWith: "@dsc.demo" } } })) {
+        if (SPECIAL.some((sp) => sp.legacy === u.email) || SPECIAL_NAMES.has(u.name) || isTestName(u.name)) continue;
+        if (["WORKER", "CLIENT", "VENDOR"].includes(u.role)) continue;
+        await prisma.user.update({ where: { id: u.id }, data: { name: `Test login: ${ROLE_LABEL[u.role] ?? u.role}` } });
+        issued.set(u.id, ""); // given a password in step 4
+      }
     }
 
-    // 2b. --reissue: give EVERY staff login a fresh password in the company style (Name@number). Old ones stop working.
-    if (process.argv.includes("--reissue")) {
-      cred.length = 0; owners.length = 0; tests.length = 0;
+    // 4. short IDs for every real person (first name + first letter of surname), and a new password wherever the ID changes.
+    //    --reissue gives every staff login a new password, even where the ID did not change.
+    const reissue = process.argv.includes("--reissue");
+    if (!dry) {
       const staff = await prisma.user.findMany({ where: { companyId: cid, deletedAt: null, isActive: true, role: { notIn: ["WORKER", "CLIENT", "VENDOR"] } }, orderBy: { createdAt: "asc" } });
-      for (const u of staff) {
-        const pw = issuedPassword(u.name, u.role);
-        if (!dry) await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false, resetRequestedAt: null } });
-        const e = u.email.toLowerCase();
-        const label = ROLE_LABEL[u.role] ?? u.role;
-        if (OWNERS[e]) owners.push({ name: u.name, designation: OWNERS[e].designation, id: u.email, pw });
-        else if (e.endsWith("@dsc.demo")) tests.push({ name: u.name, role: label, id: u.email, pw });
-        else { const p = people.find((x) => x.name === u.name); cred.push({ sr: p?.sr ?? 99, name: u.name, designation: p?.designation ?? "", role: label, id: u.email, pw }); }
+      const real = staff.filter((u) => !isTestName(u.name));
+      const fixed = new Set((await prisma.user.findMany({ where: { companyId: cid, NOT: { id: { in: real.map((u) => u.id) } } }, select: { email: true } })).map((u) => u.email.toLowerCase()));
+      for (const u of real) {
+        const id = loginIdFor(u.name, fixed);
+        if (id !== u.email.toLowerCase()) {
+          const pw = issuedPassword(u.name);
+          await prisma.user.update({ where: { id: u.id }, data: { email: id, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false, failedLogins: 0, lockedUntil: null } });
+          await prisma.employee.updateMany({ where: { userId: u.id }, data: { email: id } });
+          issued.set(u.id, pw);
+          idsChanged++;
+        }
       }
-      console.log(`Re-issued ${staff.length} passwords${dry ? " (dry run: not changed)" : ""}.`);
+      for (const u of staff) {
+        if (reissue || issued.get(u.id) === "") {
+          const pw = issuedPassword(u.name);
+          await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: false, resetRequestedAt: null, failedLogins: 0, lockedUntil: null } });
+          issued.set(u.id, pw);
+        }
+      }
+      if (reissue) console.log(`Re-issued ${staff.length} passwords.`);
     }
 
     // 3. clients and vendors
@@ -257,34 +267,44 @@ async function main() {
     if (changed || removed) console.log(`\nRoles or jobs changed: ${changed}. Removed (not wanted in the app): ${removed}.`);
     console.log(`\n${dry ? "Would create" : "Created"}: ${dry ? "" : `${newUsers} logins, ${newEmployees} employee records, ${clients} clients, ${vendors} vendors/suppliers.`}`);
     if (skipped) console.log(`Skipped ${skipped} people who already exist.`);
-    if (owners.length) console.log(`Owner and directors: ${owners.map((o) => o.name).join(", ")} (names restored${owners.some((o) => o.pw) ? ", new passwords in the file" : "; passwords unchanged"})`);
-    console.log(`Test logins renamed and given new passwords: ${tests.length}${dry ? " (dry run: not changed)" : ""}`);
+    if (idsChanged) console.log(`Login IDs shortened (with a new password each): ${idsChanged}`);
     if (noLogin.length) console.log(`Employee record only (no login): ${noLogin.map((n) => n.name).join(", ")}`);
 
-    if (!dry && (cred.length || tests.length || owners.some((x) => x.pw))) {
+    // the file: everybody who got a password in this run, read back from the database so the IDs are the final ones
+    const given = [...issued.entries()].filter(([, pw]) => pw);
+    if (!dry && given.length) {
+      const users = await prisma.user.findMany({ where: { id: { in: given.map(([id]) => id) } } });
+      const info = new Map(users.map((u) => [u.id, u]));
+      const rows = given.map(([id, pw]) => ({ u: info.get(id)!, pw })).filter((r) => r.u);
+      const short = (e: string) => (e.endsWith(`@${DOMAIN}`) ? e.slice(0, -(DOMAIN.length + 1)) : e);
+      const special = rows.filter((r) => SPECIAL_NAMES.has(r.u.name));
+      const tests = rows.filter((r) => isTestName(r.u.name));
+      const real = rows.filter((r) => !SPECIAL_NAMES.has(r.u.name) && !isTestName(r.u.name));
+      const sr = (name: string) => people.find((x) => x.name === name)?.sr ?? 99;
+      const desig = (name: string) => SPECIAL.find((x) => x.name === name)?.designation ?? people.find((x) => x.name === name)?.designation ?? "";
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("Employee logins");
-      ws.addRow(["CONFIDENTIAL: DSC app logins. Give each person only their own line, then delete this file."]).font = { bold: true, color: { argb: "FFB91C1C" } };
-      ws.addRow([`Sign in at ${SIGN_IN}   ·   The app keeps only scrambled copies, so keep this file safe: it is how you tell someone their password. Lost? The Admin presses Reset password.`]);
+      ws.addRow(["CONFIDENTIAL: DSC app logins. Give each person only their own line."]).font = { bold: true, color: { argb: "FFB91C1C" } };
+      ws.addRow([`Sign in at ${SIGN_IN}   ·   Type only the Login ID (the app adds @${DOMAIN} by itself)   ·   The app keeps only scrambled copies, so keep this file safe: it is how you tell someone their password.`]);
       ws.addRow([]);
       const head = ws.addRow(["Sr", "Name", "Job", "Role in the app", "Login ID", "Password"]);
       head.font = { bold: true, color: { argb: "FFFFFFFF" } };
       head.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1B2A52" } }; });
-      for (const o of owners.filter((x) => x.pw)) ws.addRow(["", o.name, o.designation, o.designation === "Owner" ? "Owner" : "Management", o.id, o.pw]);
-      for (const r of cred.sort((a, b) => a.sr - b.sr)) ws.addRow([r.sr, r.name, r.designation, r.role, r.id, r.pw]);
-      ws.columns = [{ width: 5 }, { width: 26 }, { width: 28 }, { width: 18 }, { width: 38 }, { width: 16 }];
+      for (const r of special) ws.addRow(["", r.u.name, desig(r.u.name), ROLE_LABEL[r.u.role] ?? r.u.role, short(r.u.email), r.pw]);
+      for (const r of real.sort((a, b) => sr(a.u.name) - sr(b.u.name))) ws.addRow([sr(r.u.name) === 99 ? "" : sr(r.u.name), r.u.name, desig(r.u.name), ROLE_LABEL[r.u.role] ?? r.u.role, short(r.u.email), r.pw]);
+      ws.columns = [{ width: 5 }, { width: 26 }, { width: 28 }, { width: 18 }, { width: 22 }, { width: 14 }];
       if (noLogin.length) {
         ws.addRow([]);
         ws.addRow(["No login yet (employee record only):"]).font = { bold: true };
         for (const n of noLogin) ws.addRow(["", n.name, n.designation, "", n.why]);
       }
       if (tests.length) {
-        const t = wb.addWorksheet("Test logins (private)");
-        t.addRow(["PRIVATE: for the Owner only. The old demo password no longer works on these."]).font = { bold: true, color: { argb: "FFB91C1C" } };
-        t.addRow([]);
-        t.addRow(["Name", "Role", "Login ID", "Password"]).font = { bold: true };
-        for (const r of tests) t.addRow([r.name, r.role, r.id, r.pw]);
-        t.columns = [{ width: 30 }, { width: 18 }, { width: 28 }, { width: 16 }];
+        const t2 = wb.addWorksheet("Test logins (private)");
+        t2.addRow(["PRIVATE: for the Owner and host only. These are for trying the app; they never appear in lists of people."]).font = { bold: true, color: { argb: "FFB91C1C" } };
+        t2.addRow([]);
+        t2.addRow(["Name", "Role", "Login ID (type it in full)", "Password"]).font = { bold: true };
+        for (const r of tests) t2.addRow([r.u.name, ROLE_LABEL[r.u.role] ?? r.u.role, r.u.email, r.pw]);
+        t2.columns = [{ width: 30 }, { width: 18 }, { width: 28 }, { width: 14 }];
       }
       if (confirm.length) {
         const c = wb.addWorksheet("Please confirm");
