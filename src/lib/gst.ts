@@ -21,6 +21,32 @@ export function stateFromGstin(gstin: string | null | undefined): string | null 
   return m && STATES[m[1]] ? m[1] : null;
 }
 
+const GSTIN_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const GSTIN_SHAPE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+/** True when the 15th character is the right check character for the first 14 (a typing slip almost always breaks this). */
+export function gstinChecksumOk(gstin: string): boolean {
+  const g = gstin.trim().toUpperCase();
+  if (!GSTIN_SHAPE.test(g)) return false;
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    const v = GSTIN_CHARS.indexOf(g[i]) * (i % 2 === 0 ? 1 : 2);
+    sum += Math.floor(v / 36) + (v % 36);
+  }
+  return GSTIN_CHARS[(36 - (sum % 36)) % 36] === g[14];
+}
+
+/** Characters 3 to 12 of a GSTIN are the company's PAN. */
+export function panFromGstin(gstin: string | null | undefined): string | null {
+  const g = (gstin ?? "").trim().toUpperCase();
+  return GSTIN_SHAPE.test(g) ? g.slice(2, 12) : null;
+}
+
+/** What the GSTIN itself tells us, without asking anyone: state, PAN and whether it was typed correctly. */
+export function readGstin(gstin: string): { state: string | null; pan: string | null; checksumOk: boolean } {
+  return { state: STATES[gstin.trim().slice(0, 2)] ?? null, pan: panFromGstin(gstin), checksumOk: gstinChecksumOk(gstin) };
+}
+
 export type TaxRateRow = { rate: number; taxable: number; cgst: number; sgst: number; igst: number };
 export type TaxSplit = { type: "INTRA" | "INTER"; companyState: string | null; supplyState: string | null; rates: TaxRateRow[]; cgst: number; sgst: number; igst: number; tax: number; taxable: number };
 

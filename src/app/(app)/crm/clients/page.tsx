@@ -44,7 +44,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Clients"
         subtitle="Everyone you have a relationship with. One client can have many projects."
-        actions={c.can("clients:create") && <FormDialog title="New client" wide trigger={<Button>Add client</Button>} fields={clientFields(pms)} action={createClient} successMessage="Client created" />}
+        actions={c.can("clients:create") && <FormDialog title="New client" wide gstHelper trigger={<Button>Add client</Button>} fields={clientFields(pms)} action={createClient} successMessage="Client created" />}
       />
       <Card>
         <ListFilters placeholder="Search name, phone, GSTIN…" />

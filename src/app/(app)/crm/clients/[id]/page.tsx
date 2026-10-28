@@ -47,7 +47,7 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
         actions={
           <>
             {c.can("users:manage") && <FormDialog title={`Portal login – ${cl.name}`} description="Lets the client sign in and see only their own projects, quotations and invoices." trigger={<Button variant="secondary">Portal login</Button>} fields={[{ name: "email", label: "Email (login)", type: "email", required: true, defaultValue: cl.email }, { name: "password", label: "Password", type: "password", required: true, hint: "At least 8 characters. Creates the login, or sets a new password if one exists." }]} action={createPortalLogin.bind(null, "CLIENT", id)} submitLabel="Save login" />}
-            {c.can("clients:edit") && <FormDialog title="Edit client" wide trigger={<Button variant="secondary">Edit</Button>} fields={clientFields(pms, cl as unknown as Record<string, unknown>)} action={updateClient.bind(null, id)} />}
+            {c.can("clients:edit") && <FormDialog title="Edit client" wide gstHelper trigger={<Button variant="secondary">Edit</Button>} fields={clientFields(pms, cl as unknown as Record<string, unknown>)} action={updateClient.bind(null, id)} />}
           </>
         }
       />

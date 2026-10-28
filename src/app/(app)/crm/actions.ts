@@ -11,6 +11,7 @@ import { notifyUsers } from "@/lib/notify";
 import { leadScope, clientScope } from "@/lib/scope";
 import { formToObject, zDate, zEmail, zGstin, zOptDate, zOptNum, zOptStr, zPan, zPhone, zReqStr } from "@/lib/form";
 import { humanize } from "@/lib/utils";
+import { panFromGstin } from "@/lib/gst";
 
 // ───────────── helpers ─────────────
 async function getLead(c: Ctx, id: string, tx: Tx | typeof db = db) {
@@ -221,10 +222,18 @@ const clientSchema = z.object({
   notes: zOptStr,
 });
 
+/** The PAN is part of the GSTIN: fill it when left empty, and refuse a PAN that belongs to a different company. */
+function withPanFromGstin<T extends { gstin?: string; pan?: string }>(d: T): T {
+  const fromGst = panFromGstin(d.gstin);
+  if (!fromGst) return d;
+  if (d.pan && d.pan !== fromGst) throw new UserError(`The PAN ${d.pan} does not match this GSTIN (it contains ${fromGst}). Please check both.`);
+  return { ...d, pan: fromGst };
+}
+
 export async function createClient(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("clients:create");
-    const d = clientSchema.parse(formToObject(fd));
+    const d = withPanFromGstin(clientSchema.parse(formToObject(fd)));
     const cl = await db.$transaction(async (tx) => {
       const code = await nextNumber(tx, c.companyId, "CL");
       const x = await tx.client.create({ data: { ...d, companyId: c.companyId, code, projectManagerId: d.projectManagerId ?? null } });
@@ -239,7 +248,7 @@ export async function createClient(fd: FormData) {
 export async function updateClient(id: string, fd: FormData) {
   return run(async () => {
     const c = await assertPerm("clients:edit");
-    const d = clientSchema.parse(formToObject(fd));
+    const d = withPanFromGstin(clientSchema.parse(formToObject(fd)));
     const old = await db.client.findFirst({ where: { id, ...clientScope(c) } });
     if (!old) throw new UserError("Client not found.");
     await db.client.update({ where: { id }, data: { ...d, projectManagerId: d.projectManagerId ?? null } });
