@@ -20,6 +20,8 @@
     "data:clear-hosted": "tsx scripts/data-tools.ts clear --hosted",
     "data:restore": "tsx scripts/data-tools.ts restore",
     "data:restore-hosted": "tsx scripts/data-tools.ts restore --hosted",
+    "data:load": "tsx scripts/load-company.ts",
+    "data:load-hosted": "tsx scripts/load-company.ts --hosted",
     "vercel-build": "prisma generate && DATABASE_URL=\"${DIRECT_URL:-$DATABASE_URL}\" prisma migrate deploy && next build --turbopack",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
