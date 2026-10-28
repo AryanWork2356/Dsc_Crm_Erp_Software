@@ -4,7 +4,7 @@ import { Check, Circle } from "lucide-react";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { projectDocScope, projectScope } from "@/lib/scope";
-import { PM_ROLES, clientOptions, userOptions } from "@/lib/lookups";
+import { DESIGNER_ROLES, PM_ROLES, SITE_ROLES, clientOptions, userOptions } from "@/lib/lookups";
 import { PROJECT_STATUS_OPTS, PRIORITY_OPTS } from "@/lib/enums";
 import { oneProjectFinancials } from "@/lib/project-finance";
 import { projectMaterialPlan } from "@/lib/project-materials";
@@ -56,9 +56,11 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
   ];
   const tab = tabs.some((t) => t.key === tabParam) ? tabParam! : "overview";
 
-  const [staff, pms, clients, fin] = await Promise.all([
-    userOptions(c.companyId),
+  const [staff, pms, designers, site, clients, fin] = await Promise.all([
+    userOptions(c.companyId, undefined, true), // everyone, for showing names
     userOptions(c.companyId, PM_ROLES),
+    userOptions(c.companyId, DESIGNER_ROLES),
+    userOptions(c.companyId, SITE_ROLES),
     c.can("projects:edit") ? clientOptions(c.companyId) : [],
     money ? oneProjectFinancials(c.companyId, id) : null,
   ]);
@@ -99,7 +101,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             {canEdit ? (
               <StageSelect current={p.status} options={PROJECT_STATUS_OPTS} action={async (s) => { "use server"; return changeProjectStatus(id, s); }} />
             ) : <StatusBadge status={p.status} />}
-            {canEdit && <FormDialog title="Edit project" wide trigger={<Button variant="secondary">Edit</Button>} fields={projectFields({ clients, pms, staff, showMoney: money, project: p as unknown as Record<string, unknown> })} action={updateProject.bind(null, id)} />}
+            {canEdit && <FormDialog title="Edit project" wide trigger={<Button variant="secondary">Edit</Button>} fields={projectFields({ clients, pms, designers, site, names: new Map(staff.map((s) => [s.value, s.label])), showMoney: money, project: p as unknown as Record<string, unknown> })} action={updateProject.bind(null, id)} />}
           </>
         }
       />

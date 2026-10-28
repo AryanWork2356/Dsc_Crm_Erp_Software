@@ -4,9 +4,12 @@ import { db } from "./db";
 import type { Opt } from "./enums";
 
 /** Dropdown options for related entities. Always scoped to the company. */
-export async function userOptions(companyId: string, roles?: RoleKey[]): Promise<Opt[]> {
+/** The old test logins ("Test login: Owner" …) are for trying the app, not real people: they never appear in a list to choose from. */
+export const TEST_LOGIN_PREFIX = "Test login:";
+
+export async function userOptions(companyId: string, roles?: RoleKey[], includeTest = false): Promise<Opt[]> {
   const rows = await db.user.findMany({
-    where: { companyId, isActive: true, deletedAt: null, ...(roles ? { role: { in: roles } } : { role: { notIn: ["CLIENT", "VENDOR", "WORKER"] } }) },
+    where: { companyId, isActive: true, deletedAt: null, ...(includeTest ? {} : { NOT: { name: { startsWith: TEST_LOGIN_PREFIX } } }), ...(roles ? { role: { in: roles } } : { role: { notIn: ["CLIENT", "VENDOR", "WORKER"] } }) },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -29,4 +32,8 @@ export async function vendorOptions(companyId: string): Promise<Opt[]> {
 }
 
 export const SALES_ROLES: RoleKey[] = ["SALES", "OWNER", "MANAGEMENT", "ADMIN"];
-export const PM_ROLES: RoleKey[] = ["PROJECT_MANAGER", "OWNER", "MANAGEMENT"];
+/** The "Project manager" list shows project managers only. */
+export const PM_ROLES: RoleKey[] = ["PROJECT_MANAGER"];
+/** One list for the person on site: site supervisors and site engineers are the same job here. */
+export const SITE_ROLES: RoleKey[] = ["SITE_SUPERVISOR", "SITE_ENGINEER"];
+export const DESIGNER_ROLES: RoleKey[] = ["DESIGNER"];

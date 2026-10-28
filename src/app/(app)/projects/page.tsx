@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { projectScope } from "@/lib/scope";
 import { flatten, listParams } from "@/lib/list";
 import { PROJECT_STATUS_OPTS, SEGMENT_OPTS } from "@/lib/enums";
-import { PM_ROLES, clientOptions, userOptions } from "@/lib/lookups";
+import { DESIGNER_ROLES, PM_ROLES, SITE_ROLES, clientOptions, userOptions } from "@/lib/lookups";
 import { projectFinancials } from "@/lib/project-finance";
 import { formatDate, formatINR, humanize, startOfDay, cn } from "@/lib/utils";
 import { PageHeader, EmptyState, Progress, StatCard } from "@/components/ui/page";
@@ -55,15 +55,15 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
     db.project.count({ where: { AND: [scope, { status: { in: ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT"] }, startDate: { gte: today, lt: new Date(today.getTime() + 15 * 86400000) } }] } }),
   ]);
   const fin = showMoney ? await projectFinancials(c.companyId, rows.map((r) => r.id)) : new Map();
-  const staff = await userOptions(c.companyId);
-  const pmName = new Map(pms.map((p) => [p.value, p.label]));
+  const [designers, site, everyone] = await Promise.all([userOptions(c.companyId, DESIGNER_ROLES), userOptions(c.companyId, SITE_ROLES), userOptions(c.companyId, undefined, true)]);
+  const pmName = new Map(everyone.map((p) => [p.value, p.label])); // names for every project, even if the manager has since changed role
 
   return (
     <>
       <PageHeader
         title="Projects"
         subtitle="Every job from approval to handover."
-        actions={c.can("projects:create") && <FormDialog title="New project" wide trigger={<Button>New project</Button>} fields={projectFields({ clients, pms, staff, showMoney })} action={createProject} successMessage="Project created" />}
+        actions={c.can("projects:create") && <FormDialog title="New project" wide trigger={<Button>New project</Button>} fields={projectFields({ clients, pms, designers, site, names: pmName, showMoney })} action={createProject} successMessage="Project created" />}
       />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Active projects" value={kActive} href="/projects?status=active" />
