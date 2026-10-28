@@ -115,7 +115,7 @@ function splitContractor(raw: string): { name: string; person: string | null } {
 async function main() {
   const dry = process.argv.includes("--dry-run");
   const hosted = process.argv.includes("--hosted");
-  const people = JSON.parse(fs.readFileSync(path.join(DATA, "employees.json"), "utf8")) as { sr: number; name: string; designation: string | null; role: RoleKey | null; confirm?: string }[];
+  const people = JSON.parse(fs.readFileSync(path.join(DATA, "employees.json"), "utf8")) as { sr: number; name: string; designation: string | null; role: RoleKey | null; confirm?: string; skip?: boolean }[];
   const sheet = await readSheet(path.join(DATA, "Supplier Contractor and Client Details.xlsx"));
   const { prisma, where, host } = await connect(hosted);
   try {
@@ -130,7 +130,7 @@ async function main() {
     const cred: { sr: number; name: string; designation: string; role: string; id: string; pw: string }[] = [];
     const noLogin: { name: string; designation: string; why: string }[] = [];
     const confirm: { name: string; designation: string; note: string }[] = [];
-    let newUsers = 0, newEmployees = 0, skipped = 0;
+    let newUsers = 0, newEmployees = 0, skipped = 0, removed = 0, changed = 0;
 
     const nextEmp = async (tx: Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0]) => {
       for (let i = 0; i < 500; i++) {
@@ -144,8 +144,31 @@ async function main() {
     // 1. staff
     for (const p of people) {
       if (p.confirm) confirm.push({ name: p.name, designation: p.designation ?? "(none written)", note: p.confirm });
+      // people DSC does not want in the app: any employee record without a login is removed (hidden), nothing else is touched
+      if (p.skip) {
+        const gone = await prisma.employee.findMany({ where: { companyId: cid, name: p.name, deletedAt: null, userId: null }, select: { id: true } });
+        if (gone.length && !dry) await prisma.employee.updateMany({ where: { id: { in: gone.map((g) => g.id) } }, data: { deletedAt: new Date(), status: "EXITED" } });
+        if (gone.length) { removed++; console.log(`  ${dry ? "would remove" : "removed"} ${p.name} (not set up, as asked)`); }
+        continue;
+      }
       // a person who is already here (as an employee, or as a login that data:clear kept) is never created twice
       if (OWNER_NAMES.has(p.name)) { skipped++; continue; } // already has a login: handled with the Owner and directors below
+      const have = await prisma.user.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null, role: { notIn: ["WORKER", "CLIENT", "VENDOR"] } }, include: { employee: true } });
+      if (have && p.role) {
+        const roleChanged = have.role !== p.role;
+        if (roleChanged || (have.employee && have.employee.designation !== p.designation)) {
+          const pw = roleChanged ? issuedPassword(p.name, p.role) : null; // the password style depends on the role, so a new role gets a new password
+          if (!dry) {
+            await prisma.user.update({ where: { id: have.id }, data: { ...(roleChanged ? { role: p.role, passwordHash: await bcrypt.hash(pw!, 11), mustChangePassword: false } : {}) } });
+            if (have.employee) await prisma.employee.update({ where: { id: have.employee.id }, data: { designation: p.designation } });
+          }
+          changed++;
+          console.log(`  ${dry ? "would change" : "changed"} ${p.name}: ${ROLE_LABEL[have.role] ?? have.role} → ${ROLE_LABEL[p.role] ?? p.role}${roleChanged ? " (new password)" : " (job title only)"}`);
+          if (pw) cred.push({ sr: p.sr, name: p.name, designation: p.designation ?? "", role: ROLE_LABEL[p.role] ?? p.role, id: have.email, pw });
+        }
+        skipped++;
+        continue;
+      }
       const already = (await prisma.employee.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null }, select: { id: true } })) ?? (await prisma.user.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null }, select: { id: true } }));
       if (already) { skipped++; continue; }
       const id = p.role ? loginId(p.name, taken) : null;
@@ -231,6 +254,7 @@ async function main() {
       }
     }
 
+    if (changed || removed) console.log(`\nRoles or jobs changed: ${changed}. Removed (not wanted in the app): ${removed}.`);
     console.log(`\n${dry ? "Would create" : "Created"}: ${dry ? "" : `${newUsers} logins, ${newEmployees} employee records, ${clients} clients, ${vendors} vendors/suppliers.`}`);
     if (skipped) console.log(`Skipped ${skipped} people who already exist.`);
     if (owners.length) console.log(`Owner and directors: ${owners.map((o) => o.name).join(", ")} (names restored${owners.some((o) => o.pw) ? ", new passwords in the file" : "; passwords unchanged"})`);
