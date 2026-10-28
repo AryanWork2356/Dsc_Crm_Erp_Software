@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const c = await requireCtx();
   // Workers / clients / vendors use their own simplified experiences.
   if (c.role === "WORKER" || c.role === "CLIENT" || c.role === "VENDOR") redirect(homeFor(c.role));
+  if (c.mustChangePassword) redirect("/change-password");
 
   const [company, unread] = await Promise.all([
     db.companySettings.findUnique({ where: { companyId: c.companyId }, include: { company: true } }),

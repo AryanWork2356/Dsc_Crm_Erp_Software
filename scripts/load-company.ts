@@ -16,7 +16,7 @@
  *   - renames the old test logins (@dsc.demo) to "Test login: <role>" and gives each a NEW random password, so the
  *     well-known demo password stops working on the online system. The logins themselves are kept.
  *   - writes ONE confidential Excel file with every ID and password. Passwords are stored only as hashes in the database,
- *     so this file is the only place they exist. Hand them out, then delete the file.
+ *     so this file is the only place they exist. Everyone must choose their own password the first time they sign in. Hand them out, then delete the file.
  * Safe to run twice: people, clients and vendors that already exist are skipped (and get no new password).
  */
 import fs from "node:fs";
@@ -148,7 +148,7 @@ async function main() {
       if (!p.role) noLogin.push({ name: p.name, designation: p.designation ?? "(none written)", why: p.confirm ?? "" });
       if (dry) { console.log(`  would add ${p.name} (${p.designation ?? "-"}) ${p.role ? `as ${ROLE_LABEL[p.role]} → ${id}` : "– employee record only"}`); continue; }
       await prisma.$transaction(async (tx) => {
-        const user = p.role && id && pw ? await tx.user.create({ data: { companyId: cid, email: id, name: p.name, role: p.role, passwordHash: await bcrypt.hash(pw, 11) } }) : null;
+        const user = p.role && id && pw ? await tx.user.create({ data: { companyId: cid, email: id, name: p.name, role: p.role, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: true } }) : null;
         const code = await nextEmp(tx);
         await tx.employee.create({ data: { companyId: cid, userId: user?.id ?? null, code, name: p.name, email: id, designation: p.designation, status: "ACTIVE" } });
         if (user) newUsers++;
@@ -162,7 +162,7 @@ async function main() {
     for (const u of existing.filter((x) => x.email.toLowerCase().endsWith("@dsc.demo")).sort((a, b) => a.email.localeCompare(b.email))) {
       const pw = password();
       const label = ROLE_LABEL[u.role] ?? u.role;
-      if (!dry) await prisma.user.update({ where: { id: u.id }, data: { name: `Test login: ${label}`, passwordHash: await bcrypt.hash(pw, 11) } });
+      if (!dry) await prisma.user.update({ where: { id: u.id }, data: { name: `Test login: ${label}`, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: true } });
       tests.push({ name: `Test login: ${label}`, role: label, id: u.email, pw });
     }
 

@@ -39,6 +39,9 @@ export async function login(_prev: LoginState, fd: FormData): Promise<LoginState
     summary: `${user.name} signed in`,
   });
 
+  // a password somebody else gave them (the Admin, or the setup tool) must be replaced before anything else
+  if (user.mustChangePassword) redirect("/change-password");
+
   const next = fd.get("next");
   if (typeof next === "string" && next.startsWith("/") && !next.startsWith("//") && next !== "/login") redirect(next);
   redirect(homeFor(user.role));

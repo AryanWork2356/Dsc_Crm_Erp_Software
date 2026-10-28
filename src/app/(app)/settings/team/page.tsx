@@ -99,7 +99,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                     <Td>{ROLE_LABELS[u.role]}</Td>
                     <Td>{u.phone ?? "—"}</Td>
                     <Td>{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "Never"}</Td>
-                    <Td>{u.isActive ? <Badge tone="green">Active</Badge> : <Badge tone="red">Inactive</Badge>}</Td>
+                    <Td>{u.isActive ? <Badge tone="green">Active</Badge> : <Badge tone="red">Inactive</Badge>}{u.resetRequestedAt && <div className="mt-1"><Badge tone="amber">Asked for a password reset</Badge></div>}</Td>
                     {canManage && (
                       <Td right>
                         <div className="flex justify-end gap-1">
@@ -112,9 +112,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                           <FormDialog
                             title={`Reset password – ${u.name}`}
                             trigger={<Button size="sm" variant="ghost">Reset password</Button>}
-                            fields={[{ name: "password", label: "New password", type: "password", required: true }]}
+                            fields={[{ name: "password", label: "Temporary password (leave empty to make one)", type: "password", hint: "They must choose their own when they sign in." }]}
                             action={resetPassword.bind(null, u.id)}
-                            submitLabel="Set password"
+                            submitLabel="Reset password"
                           />
                           {u.id !== c.userId && (
                             <ActionButton

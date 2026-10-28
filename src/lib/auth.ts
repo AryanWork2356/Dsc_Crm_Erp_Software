@@ -17,6 +17,7 @@ export type Ctx = {
   clientId: string | null;
   vendorId: string | null;
   workerId: string | null;
+  mustChangePassword: boolean;
   can: (p: PermissionKey) => boolean;
 };
 
@@ -41,6 +42,7 @@ export const getCtx = cache(async (): Promise<Ctx | null> => {
     clientId: u.clientId,
     vendorId: u.vendorId,
     workerId: u.workerId,
+    mustChangePassword: u.mustChangePassword,
     can: (p) => can(u.role, p),
   };
 });

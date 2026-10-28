@@ -394,23 +394,26 @@ model RolePermission {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  companyId    String
-  company      Company   @relation(fields: [companyId], references: [id])
-  email        String
-  name         String
-  phone        String?
-  passwordHash String
-  role         RoleKey
-  isActive     Boolean   @default(true)
-  lastLoginAt  DateTime?
+  id                 String    @id @default(cuid())
+  companyId          String
+  company            Company   @relation(fields: [companyId], references: [id])
+  email              String
+  name               String
+  phone              String?
+  passwordHash       String
+  mustChangePassword Boolean   @default(false) // set when the Admin or the setup tool issued the password: the person must choose their own first
+  passwordChangedAt  DateTime?
+  resetRequestedAt   DateTime? // the person pressed 'Forgot password' on the sign-in page; cleared when the Admin resets it
+  role               RoleKey
+  isActive           Boolean   @default(true)
+  lastLoginAt        DateTime?
   // portal links
-  clientId     String?
-  vendorId     String?
-  workerId     String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  clientId           String?
+  vendorId           String?
+  workerId           String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
 
   employee      Employee?
   notifications Notification[]

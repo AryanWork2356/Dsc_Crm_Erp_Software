@@ -2,7 +2,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, LogOut, Search } from "lucide-react";
+import { Bell, KeyRound, LogOut, Search } from "lucide-react";
 import { initials } from "@/lib/utils";
 import { InstallApp } from "./pwa";
 import { LanguageSwitcher } from "./language";
@@ -58,6 +58,9 @@ export function Topbar({
           <p className="text-xs text-slate-500">{roleLabel}</p>
         </div>
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">{initials(name)}</div>
+        <Link href="/change-password" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Change my password" title="Change my password">
+          <KeyRound className="h-5 w-5" />
+        </Link>
         <form action={logout}>
           <button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Sign out" title="Sign out">
             <LogOut className="h-5 w-5" />
