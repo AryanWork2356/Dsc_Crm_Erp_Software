@@ -141,7 +141,8 @@ async function main() {
     // 1. staff
     for (const p of people) {
       if (p.confirm) confirm.push({ name: p.name, designation: p.designation ?? "(none written)", note: p.confirm });
-      const already = await prisma.employee.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null }, select: { id: true } });
+      // a person who is already here (as an employee, or as a login that data:clear kept) is never created twice
+      const already = (await prisma.employee.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null }, select: { id: true } })) ?? (await prisma.user.findFirst({ where: { companyId: cid, name: p.name, deletedAt: null }, select: { id: true } }));
       if (already) { skipped++; continue; }
       const id = p.role ? loginId(p.name, taken) : null;
       const pw = p.role ? password() : null;
@@ -159,7 +160,7 @@ async function main() {
 
     // 2. the old test logins: kept, renamed, and given a new password so the well-known one stops working
     const tests: { name: string; role: string; id: string; pw: string }[] = [];
-    for (const u of existing.filter((x) => x.email.toLowerCase().endsWith("@dsc.demo")).sort((a, b) => a.email.localeCompare(b.email))) {
+    for (const u of existing.filter((x) => x.email.toLowerCase().endsWith("@dsc.demo") && !x.name.startsWith("Test login:")).sort((a, b) => a.email.localeCompare(b.email))) { // already done once: leave them alone
       const pw = password();
       const label = ROLE_LABEL[u.role] ?? u.role;
       if (!dry) await prisma.user.update({ where: { id: u.id }, data: { name: `Test login: ${label}`, passwordHash: await bcrypt.hash(pw, 11), mustChangePassword: true } });
@@ -230,7 +231,7 @@ async function main() {
         for (const r of confirm) c.addRow([r.name, r.designation, r.note]);
         c.columns = [{ width: 26 }, { width: 28 }, { width: 90 }];
       }
-      const file = path.join(DATA, `Employee_Logins_CONFIDENTIAL_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.xlsx`);
+      const file = path.join(DATA, `Employee_Logins_CONFIDENTIAL_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.xlsx`);
       await wb.xlsx.writeFile(file);
       console.log(`\nLogins and passwords saved to (keep private, delete after handing out):\n  ${file}`);
     }
