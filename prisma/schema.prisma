@@ -2141,3 +2141,19 @@ model CollectionNote {
   @@index([invoiceId, createdAt])
   @@index([companyId, nextActionDate])
 }
+
+/// Costs below EBITDA that the app cannot work out by itself, typed in by Accounts for a month: DEPRECIATION | INTEREST | TAX.
+model CompanyCharge {
+  id          String   @id @default(cuid())
+  companyId   String
+  year        Int
+  month       Int // 1 to 12, the calendar month the charge belongs to
+  kind        String
+  amount      Decimal  @db.Decimal(14, 2)
+  note        String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, year, month, kind])
+  @@index([companyId, year])
+}

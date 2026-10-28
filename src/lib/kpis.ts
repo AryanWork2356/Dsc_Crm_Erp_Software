@@ -109,7 +109,6 @@ export async function kpiReport(c: Ctx, now: Date = new Date()): Promise<{ gener
     generatedAt: now,
     kpis,
     notYet: [
-      { label: "EBITDA / company profit", why: "Finance has not yet defined which costs belong in it (overheads, salaries, travel). It will be added once the definition is written." },
       { label: "Lead conversion", why: "The sales pipeline is hidden until DSC has a dedicated sales team." },
       { label: "Client satisfaction", why: "No client rating is recorded anywhere in the app yet." },
     ],

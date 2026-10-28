@@ -30,7 +30,7 @@ describe("key numbers", () => {
       expect(k.definition.length, k.key).toBeGreaterThan(30);
       expect(k.basis.length, k.key).toBeGreaterThan(0);
     }
-    expect(r.notYet.some((n) => /EBITDA/.test(n.label))).toBe(true);
+    expect(r.notYet.some((n) => /EBITDA/.test(n.label))).toBe(false); // EBITDA now has its own page: Company profit
   });
 
   it("shows a dash, not a percentage, when there are too few records", async () => {
