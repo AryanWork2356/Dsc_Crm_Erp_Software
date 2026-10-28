@@ -9,7 +9,7 @@ export function ForgotForm() {
   if (state?.done)
     return (
       <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-        If that login ID is right, the Owner and Admin have been told. They will check it is you and give you a temporary password. You will choose your own when you sign in.
+        If that login ID is right, the Owner and Admin have been told. They will check it is you and tell you your password.
       </p>
     );
   return (

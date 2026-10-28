@@ -1,11 +1,11 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { randomInt } from "node:crypto";
 import { z } from "zod";
 import { RoleKey } from "@prisma/client";
 import { db } from "@/lib/db";
 import { assertPerm, hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { issuedPassword } from "@/lib/issued-password";
 import { nextEmployeeCode } from "@/lib/employee-code";
 import { run, UserError } from "@/lib/action";
 import { formToObject, zEmail, zGstin, zNumPos, zOptStr, zPan, zPhone, zReqStr } from "@/lib/form";
@@ -59,15 +59,6 @@ const userSchema = z.object({
   password: z.string().min(8, "Use at least 8 characters").optional(),
 });
 
-const TEMP_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-function generateTemporaryPassword() {
-  const pick = (set: string) => set[randomInt(set.length)];
-  const chars = Array.from({ length: 8 }, () => pick(TEMP_CHARS));
-  chars.push(pick("23456789"), pick("ABCDEFGHJKMNPQRSTUVWXYZ"));
-  for (let i = chars.length - 1; i > 0; i--) { const j = randomInt(i + 1); [chars[i], chars[j]] = [chars[j], chars[i]]; }
-  return chars.join("");
-}
-
 function guardRole(actorRole: RoleKey, target: RoleKey) {
   if ((target === "OWNER" || target === "MANAGEMENT") && actorRole !== "OWNER") {
     throw new UserError("Only the Owner can assign the Owner or Management role.");
@@ -83,7 +74,7 @@ export async function createUser(fd: FormData) {
     if (exists) throw new UserError("A user with this email already exists.");
     const u = await db.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { companyId: c.companyId, name: d.name, email: d.email, phone: d.phone, role: d.role, passwordHash: await hashPassword(d.password), mustChangePassword: true },
+        data: { companyId: c.companyId, name: d.name, email: d.email, phone: d.phone, role: d.role, passwordHash: await hashPassword(d.password) },
       });
       const staff = !["WORKER", "CLIENT", "VENDOR"].includes(d.role);
       if (staff) {
@@ -142,12 +133,12 @@ export async function resetPassword(id: string, fd: FormData) {
     const user = await db.user.findFirst({ where: { id, companyId: c.companyId } });
     if (!user) throw new UserError("User not found.");
     guardRole(c.role, user.role);
-    // left empty: the app makes a temporary one. Either way the person must choose their own at the next sign-in.
-    const temporary = d.password ?? generateTemporaryPassword();
-    await db.user.update({ where: { id }, data: { passwordHash: await hashPassword(temporary), mustChangePassword: true, resetRequestedAt: null } });
+    // left empty: the app makes one in the company style (Name@number). Nobody is asked to change it.
+    const temporary = d.password ?? issuedPassword(user.name, user.role);
+    await db.user.update({ where: { id }, data: { passwordHash: await hashPassword(temporary), mustChangePassword: false, resetRequestedAt: null } });
     await audit(c, { action: "UPDATE", entityType: "User", entityId: id, summary: `Password reset for ${user.name}` });
     revalidatePath("/settings/team");
-    return { message: d.password ? "Temporary password set. They will choose their own when they sign in." : `Temporary password for ${user.name}: ${temporary}  (shown once; give it to them privately. They will choose their own when they sign in.)` };
+    return { message: `New password for ${user.name}: ${temporary}   (shown once, so write it in your list. Give it to them privately.)` };
   });
 }
 

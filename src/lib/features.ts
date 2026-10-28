@@ -10,3 +10,6 @@ export const USE_LEADS = false;
 
 /** The Sales team role. Off: "Sales" is not offered when adding a person; existing Sales logins keep working until deactivated. */
 export const USE_SALES_TEAM = false;
+
+/** People change their own password. Off at DSC: passwords are given by the company (Name@number) and only the Admin changes them. */
+export const USE_SELF_PASSWORD = false;

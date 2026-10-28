@@ -6,6 +6,7 @@ import { checkPassword, getCtx, hashPassword } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { homeFor } from "@/lib/home";
 import { passwordProblem } from "@/lib/password-rules";
+import { USE_SELF_PASSWORD } from "@/lib/features";
 
 export type PwState = { error?: string } | undefined;
 
@@ -16,6 +17,7 @@ export type PwState = { error?: string } | undefined;
 export async function changeMyPassword(_prev: PwState, fd: FormData): Promise<PwState> {
   const c = await getCtx();
   if (!c) redirect("/login");
+  if (!USE_SELF_PASSWORD && !c.mustChangePassword) return { error: "Passwords are changed by the Admin. Ask them." };
   const current = String(fd.get("current") ?? "");
   const next = String(fd.get("next") ?? "");
   const again = String(fd.get("again") ?? "");

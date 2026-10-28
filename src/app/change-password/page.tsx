@@ -2,11 +2,14 @@ import Link from "next/link";
 import { requireCtx } from "@/lib/auth";
 import { homeFor } from "@/lib/home";
 import { PasswordForm } from "./password-form";
+import { USE_SELF_PASSWORD } from "@/lib/features";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "Change password" };
 
 export default async function ChangePasswordPage() {
   const c = await requireCtx();
+  if (!USE_SELF_PASSWORD && !c.mustChangePassword) redirect(homeFor(c.role)); // passwords are changed by the Admin
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-brand-900/10 sm:p-9">

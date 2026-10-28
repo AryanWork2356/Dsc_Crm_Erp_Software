@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { loginAs, logout, fd } from "./setup";
 import { passwordProblem } from "@/lib/password-rules";
+import { givenName, issuedPassword } from "@/lib/issued-password";
 import { changeMyPassword } from "@/app/change-password/actions";
 import { requestPasswordReset } from "@/app/forgot-password/actions";
 import { login } from "@/app/login/actions";
@@ -36,7 +37,40 @@ describe("password rules", () => {
   });
 });
 
-describe("choosing your own password", () => {
+describe("passwords the company gives out", () => {
+  it("are the first name, then @, then a number; money and management roles get a longer number and a !", () => {
+    expect(givenName("Gopal Sharma")).toBe("Gopal");
+    expect(givenName("Mohd. Shamshad Alam")).toBe("Shamshad");
+    expect(givenName("Mohd Kaif")).toBe("Kaif");
+    expect(givenName("Test login: Project Manager")).toBe("ProjectManager");
+    for (let i = 0; i < 50; i++) {
+      expect(issuedPassword("Krishna Maurya", "SITE_SUPERVISOR")).toMatch(/^Krishna@\d{5}$/);
+      expect(issuedPassword("Dinesh Sharma", "OWNER")).toMatch(/^Dinesh@\d{6}!$/);
+      expect(issuedPassword("Sakshi Singh", "HR")).toMatch(/^Sakshi@\d{6}!$/);
+      expect(issuedPassword("Shravani Bhalerkar", "ACCOUNTS")).toMatch(/^Shravani@\d{6}!$/);
+    }
+    expect(new Set(Array.from({ length: 30 }, () => issuedPassword("Amit Jha", "SITE_SUPERVISOR"))).size).toBeGreaterThan(20); // the number is random
+  });
+
+  it("are accepted at sign-in, and nobody is sent to change them", async () => {
+    const { email } = await newUser("SITE_SUPERVISOR", false);
+    const pw = issuedPassword("Krishna Maurya", "SITE_SUPERVISOR");
+    await db.user.updateMany({ where: { email }, data: { passwordHash: await bcrypt.hash(pw, 4) } });
+    const r = await redirected(login(undefined, fd({ email, password: pw })));
+    expect(r).toContain("NEXT_REDIRECT");
+    expect(r).not.toContain("change-password");
+  });
+
+  it("people can not set their own: only the Admin changes a password", async () => {
+    const { u, email } = await newUser("PROJECT_MANAGER", false);
+    await loginAs(email);
+    const r = await changeMyPassword(undefined, fd({ current: "Given1234x", next: "Blue7Kitchen", again: "Blue7Kitchen" }));
+    expect(r?.error).toMatch(/Admin/);
+    expect(await bcrypt.compare("Given1234x", (await db.user.findUniqueOrThrow({ where: { id: u.id } })).passwordHash)).toBe(true);
+  });
+});
+
+describe("choosing your own password (kept for a forced change; off for normal use)", () => {
   it("someone with a given password is sent to choose their own, and can then sign in normally", async () => {
     const { u, email } = await newUser();
     const r = await redirected(login(undefined, fd({ email, password: "Given1234x" })));
@@ -58,13 +92,6 @@ describe("choosing your own password", () => {
     expect(again).not.toContain("/change-password");
     expect(again).toContain("NEXT_REDIRECT");
   });
-
-  it("the login ID can not be changed by the person", async () => {
-    const { u, email } = await newUser("PROJECT_MANAGER", false);
-    await loginAs(email);
-    await redirected(changeMyPassword(undefined, fd({ current: "Given1234x", next: "Blue7Kitchen", again: "Blue7Kitchen", email: "someone.else@dscinterior.com" })));
-    expect((await db.user.findUniqueOrThrow({ where: { id: u.id } })).email).toBe(email);
-  });
 });
 
 describe("forgot password", () => {
@@ -80,7 +107,7 @@ describe("forgot password", () => {
     expect((await requestPasswordReset(undefined, fd({ email: "not-an-email" })))?.error).toMatch(/login ID/);
   });
 
-  it("the Admin resets it: a temporary password is made, must be replaced, and the request is cleared", async () => {
+  it("the Admin resets it: a password in the company style is made, nobody must change it, and the request is cleared", async () => {
     const { u } = await newUser("SITE_SUPERVISOR", false);
     await db.user.update({ where: { id: u.id }, data: { resetRequestedAt: new Date() } });
     await loginAs("admin@dsc.demo");
@@ -88,9 +115,9 @@ describe("forgot password", () => {
     expect(r.ok).toBe(true);
     const msg = r.ok ? r.message ?? "" : "";
     const temp = /: (\S+)\s/.exec(msg)?.[1] ?? "";
-    expect(temp.length).toBeGreaterThanOrEqual(10);
+    expect(temp).toMatch(/^Pw@\d{5}$/); // first name of "Pw tester …", then @ and a number
     const after = await db.user.findUniqueOrThrow({ where: { id: u.id } });
-    expect(after.mustChangePassword).toBe(true);
+    expect(after.mustChangePassword).toBe(false);
     expect(after.resetRequestedAt).toBeNull();
     expect(await bcrypt.compare(temp, after.passwordHash)).toBe(true);
   });
@@ -101,11 +128,11 @@ describe("forgot password", () => {
     expect((await resetPassword(u.id, fd({ password: "Whatever123" }))).ok).toBe(false);
   });
 
-  it("a person added by the Admin must choose their own password at first sign-in", async () => {
+  it("a person added by the Admin signs in with the password the Admin gave and is not asked to change it", async () => {
     await loginAs("admin@dsc.demo");
     const email = `added-${tag()}@dscinterior.com`;
     const r = await createUser(fd({ name: "Added Person", email, role: "SITE_SUPERVISOR", password: "Given1234x" }));
     expect(r.ok).toBe(true);
-    expect((await db.user.findFirstOrThrow({ where: { email } })).mustChangePassword).toBe(true);
+    expect((await db.user.findFirstOrThrow({ where: { email } })).mustChangePassword).toBe(false);
   });
 });

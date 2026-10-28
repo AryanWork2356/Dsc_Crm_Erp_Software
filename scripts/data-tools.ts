@@ -91,6 +91,7 @@ async function clear(hosted: boolean, yes: boolean) {
   try {
     console.log(`\nDatabase: ${where}`);
     await assertDscDatabase(prisma, host, hosted);
+    await assertDscDatabase(prisma, host, hosted);
     console.log("Saving a full copy first …");
     const { dir, counts } = await backup(prisma);
     const rows = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -118,6 +119,7 @@ async function restore(hosted: boolean, folder: string) {
   if (!folder || !fs.existsSync(path.join(folder, "_counts.json"))) throw new Error('Give the saved folder, for example: npm run data:restore -- "D:\\DSC_Crm_Softw\\backups\\2026-10-19T09-00-00"');
   const { prisma, where, host } = await connect(hosted);
   try {
+    await assertDscDatabase(prisma, host, hosted);
     await assertDscDatabase(prisma, host, hosted);
     console.log(`\nPutting ${folder}\nback into ${where} …`);
     const counts = JSON.parse(fs.readFileSync(path.join(folder, "_counts.json"), "utf8")) as Record<string, number>;

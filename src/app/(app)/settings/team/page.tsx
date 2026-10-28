@@ -112,7 +112,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                           <FormDialog
                             title={`Reset password – ${u.name}`}
                             trigger={<Button size="sm" variant="ghost">Reset password</Button>}
-                            fields={[{ name: "password", label: "Temporary password (leave empty to make one)", type: "password", hint: "They must choose their own when they sign in." }]}
+                            fields={[{ name: "password", label: "New password (leave empty to make one like Name@12345)", type: "password", hint: "Shown once after you save: write it in your list." }]}
                             action={resetPassword.bind(null, u.id)}
                             submitLabel="Reset password"
                           />
