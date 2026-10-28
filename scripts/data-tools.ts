@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { PrismaClient } from "@prisma/client";
+import { assertDscDatabase } from "./lib/guard";
 
 const KEEP = new Set(["Company", "CompanySettings", "Permission", "RolePermission", "TermsAndConditions", "User"]);
 const BACKUPS = path.resolve(process.cwd(), "..", "backups");
@@ -33,14 +34,14 @@ async function connect(hosted: boolean) {
   if (!hosted) {
     const u = process.env.DATABASE_URL ?? "";
     const host = u ? new URL(u).hostname : "";
-    return { prisma: new PrismaClient(), where: `this computer (${host || "from .env"})` };
+    return { prisma: new PrismaClient(), where: `this computer (${host || "from .env"})`, host };
   }
   const raw = await ask("Paste the ONLINE database connection string, then press Enter: ");
   const url = new URL(raw.replace(/^[\s'"<]+|[\s'">]+$/g, ""));
   if (["localhost", "127.0.0.1"].includes(url.hostname)) throw new Error("That is your own computer's database, not the online one.");
   url.searchParams.delete("channel_binding");
   if (!url.searchParams.has("sslmode")) url.searchParams.set("sslmode", "require");
-  return { prisma: new PrismaClient({ datasources: { db: { url: url.toString() } } }), where: `${url.hostname} (database ${url.pathname.slice(1)})` };
+  return { prisma: new PrismaClient({ datasources: { db: { url: url.toString() } } }), where: `${url.hostname} (database ${url.pathname.slice(1)})`, host: url.hostname };
 }
 
 async function tables(prisma: PrismaClient): Promise<string[]> {
@@ -71,10 +72,11 @@ async function backup(prisma: PrismaClient): Promise<{ dir: string; counts: Reco
 }
 
 async function backupOnly(hosted: boolean) {
-  const { prisma, where } = await connect(hosted);
+  const { prisma, where, host } = await connect(hosted);
   try {
     console.log(`
 Database: ${where}`);
+    await assertDscDatabase(prisma, host, hosted);
     const { dir, counts } = await backup(prisma);
     console.log(`Saved ${Object.values(counts).reduce((a, b) => a + b, 0)} rows from ${Object.keys(counts).length} tables to:
   ${dir}
@@ -85,9 +87,10 @@ Nothing was changed or removed.`);
 }
 
 async function clear(hosted: boolean, yes: boolean) {
-  const { prisma, where } = await connect(hosted);
+  const { prisma, where, host } = await connect(hosted);
   try {
     console.log(`\nDatabase: ${where}`);
+    await assertDscDatabase(prisma, host, hosted);
     console.log("Saving a full copy first …");
     const { dir, counts } = await backup(prisma);
     const rows = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -113,8 +116,9 @@ async function clear(hosted: boolean, yes: boolean) {
 
 async function restore(hosted: boolean, folder: string) {
   if (!folder || !fs.existsSync(path.join(folder, "_counts.json"))) throw new Error('Give the saved folder, for example: npm run data:restore -- "D:\\DSC_Crm_Softw\\backups\\2026-10-19T09-00-00"');
-  const { prisma, where } = await connect(hosted);
+  const { prisma, where, host } = await connect(hosted);
   try {
+    await assertDscDatabase(prisma, host, hosted);
     console.log(`\nPutting ${folder}\nback into ${where} …`);
     const counts = JSON.parse(fs.readFileSync(path.join(folder, "_counts.json"), "utf8")) as Record<string, number>;
     let pending = Object.keys(counts).filter((t) => counts[t] > 0);
