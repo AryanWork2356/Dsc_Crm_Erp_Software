@@ -110,6 +110,18 @@ describe("saving locations", () => {
     expect((await setSiteLocation(p.id, fd({ lat: "19.2", lng: "72.9" }))).ok).toBe(false);
   });
 
+  it("the site supervisor standing at the site can save its location, but only on a project they are named on", async () => {
+    const sup = await db.user.findFirstOrThrow({ where: { email: "supervisor@dsc.demo" } });
+    const company = await db.company.findFirstOrThrow();
+    const client = await db.client.findFirstOrThrow({ where: { deletedAt: null } });
+    const mine = await db.project.create({ data: { companyId: company.id, code: `PRJ-SL${Date.now().toString(36)}`, name: "Supervisor site", clientId: client.id, status: "EXECUTION", supervisorId: sup.id, members: { create: [{ userId: sup.id, roleLabel: "Supervisor" }] } } });
+    const notMine = await db.project.create({ data: { companyId: company.id, code: `PRJ-SM${Date.now().toString(36)}`, name: "Someone else's site", clientId: client.id, status: "EXECUTION" } });
+    await loginAs("supervisor@dsc.demo");
+    expect((await setSiteLocation(mine.id, fd({ lat: "19.2183", lng: "72.9781" }))).ok).toBe(true);
+    expect(await db.project.findUniqueOrThrow({ where: { id: mine.id } })).toMatchObject({ siteLat: 19.2183, siteLng: 72.9781 });
+    expect((await setSiteLocation(notMine.id, fd({ lat: "19.2183", lng: "72.9781" }))).ok).toBe(false);
+  });
+
   it("only people who manage settings change the company rule", async () => {
     await loginAs("supervisor@dsc.demo");
     expect((await saveAttendanceLocation(fd({ radius: "20", geoRequired: "on" }))).ok).toBe(false);

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { run, UserError } from "@/lib/action";
 import { projectScope } from "@/lib/scope";
 import { validPoint } from "@/lib/geo";
+import { SITE_ROLES } from "@/lib/lookups";
 
 function point(fd: FormData) {
   const lat = Number(String(fd.get("lat") ?? "").trim());
@@ -24,10 +25,11 @@ function radius(fd: FormData, blankOk: boolean): number | null {
   return r;
 }
 
-/** Saves where a project's site is. Anyone who can edit the project and works on it may set it. */
+/** Saves where a project's site is. Anyone who can edit the project, and the site supervisor or engineer who is actually standing at the site, may set it. */
 export async function setSiteLocation(projectId: string, fd: FormData) {
   return run(async () => {
-    const c = await assertPerm("projects:edit");
+    const c = await assertPerm("projects:view");
+    if (!c.can("projects:edit") && !SITE_ROLES.includes(c.role)) throw new UserError("You are not allowed to set the site location.");
     const p = await db.project.findFirst({ where: { id: projectId, ...projectScope(c) } });
     if (!p) throw new UserError("Project not found or you don't have access to it.");
     const { lat, lng } = point(fd);

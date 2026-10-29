@@ -146,7 +146,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             <Card>
               <CardHeader><CardTitle>Site location (for attendance)</CardTitle></CardHeader>
               <CardBody>
-                <LocationForm action={setSiteLocation.bind(null, id)} lat={p.siteLat} lng={p.siteLng} radius={p.geoRadiusM} radiusHint="Company default" canEdit={c.can("projects:edit")} />
+                <LocationForm action={setSiteLocation.bind(null, id)} lat={p.siteLat} lng={p.siteLng} radius={p.geoRadiusM} radiusHint="Company default" canEdit={c.can("projects:edit") || SITE_ROLES.includes(c.role)} />
               </CardBody>
             </Card>
           )}
