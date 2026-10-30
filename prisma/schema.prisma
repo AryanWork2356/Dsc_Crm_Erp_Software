@@ -913,6 +913,7 @@ model BoqItem {
   labourCost    Decimal     @default(0) @db.Decimal(12, 2) // per unit
   otherCost     Decimal     @default(0) @db.Decimal(12, 2) // per unit
   sellingRate   Decimal     @default(0) @db.Decimal(12, 2) // per unit
+  rateNote      String? // where a rate filled by the app came from when it is not an exact match: to be checked
   materialId    String?
   material      Material?   @relation(fields: [materialId], references: [id])
   supplierId    String?

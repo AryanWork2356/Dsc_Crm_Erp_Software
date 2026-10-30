@@ -9,7 +9,7 @@ import { run, UserError } from "@/lib/action";
 import { boqItemTotals } from "@/lib/money";
 import { formToObject, zReqStr } from "@/lib/form";
 import { num } from "@/lib/utils";
-import { findRate, rateKey, sellFromCost } from "@/lib/rate-card";
+import { closeRate, findRate, rateKey, sellFromCost } from "@/lib/rate-card";
 
 /** Rate cards hold DSC's costs and profit, so only people who may see margins can use them. */
 async function costPerm(perm: "boq:edit" | "boq:view") {
@@ -46,33 +46,54 @@ export async function setBoqClient(boqId: string, fd: FormData) {
   });
 }
 
-/** "Use the same as last time": fills every row the client's rate card knows, and prices it at the client's profit %. */
+/**
+ * "Use the rates we already have": fills every row the app knows, and prices it at the client's profit %.
+ *   1. this client's saved rate for the same item (exact): filled, nothing to check;
+ *   2. this client's saved rate for the same item worded differently ("Providing and fixing 18 mm ply" = "Supply & fix 18mm plywood");
+ *   3. another client's saved rate for the same item (exact or worded differently): the most recent card wins.
+ * Rows filled by 2 or 3 carry a note saying where the rate came from, so a person checks them. Only truly new items stay empty.
+ */
 export async function applyLastRates(boqId: string) {
   return run(async () => {
     const c = await costPerm("boq:edit");
     const b = await draftBoq(c, boqId);
     if (!b.clientId) throw new UserError("Choose the client first.");
-    const card = await db.clientRateCard.findUnique({ where: { clientId: b.clientId }, include: { rates: true } });
-    if (!card) throw new UserError("This client has no saved rates yet.");
-    const rates = card.rates.map((r) => ({ ...r, materialRate: num(r.materialRate), labourRate: num(r.labourRate), otherRate: num(r.otherRate) }));
-    const profit = num(card.profitPct);
-    let matched = 0;
+    const cards = await db.clientRateCard.findMany({ where: { companyId: c.companyId }, include: { rates: true, client: { select: { name: true } } }, orderBy: { updatedAt: "desc" } });
+    const own = cards.find((k) => k.clientId === b.clientId);
+    const others = cards.filter((k) => k.clientId !== b.clientId);
+    if (!own?.rates.length && !others.some((k) => k.rates.length)) throw new UserError("No client has saved rates yet. Fill this BOQ's rates, then press Save rates for next time.");
+    const asNum = (k: (typeof cards)[number]) => k.rates.map((r) => ({ ...r, materialRate: num(r.materialRate), labourRate: num(r.labourRate), otherRate: num(r.otherRate), from: k.client.name }));
+    const ownRates = own ? asNum(own) : [];
+    const otherRates = others.flatMap(asNum);
+    const profit = own ? num(own.profitPct) : b.profitPct !== null ? num(b.profitPct) : others[0] ? num(others[0].profitPct) : 0;
+    const counts = { exact: 0, worded: 0, otherClient: 0 };
     await db.$transaction(async (tx) => {
       for (const i of b.items) {
-        const r = findRate(rates, i.item, i.unit);
-        if (!r) continue;
+        let r: (typeof ownRates)[number] | undefined = findRate(ownRates, i.item, i.unit);
+        let note: string | null = null;
+        if (r) counts.exact++;
+        else {
+          const close = closeRate(ownRates, i.item, i.unit);
+          const otherExact = close ? undefined : findRate(otherRates, i.item, i.unit);
+          const otherClose = close || otherExact ? undefined : closeRate(otherRates, i.item, i.unit);
+          r = close?.rate ?? otherExact ?? otherClose?.rate;
+          if (!r) continue;
+          if (close) { counts.worded++; note = `Same as “${r.name}” (worded differently). Check the rate.`; }
+          else { counts.otherClient++; note = `Rate from ${r.from}: “${r.name}”${otherClose ? " (worded differently)" : ""}. Check it suits this client.`; }
+        }
         const cost = r.materialRate + r.labourRate + r.otherRate;
         const sellingRate = sellFromCost(cost, profit);
         const t = boqItemTotals({ quantity: num(i.quantity), materialCost: r.materialRate, labourCost: r.labourRate, otherCost: r.otherRate, sellingRate });
-        await tx.boqItem.update({ where: { id: i.id }, data: { materialCost: r.materialRate, labourCost: r.labourRate, otherCost: r.otherRate, sellingRate, estimatedCost: t.estimatedCost, total: t.total } });
-        matched++;
+        await tx.boqItem.update({ where: { id: i.id }, data: { materialCost: r.materialRate, labourCost: r.labourRate, otherCost: r.otherRate, sellingRate, estimatedCost: t.estimatedCost, total: t.total, rateNote: note?.slice(0, 300) ?? null } });
       }
       await tx.boq.update({ where: { id: boqId }, data: { profitPct: profit, ratesAppliedAt: new Date() } });
-      await audit(c, { action: "UPDATE", entityType: "Boq", entityId: boqId, summary: `Used ${card.updatedAt.toLocaleDateString("en-IN")} rates for the client: ${matched} of ${b.items.length} rows filled, profit ${profit}%` }, tx);
+      await audit(c, { action: "UPDATE", entityType: "Boq", entityId: boqId, summary: `Filled saved rates: ${counts.exact} exact, ${counts.worded} worded differently, ${counts.otherClient} from other clients, of ${b.items.length} rows; profit ${profit}%` }, tx);
     });
     revalidatePath(`/sales/boq/${boqId}`);
-    const left = b.items.length - matched;
-    return { message: `Filled ${matched} rows at ${profit}% profit.${left ? ` ${left} rows are new – enter their rates.` : ""}`, data: { matched, left } };
+    const filled = counts.exact + counts.worded + counts.otherClient;
+    const left = b.items.length - filled;
+    const check = counts.worded + counts.otherClient;
+    return { message: `Filled ${filled} of ${b.items.length} rows at ${profit}% profit.${check ? ` ${check} are marked “check” (worded differently or from another client).` : ""}${left ? ` ${left} are new – enter their rates.` : ""}`, data: { ...counts, left } };
   });
 }
 

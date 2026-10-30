@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { CLOSE_ENOUGH, nameScore, rateKey } from "@/lib/rate-card";
 import ExcelJS from "exceljs";
 import { BoqCategory, type Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -45,6 +46,7 @@ const itemSchema = z.object({
   remarks: z.string().trim().optional().nullable(),
   code: z.string().trim().optional().nullable(),
   hsn: z.string().trim().optional().nullable(),
+  rateNote: z.string().trim().max(300).optional().nullable(),
   measurements: z.object({ lines: z.array(measureLine).max(200, "Too many measurement lines on one item (max 200)") }).nullish(),
 });
 export type BoqItemInput = z.infer<typeof itemSchema>;
@@ -76,7 +78,7 @@ function itemRows(items: BoqItemInput[]) {
     return {
       sortOrder: idx, category: i.category, subcategory: i.subcategory || null, item: i.item, description: i.description || null,
       specification: i.specification || null, unit: i.unit, quantity: i.quantity, materialCost: i.materialCost, labourCost: i.labourCost,
-      otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId || null, package: i.package || null, ref: i.ref || null, remarks: i.remarks || null, code: i.code || null, hsn: i.hsn || null, estimatedCost: t.estimatedCost, total: t.total,
+      otherCost: i.otherCost, sellingRate: i.sellingRate, materialId: i.materialId || null, package: i.package || null, ref: i.ref || null, remarks: i.remarks || null, code: i.code || null, hsn: i.hsn || null, rateNote: i.rateNote || null, estimatedCost: t.estimatedCost, total: t.total,
       measurements: (i.measurements?.lines.length ? { lines: i.measurements.lines } : undefined) as Prisma.InputJsonValue | undefined,
     };
   });
@@ -328,12 +330,28 @@ const summarise = (sh: ReadSheet) => {
 };
 
 /** Step 1: reads the file and shows what it found. Saves nothing. */
+/**
+ * A client file often holds the same list twice: two versions of the same work (a high-street store and a mall store), or a
+ * measurement sheet that repeats the items to work out quantities. If a sheet repeats most items of an earlier sheet, say which one,
+ * so only one is imported (otherwise every item comes in twice).
+ */
+function repeatsOf(sheets: Awaited<ReturnType<typeof readUpload>>, i: number): string | null {
+  const mine = sheets[i].items;
+  if (mine.length < 2) return null;
+  for (let j = 0; j < i; j++) {
+    const other = sheets[j].items;
+    const same = mine.filter((a) => other.some((b) => rateKey(a.item) === rateKey(b.item) || nameScore(a.item, b.item) >= CLOSE_ENOUGH)).length;
+    if (same / mine.length >= 0.6) return sheets[j].name;
+  }
+  return null;
+}
+
 export async function previewClientBoq(fd: FormData) {
   return run(async () => {
     await assertPerm("boq:edit");
     const sheets = await readUpload(fd);
     if (!sheets.length) throw new UserError("I couldn't find a BOQ table in this file. It needs a header row with Description, Unit and Quantity columns. Check that the file is the BOQ itself, or use DSC's own template.");
-    return { message: `Found ${sheets.reduce((n, x) => n + x.items.length, 0)} items on ${sheets.length} sheet(s)`, data: { sheets: sheets.map(summarise) } };
+    return { message: `Found ${sheets.reduce((n, x) => n + x.items.length, 0)} items on ${sheets.length} sheet(s)`, data: { sheets: sheets.map((x, i) => ({ ...summarise(x), repeats: repeatsOf(sheets, i) })) } };
   });
 }
 

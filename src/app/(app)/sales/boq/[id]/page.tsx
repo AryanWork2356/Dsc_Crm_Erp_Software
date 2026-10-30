@@ -30,7 +30,9 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
   const edit = c.can("boq:edit");
   const editable = edit && b.status === "DRAFT";
   const card = canCosts && b.clientId ? await db.clientRateCard.findUnique({ where: { clientId: b.clientId }, include: { _count: { select: { rates: true } } } }) : null;
-  const askLastRates = editable && canCosts && !!card && card._count.rates > 0 && !b.ratesAppliedAt && b.items.length > 0;
+  const otherRates = canCosts && b.clientId ? await db.clientRate.count({ where: { card: { companyId: c.companyId, clientId: { not: b.clientId } } } }) : 0;
+  const askLastRates = editable && canCosts && !!b.clientId && ((card?._count.rates ?? 0) > 0 || otherRates > 0) && !b.ratesAppliedAt && b.items.length > 0;
+  const toCheck = canCosts ? b.items.filter((i) => i.rateNote).length : 0;
   const [materials, clients, pending, siblings, allClients] = await Promise.all([
     db.material.findMany({ where: { companyId: c.companyId, deletedAt: null }, select: { id: true, name: true, unit: true, purchaseCost: true }, orderBy: { name: "asc" }, take: 2000 }),
     c.can("quotations:create") ? clientOptions(c.companyId) : [],
@@ -96,19 +98,24 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
           {canCosts && b.clientId && <Link href={`/sales/rates/${b.clientId}`} className="font-medium text-brand-700 hover:underline">View {b.client?.name}&apos;s saved rates →</Link>}
         </p>
       )}
-      {askLastRates && card && (
+      {askLastRates && (
         <Card className="mb-4 border-brand-200 bg-brand-50/50">
           <CardBody className="space-y-3">
-            <p className="text-sm font-semibold text-slate-900">Use the same rates as last time for {b.client?.name}?</p>
-            <p className="text-sm text-slate-600">DSC saved <b>{card._count.rates} rates</b> with <b>{num(card.profitPct)}% profit</b> for this client on {formatDate(card.updatedAt)}. Rows that match are filled in and priced for you. New items are left empty.</p>
+            <p className="text-sm font-semibold text-slate-900">Fill the rates DSC already has?</p>
+            <p className="text-sm text-slate-600">
+              {card && card._count.rates > 0 ? <>DSC saved <b>{card._count.rates} rates</b> with <b>{num(card.profitPct)}% profit</b> for {b.client?.name} on {formatDate(card.updatedAt)}. </> : <>{b.client?.name} has no saved rates yet. </>}
+              {otherRates > 0 && <>Rates saved for other clients ({otherRates}) are used for items this client has not had before. </>}
+              The same item is found even when it is worded differently (“Providing and fixing” or “Supply and installation”). Those rows, and rows priced from another client, are marked <b>check</b>. Only truly new items stay empty.
+            </p>
             <div className="flex flex-wrap gap-2">
-              <ActionButton size="sm" action={applyLastRates.bind(null, id)}>Yes, use the same as last time</ActionButton>
-              <Button asChild size="sm" variant="secondary"><Link href={`/sales/rates/${b.clientId}`}>View / change the saved rates</Link></Button>
+              <ActionButton size="sm" action={applyLastRates.bind(null, id)}>Yes, fill the rates</ActionButton>
+              {card && <Button asChild size="sm" variant="secondary"><Link href={`/sales/rates/${b.clientId}`}>View / change the saved rates</Link></Button>}
               <ActionButton size="sm" variant="ghost" action={skipLastRates.bind(null, id)}>No, start fresh</ActionButton>
             </div>
           </CardBody>
         </Card>
       )}
+      {toCheck > 0 && editable && <div className="mb-4"><Alert tone="warn"><b>{toCheck} row{toCheck === 1 ? "" : "s"} to check:</b> the rate was filled from an item worded differently or from another client. Look at the note under the item, change the rate if needed, then press OK on it (or change the rate) and Save.</Alert></div>}
       {pending && <div className="mb-4"><Alert tone="warn">Waiting for Management approval. <Link href="/approvals" className="font-medium underline">Open approvals</Link></Alert></div>}
       {b.status === "REVISED" && <div className="mb-4"><Alert>This version has been superseded. {siblings.filter((s) => s.revision > b.revision).map((s) => <Link key={s.id} href={`/sales/boq/${s.id}`} className="ml-1 font-medium underline">{s.number}</Link>)}</Alert></div>}
       {b.status === "APPROVED" && edit && <div className="mb-4"><Alert tone="info">Approved BOQs are locked. Use <b>Revise</b> to make changes.</Alert></div>}
@@ -131,7 +138,7 @@ export default async function BoqDetail({ params }: { params: Promise<{ id: stri
           id: i.id, category: i.category, item: i.item, specification: i.specification ?? "", unit: i.unit, quantity: num(i.quantity),
           materialCost: num(i.materialCost), labourCost: num(i.labourCost), otherCost: num(i.otherCost), sellingRate: num(i.sellingRate), materialId: i.materialId,
           lines: parseMeasurements(i.measurements),
-          subcategory: i.subcategory ?? undefined, package: i.package ?? undefined, ref: i.ref ?? undefined, remarks: i.remarks ?? undefined, code: i.code ?? undefined, hsn: i.hsn ?? undefined,
+          subcategory: i.subcategory ?? undefined, package: i.package ?? undefined, ref: i.ref ?? undefined, remarks: i.remarks ?? undefined, code: i.code ?? undefined, hsn: i.hsn ?? undefined, rateNote: i.rateNote ?? undefined,
         }))}
       />
     </>

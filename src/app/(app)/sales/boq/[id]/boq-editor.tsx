@@ -34,6 +34,7 @@ export type EditorItem = {
   remarks?: string;
   code?: string;
   hsn?: string;
+  rateNote?: string; // where the app took this rate from, when it was not an exact match: cleared once someone looks at it
   auto?: boolean; // selling rate follows cost + profit % until someone types a selling rate by hand
 };
 
@@ -81,7 +82,8 @@ export function BoqEditor({
   const priced = (r: EditorItem, p: number | ""): EditorItem => (r.auto && p !== "" && costOf(r) > 0 ? { ...r, sellingRate: sellFromCost(costOf(r), p) } : r);
   const set = (key: string, patch: Partial<EditorItem>) => {
     const manual = "sellingRate" in patch;
-    setRows((rs) => rs.map((r) => (r.key === key ? priced({ ...r, ...patch, ...(manual ? { auto: false } : {}) }, profit) : r)));
+    const rateTouched = ["materialCost", "labourCost", "otherCost", "sellingRate"].some((k) => k in patch); // a person looked at the rate
+    setRows((rs) => rs.map((r) => (r.key === key ? priced({ ...r, ...patch, ...(manual ? { auto: false } : {}), ...(rateTouched ? { rateNote: undefined } : {}) }, profit) : r)));
     setDirty(true);
   };
   const changeProfit = (p: number | "") => {
@@ -218,7 +220,9 @@ export function BoqEditor({
                           {BOQ_CATEGORY_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </Select>
                       </td>
-                      <td className="px-1 pt-1.5 align-top"><Input value={r.item} list={listId} disabled={!editable} onChange={(e) => onItem(r, e.target.value)} placeholder="Item name" className="h-8 px-2 text-xs" aria-label={`Item ${i + 1}`} /></td>
+                      <td className="px-1 pt-1.5 align-top"><Input value={r.item} list={listId} disabled={!editable} onChange={(e) => onItem(r, e.target.value)} placeholder="Item name" className="h-8 px-2 text-xs" aria-label={`Item ${i + 1}`} />
+                        {canCosts && r.rateNote && <p className="mt-1 rounded bg-amber-50 px-1.5 py-1 text-[11px] leading-snug text-amber-800"><b>Check:</b> {r.rateNote}{editable && <button type="button" className="ml-1 font-semibold text-amber-900 underline" onClick={() => { setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, rateNote: undefined } : x))); setDirty(true); }}>OK</button>}</p>}
+                      </td>
                       <td className="px-1 pt-1.5 align-top">
                         <Select value={r.unit} disabled={!editable} onChange={(e) => set(r.key, { unit: e.target.value })} className="h-8 px-2 text-xs">
                           {UNIT_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

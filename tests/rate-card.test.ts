@@ -61,7 +61,7 @@ describe("a client's rate card on a BOQ", () => {
 
     const r = await applyLastRates(second);
     expect(r.ok).toBe(true);
-    expect((r as unknown as { data: { matched: number; left: number } }).data).toEqual({ matched: 2, left: 1 });
+    expect((r as unknown as { data: object }).data).toMatchObject({ exact: 2, worded: 0, left: 1 });
     const filled = await db.boqItem.findMany({ where: { boqId: second }, orderBy: { sortOrder: "asc" } });
     expect(filled.map((i) => [Number(i.materialCost), Number(i.labourCost), Number(i.otherCost), Number(i.sellingRate)])).toEqual([
       [100, 20, 5, 156.25],
@@ -96,7 +96,7 @@ describe("a client's rate card on a BOQ", () => {
     const third = ((await createBoq(fd({ title: "Rate card test 3" }))) as { data: { id: string } }).data.id;
     expect((await applyLastRates(third)).ok).toBe(false); // no client yet
     expect((await setBoqClient(third, fd({ clientId: clientB }))).ok).toBe(true);
-    expect((await applyLastRates(third)).ok).toBe(false); // client B has no saved rates
+    expect((await applyLastRates(third)).ok).toBe(true); // client B has no saved rates of its own, but other clients' rates can be used
     expect((await skipLastRates(third)).ok).toBe(true);
     expect((await db.boq.findUniqueOrThrow({ where: { id: third } })).ratesAppliedAt).not.toBeNull();
     // changing the client asks again

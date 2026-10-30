@@ -10,7 +10,7 @@ import { humanize } from "@/lib/utils";
 import { importClientBoq, previewClientBoq } from "../../actions";
 
 type Sheet = {
-  name: string; measurement: boolean; hidden: boolean; headerRow: number; columns: Record<string, string>; count: number; skipped: number; sections: string[]; warnings: string[]; flagged: number; withRates: number;
+  name: string; measurement: boolean; hidden: boolean; headerRow: number; columns: Record<string, string>; count: number; skipped: number; sections: string[]; warnings: string[]; flagged: number; withRates: number; repeats: string | null;
   categories: Record<string, number>; sample: { row: number; sl: string; category: string; item: string; unit: string; quantity: number; rate: number | null; flags: string[] }[];
 };
 
@@ -35,7 +35,8 @@ export function ImportClientBoq({ boqId, hasItems, canKeepRates }: { boqId: stri
       if (r.ok) {
         const found = (r.data as { sheets: Sheet[] }).sheets;
         setSheets(found);
-        setPicked(new Set(found.filter((s) => !s.measurement && !s.hidden).map((s) => s.name))); // a measurement sheet is not a price list: not ticked
+        // a measurement sheet is not a price list, and a sheet that repeats an earlier one would bring every item twice: not ticked
+        setPicked(new Set(found.filter((s) => !s.measurement && !s.hidden && !s.repeats).map((s) => s.name)));
       } else setError(r.error);
     });
   }
@@ -83,10 +84,11 @@ export function ImportClientBoq({ boqId, hasItems, canKeepRates }: { boqId: stri
                   <label className="flex items-start gap-3">
                     <input type="checkbox" className="mt-1 h-5 w-5 accent-brand-700" checked={picked.has(s.name)} onChange={(e) => setPicked((p) => { const n = new Set(p); if (e.target.checked) n.add(s.name); else n.delete(s.name); return n; })} />
                     <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900"><FileSpreadsheet className="h-4 w-4 text-slate-400" /> {s.name} <Badge tone="blue">{s.count} items</Badge>{s.withRates > 0 && <Badge tone="teal">{s.withRates} with rates</Badge>}{s.measurement && <Badge tone="slate">measurement sheet – not ticked</Badge>}{s.hidden && <Badge tone="slate">hidden in the file – not ticked</Badge>}{s.flagged > 0 && <Badge tone="amber">{s.flagged} to check</Badge>}</span>
+                      <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900"><FileSpreadsheet className="h-4 w-4 text-slate-400" /> {s.name} <Badge tone="blue">{s.count} items</Badge>{s.withRates > 0 && <Badge tone="teal">{s.withRates} with rates</Badge>}{s.measurement && <Badge tone="slate">measurement sheet – not ticked</Badge>}{s.hidden && <Badge tone="slate">hidden in the file – not ticked</Badge>}{s.flagged > 0 && <Badge tone="amber">{s.flagged} to check</Badge>}{s.repeats && <Badge tone="amber">same items as “{s.repeats}” – not ticked</Badge>}</span>
                       <span className="mt-1 block text-xs text-slate-500">Header on row {s.headerRow} · columns: {Object.entries(s.columns).filter(([, v]) => v !== "—").map(([k, v]) => `${k} = ${v}`).join(", ")}{s.skipped ? ` · ${s.skipped} total/blank line(s) ignored` : ""}</span>
                       {s.sections.length > 0 && <span className="mt-1 block text-xs text-slate-500">Sections: {s.sections.join(", ")}</span>}
                       <span className="mt-1 flex flex-wrap gap-1">{Object.entries(s.categories).map(([k, v]) => <Badge key={k} tone="slate">{humanize(k)} {v}</Badge>)}</span>
+                      {s.repeats && <span className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700"><AlertTriangle className="h-3.5 w-3.5" /> This sheet repeats most items of “{s.repeats}” (for example another version of the same work, or where the quantities are worked out). Tick only the one you are quoting, or the items come in twice.</span>}
                       {s.warnings.map((w) => <span key={w} className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700"><AlertTriangle className="h-3.5 w-3.5" /> {w}</span>)}
                     </span>
                   </label>
