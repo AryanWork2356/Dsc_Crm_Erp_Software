@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { assertPerm, type Ctx } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { run, UserError } from "@/lib/action";
+import { deleteFile, keepBill, readBillFile } from "@/lib/bill-file";
 import { nextDocNumber } from "@/lib/sequence";
 import { notifyRoles } from "@/lib/notify";
 import { canDecide, requestApproval, requiredRoleFor } from "@/lib/workflow";
@@ -262,16 +263,19 @@ export async function createExpense(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("expenses:create");
     const d = expSchema.parse(formToObject(fd));
+    const billFile = await readBillFile(fd);
     if (d.category === "PROJECT" && !d.projectId) throw new UserError("Select the project this expense belongs to.");
     if (d.projectId && !(await db.project.findFirst({ where: { id: d.projectId, ...projectScope(c) } }))) throw new UserError("Project not found or you don't have access to it.");
     if (d.date.getTime() > Date.now() + 86400000) throw new UserError("The expense date can't be in the future.");
+    let keptKey: string | null = null;
     const e = await db.$transaction(async (tx) => {
       // Not counted in project cost until approved
       const x = await tx.expense.create({ data: { ...d, companyId: c.companyId, projectId: d.projectId ?? null, createdById: c.userId, approved: false } });
+      if (billFile) keptKey = await keepBill(c, tx, billFile, "EXPENSE", x.id, `Bill - ${d.description}`);
       const r = await requestApproval(tx, c, { type: "EXPENSE", entityType: "Expense", entityId: x.id, title: `Expense – ${d.description}`, amount: d.amount });
       await audit(c, { action: "CREATE", entityType: "Expense", entityId: x.id, summary: `Logged expense ₹${d.amount.toLocaleString("en-IN")} – ${d.description}${r.autoApproved ? " (auto-approved)" : ""}` }, tx);
       return { x, r };
-    });
+    }).catch(async (err) => { if (keptKey) await deleteFile(keptKey); throw err; });
     refresh();
     return { message: e.r.autoApproved ? "Expense recorded" : "Expense sent for approval", data: { id: e.x.id } };
   });
@@ -329,6 +333,7 @@ export async function createVendorBill(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("vendor_bills:create");
     const d = billSchema.parse(formToObject(fd));
+    const billFile = await readBillFile(fd);
     const vendor = await db.vendor.findFirst({ where: { id: d.vendorId, companyId: c.companyId, deletedAt: null } });
     if (!vendor) throw new UserError("Vendor not found.");
     if (await db.vendorBill.findFirst({ where: { companyId: c.companyId, vendorId: d.vendorId, number: d.number, status: { not: "CANCELLED" } } })) throw new UserError(`Bill ${d.number} from ${vendor.name} is already recorded.`);
@@ -344,7 +349,12 @@ export async function createVendorBill(fd: FormData) {
     const warnings = await billWarnings(c.companyId, d);
     const why = (d.overrideReason ?? "").trim();
     if (warnings.length && why.length < 5) throw new UserError(`${warnings.join(" ")} If this is correct, write why in “Reason to go ahead”.`);
-    const b = await db.vendorBill.create({ data: { companyId: c.companyId, number: d.number, vendorId: d.vendorId, poId: d.poId ?? null, projectId, billDate: d.billDate, dueDate: d.dueDate, amount: d.amount, notes: warnings.length ? `${d.notes ? d.notes + " · " : ""}Checked with reason: ${why} (${warnings.join(" ")})` : d.notes } });
+    let keptKey: string | null = null;
+    const b = await db.$transaction(async (tx) => {
+      const x = await tx.vendorBill.create({ data: { companyId: c.companyId, number: d.number, vendorId: d.vendorId, poId: d.poId ?? null, projectId, billDate: d.billDate, dueDate: d.dueDate, amount: d.amount, notes: warnings.length ? `${d.notes ? d.notes + " · " : ""}Checked with reason: ${why} (${warnings.join(" ")})` : d.notes } });
+      if (billFile) keptKey = await keepBill(c, tx, billFile, "VENDOR_BILL", x.id, `Bill {d.number} - ${vendor.name}`);
+      return x;
+    }).catch(async (e) => { if (keptKey) await deleteFile(keptKey); throw e; });
     await audit(c, { action: "CREATE", entityType: "VendorBill", entityId: b.id, summary: `Recorded bill ${d.number} from ${vendor.name} – ₹${d.amount.toLocaleString("en-IN")}${warnings.length ? ` – went ahead despite: ${warnings.join(" ")} Reason: ${why}` : ""}` });
     refresh();
     return { message: "Vendor bill recorded" };

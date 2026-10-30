@@ -10,7 +10,7 @@ import { projectDocScope, clientScope, leadScope } from "./scope";
  *   VENDOR/PO → procurement, INVOICE → finance. Portal users only get files explicitly shared with them.
  */
 
-export const ENTITY_TYPES = ["CLIENT", "LEAD", "PROJECT", "EMPLOYEE", "VENDOR", "QUOTATION", "PO", "INVOICE", "BOQ", "SITE_VISIT", "TICKET", "GENERAL"] as const;
+export const ENTITY_TYPES = ["CLIENT", "LEAD", "PROJECT", "EMPLOYEE", "VENDOR", "QUOTATION", "PO", "INVOICE", "BOQ", "SITE_VISIT", "TICKET", "EXPENSE", "VENDOR_BILL", "GENERAL"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 const STAFF_ALL = ["OWNER", "MANAGEMENT", "ADMIN"];
@@ -46,6 +46,15 @@ export async function canViewEntity(c: Ctx, type: string | null, id: string | nu
       if (c.role === "VENDOR") return !!(await db.purchaseOrder.findFirst({ where: { id, vendorId: c.vendorId ?? "none" }, select: { id: true } }));
       return c.can("purchase_orders:view");
     }
+    case "EXPENSE": {
+      if (!c.can("expenses:view")) return false;
+      const e = await db.expense.findFirst({ where: { id, companyId: c.companyId }, select: { createdById: true, projectId: true } });
+      if (!e) return false;
+      if (c.can("finance:view") || STAFF_ALL.includes(c.role) || e.createdById === c.userId) return true;
+      return !!e.projectId && !!(await db.project.findFirst({ where: { id: e.projectId, ...projectDocScope(c) }, select: { id: true } }));
+    }
+    case "VENDOR_BILL":
+      return c.can("vendor_bills:view") && !!(await db.vendorBill.findFirst({ where: { id, companyId: c.companyId }, select: { id: true } }));
     case "INVOICE": {
       if (c.role === "CLIENT") return !!(await db.invoice.findFirst({ where: { id, clientId: c.clientId ?? "none", deletedAt: null }, select: { id: true } }));
       return c.can("invoices:view");

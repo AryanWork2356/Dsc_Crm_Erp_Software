@@ -16,7 +16,12 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { cancelVendorBill, certifyVendorBill, createVendorBill, payVendorBill } from "../actions";
 
+import { billReadingOn } from "@/lib/bill-reader";
+import { Paperclip } from "lucide-react";
+
 export const metadata = { title: "Vendor Bills" };
+// reading a bill photo can take up to a minute
+export const maxDuration = 60;
 
 export default async function BillsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const c = await requirePerm("vendor_bills:view");
@@ -36,13 +41,15 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
     db.purchaseOrder.findMany({ where: { companyId: c.companyId, status: { notIn: ["DRAFT", "CANCELLED"] } }, select: { id: true, number: true, vendor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 200 }),
     db.vendorBill.findMany({ where: { companyId: c.companyId, status: { in: ["UNPAID", "PARTIALLY_PAID"] } }, select: { amount: true, paid: true, dueDate: true } }),
   ]);
+  const files = rows.length ? await db.document.findMany({ where: { companyId: c.companyId, entityType: "VENDOR_BILL", entityId: { in: rows.map((r) => r.id) }, deletedAt: null }, select: { id: true, entityId: true } }) : [];
+  const billOf = new Map(files.map((f) => [f.entityId!, f.id]));
   const owed = unpaid.reduce((s, b) => s + num(b.amount) - num(b.paid), 0);
   const late = unpaid.filter((b) => b.dueDate && b.dueDate < today).reduce((s, b) => s + num(b.amount) - num(b.paid), 0);
 
   return (
     <>
       <PageHeader title="Vendor bills" subtitle="Bills received from vendors and payments made against them." actions={c.can("vendor_bills:create") && (
-        <FormDialog title="Record vendor bill" wide trigger={<Button>Add bill</Button>} fields={[
+        <FormDialog title="Record vendor bill" wide bill={{ kind: "vendor_bill", read: billReadingOn() }} trigger={<Button>Add bill</Button>} fields={[
           { name: "vendorId", label: "Vendor", type: "select", required: true, options: vendors },
           { name: "number", label: "Vendor's bill number", required: true },
           { name: "poId", label: "Against purchase order", type: "select", options: pos.map((p) => ({ value: p.id, label: `${p.number} · ${p.vendor.name}` })), hint: "Optional. Material bills should be linked to their PO" },
@@ -67,7 +74,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
                   const overdue = b.dueDate && b.dueDate < today && bal > 0.005 && b.status !== "CANCELLED";
                   return (
                     <Tr key={b.id}>
-                      <Td><p className="font-medium text-slate-900">{b.number}</p><p className="text-xs text-slate-500">{formatDate(b.billDate)}</p></Td>
+                      <Td><p className="font-medium text-slate-900">{b.number}{billOf.has(b.id) && <a href={`/documents/${billOf.get(b.id)}/download?inline=1`} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-0.5 text-xs font-medium text-brand-700 hover:underline"><Paperclip className="h-3 w-3" />Bill</a>}</p><p className="text-xs text-slate-500">{formatDate(b.billDate)}</p></Td>
                       <Td>{b.vendor.name}</Td><Td>{b.po?.number ?? "—"}</Td>
                       <Td className={cn(overdue && "font-medium text-red-600")}>{formatDate(b.dueDate)}{overdue && <Badge tone="red" className="ml-1.5">Overdue</Badge>}</Td>
                       <Td right>{formatINR(b.amount)}</Td><Td right className={bal > 0.005 && b.status !== "CANCELLED" ? "font-semibold text-amber-700" : "text-slate-400"}>{b.status === "CANCELLED" ? "—" : formatINR(bal)}</Td>

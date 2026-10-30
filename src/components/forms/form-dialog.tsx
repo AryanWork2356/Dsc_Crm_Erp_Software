@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import type { ActionResult } from "@/lib/action";
 import { readGstin } from "@/lib/gst";
+import { BillAttach } from "./bill-attach";
 
 export type FieldDef = {
   name: string;
@@ -32,12 +33,15 @@ type Props = {
   wide?: boolean;
   /** Turns on the GSTIN helper: typing a GSTIN fills the PAN and shows the state, and warns about a typing slip. */
   gstHelper?: boolean;
+  /** Adds the 'Bill photo or PDF' box (kept with the saved record). `read` also fills the boxes from the bill; a person still checks and saves. */
+  bill?: { kind: "expense" | "vendor_bill"; read: boolean };
   /** Called after a successful save with returned data (e.g. to navigate to the new record) */
   onSuccess?: (r: Extract<ActionResult, { ok: true }>) => void;
 };
 
 /** Config-driven create/edit dialog. Every field maps 1:1 to a server-side zod schema. */
-export function FormDialog({ title, description, trigger, fields, action, submitLabel = "Save", successMessage, wide, gstHelper, onSuccess }: Props) {
+export function FormDialog({ title, description, trigger, fields, action, submitLabel = "Save", successMessage, wide, gstHelper, bill, onSuccess }: Props) {
+  const formRef = React.useRef<HTMLFormElement>(null);
   const [open, setOpen] = React.useState(false);
   const [gstNote, setGstNote] = React.useState<{ ok: boolean; text: string } | null>(null);
   const autoPan = React.useRef<string | null>(null);
@@ -87,8 +91,9 @@ export function FormDialog({ title, description, trigger, fields, action, submit
         {trigger}
       </span>
       <Modal open={open} onOpenChange={setOpen} title={title} description={description} wide={wide}>
-        <form onSubmit={submit} onInput={onGstTyped} className="space-y-4" noValidate>
+        <form ref={formRef} onSubmit={submit} onInput={onGstTyped} className="space-y-4" noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {bill && <BillAttach kind={bill.kind} canRead={bill.read} formRef={formRef} />}
             {fields.map((f) => {
               if (f.type === "hidden") return <input key={f.name} type="hidden" name={f.name} value={String(f.defaultValue ?? "")} />;
               const err = errors[f.name];

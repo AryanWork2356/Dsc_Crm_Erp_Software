@@ -35,8 +35,9 @@ async function visibleWhere(c: Awaited<ReturnType<typeof requirePerm>>): Promise
     { entityType: "CLIENT", entityId: { in: clients.map((p) => p.id) } },
     { entityType: "LEAD", entityId: { in: leads.map((p) => p.id) } },
   ];
-  const byPerm: [string, Parameters<typeof c.can>[0]][] = [["VENDOR", "vendors:view"], ["PO", "purchase_orders:view"], ["EMPLOYEE", "employees:view"], ["INVOICE", "invoices:view"], ["SITE_VISIT", "sitevisits:view"], ["TICKET", "support:view"], ["QUOTATION", "quotations:view"], ["BOQ", "boq:view"]];
+  const byPerm: [string, Parameters<typeof c.can>[0]][] = [["VENDOR", "vendors:view"], ["VENDOR_BILL", "vendor_bills:view"], ["PO", "purchase_orders:view"], ["EMPLOYEE", "employees:view"], ["INVOICE", "invoices:view"], ["SITE_VISIT", "sitevisits:view"], ["TICKET", "support:view"], ["QUOTATION", "quotations:view"], ["BOQ", "boq:view"]];
   for (const [t, p] of byPerm) if (c.can(p)) or.push({ entityType: t });
+  if (c.can("finance:view")) or.push({ entityType: "EXPENSE" });
   return { ...base, OR: or };
 }
 
@@ -87,7 +88,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
               <THead><tr><Th>File</Th><Th>Type</Th><Th>Attached to</Th><Th>Folder</Th><Th>Added</Th><Th /></tr></THead>
               <tbody>
                 {rows.map((d) => {
-                  const href = d.entityType === "PROJECT" ? `/projects/${d.entityId}?tab=documents` : d.entityType === "CLIENT" ? `/crm/clients/${d.entityId}` : d.entityType === "VENDOR" ? `/procurement/vendors/${d.entityId}` : d.entityType === "LEAD" ? `/crm/leads/${d.entityId}` : null;
+                  const href = d.entityType === "PROJECT" ? `/projects/${d.entityId}?tab=documents` : d.entityType === "CLIENT" ? `/crm/clients/${d.entityId}` : d.entityType === "VENDOR" ? `/procurement/vendors/${d.entityId}` : d.entityType === "LEAD" ? `/crm/leads/${d.entityId}` : d.entityType === "EXPENSE" ? "/finance/expenses" : d.entityType === "VENDOR_BILL" ? "/finance/bills" : null;
                   const expired = d.expiresAt && d.expiresAt < startOfDay();
                   return (
                     <Tr key={d.id}>

@@ -14,8 +14,12 @@ import { ListFilters } from "@/components/list/list-filters";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { createExpense, deleteExpense } from "../actions";
+import { billReadingOn } from "@/lib/bill-reader";
+import { Paperclip } from "lucide-react";
 
 export const metadata = { title: "Expenses" };
+// reading a bill photo can take up to a minute
+export const maxDuration = 60;
 
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const c = await requirePerm("expenses:view");
@@ -38,10 +42,12 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     db.expense.aggregate({ where: { ...where, approved: true, date: { gte: monthStart } }, _sum: { amount: true } }),
     db.expense.count({ where: { ...where, approved: false, rejectedAt: null } }),
   ]);
+  const bills = rows.length ? await db.document.findMany({ where: { companyId: c.companyId, entityType: "EXPENSE", entityId: { in: rows.map((r) => r.id) }, deletedAt: null }, select: { id: true, entityId: true } }) : [];
+  const billOf = new Map(bills.map((b) => [b.entityId!, b.id]));
   return (
     <>
       <PageHeader title="Expenses" subtitle="Site, travel, petty cash and other spending. Larger amounts need approval." actions={c.can("expenses:create") && (
-        <FormDialog title="Log an expense" wide trigger={<Button>Add expense</Button>} fields={[
+        <FormDialog title="Log an expense" wide bill={{ kind: "expense", read: billReadingOn() }} trigger={<Button>Add expense</Button>} fields={[
           { name: "description", label: "What was it for?", required: true, full: true },
           { name: "amount", label: "Amount (₹)", type: "number", required: true },
           { name: "date", label: "Date", type: "date", required: true, defaultValue: toDateInput(new Date()) },
@@ -61,7 +67,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
               <tbody>
                 {rows.map((e) => (
                   <Tr key={e.id}>
-                    <Td>{formatDate(e.date)}</Td><Td><p className="font-medium text-slate-900">{e.description}</p>{e.paidBy && <p className="text-xs text-slate-500">Paid by {e.paidBy}{e.reference ? ` · ${e.reference}` : ""}</p>}</Td>
+                    <Td>{formatDate(e.date)}</Td><Td><p className="font-medium text-slate-900">{e.description}{billOf.has(e.id) && <a href={`/documents/${billOf.get(e.id)}/download?inline=1`} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-0.5 text-xs font-medium text-brand-700 hover:underline"><Paperclip className="h-3 w-3" />Bill</a>}</p>{e.paidBy && <p className="text-xs text-slate-500">Paid by {e.paidBy}{e.reference ? ` · ${e.reference}` : ""}</p>}</Td>
                     <Td>{humanize(e.category)}</Td><Td>{e.project?.code ?? "—"}</Td>
                     <Td>{e.approved ? <Badge tone="green">Approved</Badge> : e.rejectedAt ? <Badge tone="red">Rejected</Badge> : <Badge tone="amber">Pending</Badge>}</Td>
                     <Td right className="font-semibold text-slate-900">{formatINR(e.amount, true)}</Td>
