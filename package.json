@@ -42,7 +42,7 @@
     "exceljs": "^4.4.0",
     "jose": "^6.2.12",
     "lucide-react": "^1.53.0",
-    "next": "15.5.27",
+    "next": "15.5.28",
     "pdfkit": "^0.20.2",
     "prisma": "^6.19.3",
     "react": "19.1.0",
@@ -51,7 +51,7 @@
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.7.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
