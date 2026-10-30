@@ -40,6 +40,9 @@ export async function createExtraWork(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("extra_work:create");
     const d = schema.parse(formToObject(fd));
+    // DSC: the site team describes the work; only the directors (people who see prices) put the price on it
+    const pricing = c.can("margins:view");
+    if (!pricing) { d.amount = 0; d.costEstimate = 0; if (d.kind === "CONCESSION") throw new UserError("A concession is decided by a director. Choose another kind, and tell the director."); }
     const p = await db.project.findFirst({ where: { id: d.projectId, ...projectScope(c) } });
     if (!p) throw new UserError("Project not found or you aren't on it.");
     if (["COMPLETED", "CANCELLED"].includes(p.status)) throw new UserError("This project is closed.");
@@ -54,10 +57,29 @@ export async function createExtraWork(fd: FormData) {
       const x = await tx.additionalWork.create({ data: { companyId: c.companyId, number, projectId: p.id, title: d.title, description: d.description, amount: d.amount, requestedById: c.userId, kind: d.kind, inOriginalScope: d.inOriginalScope ? d.inOriginalScope === "YES" : null, scopeNote: d.scopeNote ?? null, costEstimate: d.costEstimate, scheduleImpactDays: d.scheduleImpactDays } });
       await audit(c, { action: "CREATE", entityType: "AdditionalWork", entityId: x.id, summary: `Raised extra work ${number} on ${p.code}: ${d.title} (${formatINR(d.amount)})` }, tx);
       if (p.projectManagerId && p.projectManagerId !== c.userId) await notifyUsers([p.projectManagerId], { companyId: c.companyId, type: "GENERAL", title: `Extra work ${number} raised on ${p.code}`, body: d.title, link: "/extra-work" }, tx);
+      if (!pricing && BILLABLE.includes(d.kind)) await notifyRoles(c.companyId, ["OWNER", "MANAGEMENT"], { type: "GENERAL", title: `Extra work ${number} on ${p.code} needs a price`, body: `${d.title}${d.description ? ` – ${d.description}` : ""} (raised by ${c.name})`, link: "/extra-work", dedupeKey: `aw-price:${x.id}` }, tx);
       return x;
     });
     refresh();
     return { message: `Extra work ${w.number} saved as a draft`, data: { id: w.id } };
+  });
+}
+
+const priceSchema = z.object({ amount: zNumPos(), costEstimate: zNumPos().default(0) });
+
+/** Directors put the price on extra work the site team raised (before it is sent to the client). */
+export async function setExtraWorkPrice(id: string, fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("extra_work:edit");
+    if (!c.can("margins:view")) throw new UserError("Only the directors put a price on extra work.");
+    const w = await load(c, id);
+    if (!["DRAFT", "REJECTED"].includes(w.status)) throw new UserError("The price can be changed only before it is sent to the client.");
+    const d = priceSchema.parse(formToObject(fd));
+    if ((w.kind === "INCLUDED" || w.kind === "OWN_REWORK") && d.amount > 0) throw new UserError("This kind of work is never charged to the client.");
+    await db.additionalWork.update({ where: { id }, data: { amount: d.amount, costEstimate: d.costEstimate } });
+    await audit(c, { action: "UPDATE", entityType: "AdditionalWork", entityId: id, summary: `Price of extra work ${w.number} set to ${formatINR(d.amount)}`, oldValue: { amount: Number(w.amount) }, newValue: d });
+    refresh();
+    return { message: "Price saved" };
   });
 }
 

@@ -18,7 +18,8 @@ const ROOT = path.resolve(process.env.UPLOAD_DIR ?? "./uploads");
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 // Only these types may be uploaded. Magic bytes are checked so a renamed .exe can't pass as .pdf.
-const ALLOWED: Record<string, { mime: string; magic: number[][] | null }> = {
+const ftyp = (b: Buffer) => b.length > 8 && b.toString("latin1", 4, 8) === "ftyp"; // MP4 / M4A keep their mark at byte 4
+const ALLOWED: Record<string, { mime: string; magic: number[][] | null; check?: (b: Buffer) => boolean }> = {
   pdf: { mime: "application/pdf", magic: [[0x25, 0x50, 0x44, 0x46]] },
   png: { mime: "image/png", magic: [[0x89, 0x50, 0x4e, 0x47]] },
   jpg: { mime: "image/jpeg", magic: [[0xff, 0xd8, 0xff]] },
@@ -29,6 +30,11 @@ const ALLOWED: Record<string, { mime: string; magic: number[][] | null }> = {
   csv: { mime: "text/csv", magic: null },
   txt: { mime: "text/plain", magic: null },
   dwg: { mime: "application/octet-stream", magic: [[0x41, 0x43, 0x31]] },
+  // voice notes from the site reports (Android records WebM/Ogg, iPhone records MP4/M4A)
+  webm: { mime: "audio/webm", magic: [[0x1a, 0x45, 0xdf, 0xa3]] },
+  ogg: { mime: "audio/ogg", magic: [[0x4f, 0x67, 0x67, 0x53]] },
+  m4a: { mime: "audio/mp4", magic: null, check: ftyp },
+  mp4: { mime: "audio/mp4", magic: null, check: ftyp },
 };
 export const ALLOWED_EXTENSIONS = Object.keys(ALLOWED);
 
@@ -44,6 +50,7 @@ export async function validateUpload(file: File): Promise<ValidatedFile> {
   if (!rule) throw new UploadError(`.${ext || "?"} files aren't allowed. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}.`);
   const bytes = Buffer.from(await file.arrayBuffer());
   if (rule.magic && !rule.magic.some((m) => m.every((b, i) => bytes[i] === b))) throw new UploadError("The file contents don't match its type.");
+  if (rule.check && !rule.check(bytes)) throw new UploadError("The file contents don't match its type.");
   // never trust the client-supplied name for paths – keep a sanitised display name only
   const safeName = file.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 120);
   return { ext, mime: rule.mime, size: bytes.length, bytes, safeName };

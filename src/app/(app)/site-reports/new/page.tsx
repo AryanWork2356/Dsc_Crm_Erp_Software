@@ -29,6 +29,8 @@ export default async function NewSiteReportPage({ searchParams }: { searchParams
     kind === "EVENING" ? db.lateWork.findUnique({ where: { projectId_date: { projectId: chosen.id, date: reportDay() } } }) : null,
   ]);
 
+  const hasSelfie = !!existing?.photoIds.length && (await db.document.count({ where: { id: { in: existing.photoIds }, name: { contains: "selfie" } } })) > 0;
+
   return (
     <div>
       <PageHeader
@@ -40,7 +42,7 @@ export default async function NewSiteReportPage({ searchParams }: { searchParams
         key={`${chosen.id}-${kind}`} kind={kind} projectId={chosen.id}
         sites={projects.map((p) => ({ id: p.id, label: `${p.code} – ${p.name}` }))}
         canUpdateTasks={c.can("tasks:edit")}
-        day={{ tasks: kind === "MORNING" ? day.todayTasks : day.todayTasks, crew: day.crew }}
+        day={{ tasks: day.todayTasks, crew: day.crew, workers: day.workers, lastWorkers: day.lastWorkers, knownNames: day.knownNames, hasSelfie }}
         initial={{
           manpower: existing?.manpower ?? (kind === "EVENING" ? day.morningManpower : null) ?? 0, workDone: existing?.workDone ?? "",
           planNext: existing?.planNext ?? workLine(kind === "MORNING" ? day.todayTasks : day.tomorrowTasks),

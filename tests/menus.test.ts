@@ -20,10 +20,10 @@ describe("lean menus per role", () => {
 
   it("a site supervisor sees only the jobs of a supervisor", () => {
     const m = visible("SITE_SUPERVISOR");
-    expect(m).toEqual(expect.arrayContaining(["/actions", "/site-reports", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work"]));
+    expect(m).toEqual(expect.arrayContaining(["/site-reports", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work"]));
     expect(m).toContain("/today"); // the day's work from the schedule
-    expect(m.length).toBeLessThanOrEqual(17); // 13 jobs + Today's Plan + Actions & Blockers + Manpower + Waste
-    for (const hidden of ["/dashboard", "/finance/invoices", "/finance/bills", "/hr/payroll", "/crm/leads", "/inventory/movements", "/settings/team", "/scorecards", "/time-limits"]) expect(m).not.toContain(hidden);
+    expect(m.length).toBeLessThanOrEqual(17); // the jobs of a coordinator; Actions & Blockers, Site visits and Support are switched off for everyone
+    for (const hidden of ["/actions", "/support", "/crm/site-visits", "/dashboard", "/finance/invoices", "/finance/bills", "/hr/payroll", "/crm/leads", "/inventory/movements", "/settings/team", "/scorecards", "/time-limits"]) expect(m).not.toContain(hidden);
   });
 
   it("each role gets a clearly shorter menu than its permissions would allow, and the owner keeps everything", () => {
@@ -35,6 +35,12 @@ describe("lean menus per role", () => {
       const allowed = entries.filter((i) => !i.perm || can(role, i.perm)).length;
       expect(lean, role).toBeLessThan(allowed);
       expect(lean, role).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it("switched-off features (Actions & Blockers, Site visits, Customer support) are in nobody's menu", () => {
+    for (const role of ["OWNER", "MANAGEMENT", "ADMIN", "PROJECT_MANAGER", "SITE_SUPERVISOR", "HR", "ACCOUNTS", "DESIGNER"] as RoleKey[]) {
+      for (const h of visible(role)) expect(h.startsWith("/actions") || h.startsWith("/support") || h.startsWith("/crm/site-visits"), `${role}: ${h}`).toBe(false);
     }
   });
 

@@ -137,7 +137,7 @@ describe("uploading a schedule to a project", () => {
   });
 
   it("the template file adds the work AND the materials list, each material linked to its work", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const pm = await db.user.findFirstOrThrow({ where: { email: "pm@dsc.demo" } });
     const p = await newProject();
     await db.project.update({ where: { id: p.id }, data: { projectManagerId: pm.id } });
@@ -174,7 +174,7 @@ describe("uploading a schedule to a project", () => {
     await loginAs("store@dsc.demo");
     const x = fd({}); x.set("file", await xlsx(["Task", "Start day", "End day"], [["A", 1, 2]]));
     expect((await importSchedule(p.id, x)).ok).toBe(false);
-    await loginAs("supervisor@dsc.demo"); // may add tasks, but is not named on this project
+    await loginAs("pm@dsc.demo"); // DSC: managers and coordinators see the schedule but do not upload it
     const y = fd({}); y.set("file", await xlsx(["Task", "Start day", "End day"], [["A", 1, 2]]));
     expect((await importSchedule(p.id, y)).ok).toBe(false);
     expect(await db.projectTask.count({ where: { projectId: p.id } })).toBe(0);

@@ -703,6 +703,7 @@ model ClientRate {
   materialRate Decimal        @default(0) @db.Decimal(12, 2)
   labourRate   Decimal        @default(0) @db.Decimal(12, 2)
   otherRate    Decimal        @default(0) @db.Decimal(12, 2)
+  rate         Decimal        @default(0) @db.Decimal(12, 2) // the rate DSC quotes (profit already in it); 0 = an old card priced as cost + profit %
   updatedAt    DateTime       @updatedAt
 
   @@unique([cardId, nameKey, unit])
@@ -2220,4 +2221,24 @@ model AppSecret {
   key       String   @id
   value     String
   createdAt DateTime @default(now())
+}
+
+/// Site attendance: each worker on a site that day, the work they did, coming and going time. Filled by the project coordinator
+/// in the morning update (who came, on which work) and the evening report (going time).
+model SiteLabour {
+  id          String   @id @default(cuid())
+  companyId   String
+  projectId   String
+  date        DateTime @db.Date
+  name        String
+  work        String? // the job of the day (from the schedule) or a few words
+  taskId      String?
+  inTime      String? // "09:15", IST
+  outTime     String?
+  markedById  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, date, name])
+  @@index([companyId, date])
 }

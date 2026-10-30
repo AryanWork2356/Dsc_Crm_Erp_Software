@@ -71,17 +71,13 @@ export default async function BoqListPage({ searchParams }: { searchParams: Prom
               <THead>
                 <tr>
                   <Th>BOQ</Th><Th>Project</Th><Th right>Items</Th>
-                  {canCosts && <Th right>Est. cost</Th>}
-                  <Th right>Selling</Th>
-                  {canCosts && <Th right>Margin</Th>}
+                  {canCosts && <Th right>Amount</Th>}
                   <Th>Status</Th><Th>Updated</Th>
                 </tr>
               </THead>
               <tbody>
                 {rows.map((b) => {
-                  const cost = b.items.reduce((s, i) => s + num(i.estimatedCost), 0);
                   const rev = b.items.reduce((s, i) => s + num(i.total), 0);
-                  const m = rev > 0 ? ((rev - cost) / rev) * 100 : 0;
                   return (
                     <Tr key={b.id}>
                       <Td>
@@ -90,9 +86,7 @@ export default async function BoqListPage({ searchParams }: { searchParams: Prom
                       </Td>
                       <Td>{b.project ? `${b.project.code} · ${b.project.name}` : "—"}</Td>
                       <Td right>{b.items.length}</Td>
-                      {canCosts && <Td right>{formatINR(cost)}</Td>}
-                      <Td right className="font-medium text-slate-900">{formatINR(rev)}</Td>
-                      {canCosts && <Td right className={m < 15 && rev > 0 ? "font-medium text-red-600" : "text-emerald-700"}>{rev > 0 ? `${m.toFixed(1)}%` : "—"}</Td>}
+                      {canCosts && <Td right className="font-medium text-slate-900">{formatINR(rev)}</Td>}
                       <Td><StatusBadge status={b.status} /></Td>
                       <Td>{formatDate(b.updatedAt)}</Td>
                     </Tr>

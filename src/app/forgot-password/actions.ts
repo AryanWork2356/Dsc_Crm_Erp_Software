@@ -15,7 +15,7 @@ export type ForgotState = { done?: boolean; error?: string } | undefined;
  */
 export async function requestPasswordReset(_prev: ForgotState, fd: FormData): Promise<ForgotState> {
   const typed = String(fd.get("email") ?? "").trim();
-  if (!typed) return { error: "Type your login ID (for example gopals)." };
+  if (!typed) return { error: "Type your login ID (for example aryan.s@dsc)." };
   const email = fullLoginId(typed);
   const meta = await requestMeta();
   if (!rateLimit(`forgot-ip:${meta.ip ?? "?"}`, 6, 15 * 60 * 1000) || !rateLimit(`forgot:${email}`, 3, 60 * 60 * 1000)) return { error: "Too many requests. Please wait a while, or phone your Admin." };

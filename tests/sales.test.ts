@@ -163,7 +163,7 @@ describe("BOQ", () => {
   ];
 
   it("saves items with correct per-item cost, total and overall margin", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo"); // DSC: BOQ rates are made by the directors
     expect((await createBoq(fd({ title: "Test BOQ" }))).ok).toBe(true);
     const b = await db.boq.findFirstOrThrow({ where: { title: "Test BOQ" } });
     boqId = b.id;
@@ -175,7 +175,7 @@ describe("BOQ", () => {
     expect(Number(items[1].total)).toBe(30000);
   });
 
-  it("users without cost access can edit quantities/rates but existing costs are preserved", async () => {
+  it("users who may not see rates can change quantities, but never the rates or costs (they are kept)", async () => {
     await loginAs("designer@dsc.demo");
     const existing = await db.boqItem.findMany({ where: { boqId }, orderBy: { sortOrder: "asc" } });
     const payload = existing.map((i, idx) => ({
@@ -189,18 +189,20 @@ describe("BOQ", () => {
     expect(Number(after[0].quantity)).toBe(20);
     expect(Number(after[0].materialCost)).toBe(3000); // preserved
     expect(Number(after[0].estimatedCost)).toBe(80000);
-    expect(Number(after[2].materialCost)).toBe(0); // new row: cost cannot be set by a user without access
+    expect(Number(after[0].total)).toBe(120000); // 20 x the kept rate of 6000
+    expect(Number(after[2].materialCost)).toBe(0); // new row: no cost and no rate from a user without access
+    expect(Number(after[2].sellingRate)).toBe(0);
   });
 
   it("validates rows and blocks other tenants' / missing BOQs", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     expect((await saveBoqItems(boqId, JSON.stringify([{ item: "", quantity: 1 }]))).ok).toBe(false);
     expect((await saveBoqItems(boqId, "not json")).ok).toBe(false);
     expect((await saveBoqItems("missing", "[]")).ok).toBe(false);
   });
 
   it("imports items from an Excel file, stops on bad rows", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("BOQ");
     ws.addRow(["Category", "Item", "Unit", "Quantity", "Material Cost", "Labour Cost", "Other Cost", "Selling Rate"]);
@@ -230,14 +232,14 @@ describe("BOQ", () => {
   });
 
   it("approval locks the BOQ; revision creates -R2 and marks the old one Revised", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("designer@dsc.demo");
     expect((await submitBoq(boqId)).ok).toBe(true);
     const ap = await db.approval.findFirstOrThrow({ where: { entityId: boqId, status: "PENDING" } });
     await loginAs("director@dsc.demo");
     expect((await approveRequest(ap.id)).ok).toBe(true);
     expect((await db.boq.findUniqueOrThrow({ where: { id: boqId } })).status).toBe("APPROVED");
 
-    await loginAs("pm@dsc.demo");
+    await loginAs("designer@dsc.demo");
     expect((await saveBoqItems(boqId, "[]")).ok).toBe(false); // locked
     const r = await reviseBoq(boqId);
     expect(r.ok).toBe(true);

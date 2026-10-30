@@ -15,6 +15,7 @@ import { Donut, HBars, MoneyBars } from "@/components/ui/charts";
 import { checkIn } from "@/app/(app)/workforce/actions";
 import { StaffCheckIn } from "./staff-check-in";
 import { PushToggle } from "@/components/layout/push-toggle";
+import { USE_ACTIONS, USE_SUPPORT } from "@/lib/features";
 
 export const metadata = { title: "Dashboard" };
 type SP = { period?: string; from?: string; to?: string };
@@ -28,7 +29,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <MarkMe c={c} />
-      <MyActions c={c} />
+      {USE_ACTIONS && <MyActions c={c} />}
       {exec ? <Executive c={c} sp={sp} /> : <WorkDashboard c={c} />}
     </>
   );
@@ -249,7 +250,7 @@ async function WorkDashboard({ c }: { c: C }) {
             </Card>
           </>
         )}
-        {(tickets as unknown[]).length > 0 && (
+        {USE_SUPPORT && (tickets as unknown[]).length > 0 && (
           <Card><CardHeader><CardTitle>Support tickets for me</CardTitle></CardHeader><ul className="divide-y divide-slate-100">{(tickets as { id: string; subject: string; status: string }[]).map((t) => <li key={t.id} className="flex items-center gap-3 px-5 py-3 text-sm"><Link href={`/support/${t.id}`} className="flex-1 font-medium text-slate-900 hover:text-brand-700">{t.subject}</Link><StatusBadge status={t.status} /></li>)}</ul></Card>
         )}
         {(quotes as unknown[]).length > 0 && (

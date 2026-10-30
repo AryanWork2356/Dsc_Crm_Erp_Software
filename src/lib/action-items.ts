@@ -1,4 +1,5 @@
 import "server-only";
+import { USE_ACTIONS } from "./features";
 import type { ActionSeverity } from "@prisma/client";
 import { db, type Tx } from "./db";
 import { nextNumber } from "./sequence";
@@ -48,8 +49,10 @@ export async function raiseAction(tx: Tx | typeof db, a: NewAction) {
       projectId: a.projectId ?? null, dueDate: a.dueDate, sourceType: a.sourceType ?? null, sourceId: a.sourceId ?? null, sourceLabel: a.sourceLabel ?? null, link: a.link ?? null,
     },
   });
-  if (a.ownerId !== a.createdById) {
-    await notifyUsers([a.ownerId], { companyId: a.companyId, type: "GENERAL", title: `${action.severity === "CRITICAL" || action.severity === "HIGH" ? "Urgent action" : "New action"}: ${a.title}`, body: `Due ${a.dueDate.toLocaleDateString("en-IN")}`, link: a.link ?? "/actions", dedupeKey: `action:${action.id}:new` }, tx as Tx);
+  // with the Actions list switched off, the notification is the only place a problem shows, so the owner is always told
+  if (a.ownerId !== a.createdById || !USE_ACTIONS) {
+    const urgent = action.severity === "CRITICAL" || action.severity === "HIGH";
+    await notifyUsers([a.ownerId], { companyId: a.companyId, type: "GENERAL", title: USE_ACTIONS ? `${urgent ? "Urgent action" : "New action"}: ${a.title}` : `${urgent ? "Urgent: " : ""}${a.title}`, body: [a.detail, `Please sort it out by ${a.dueDate.toLocaleDateString("en-IN")}`].filter(Boolean).join(" · ").slice(0, 400), link: a.link ?? (USE_ACTIONS ? "/actions" : "/notifications"), dedupeKey: `action:${action.id}:new` }, tx as Tx);
   }
   return { action, created: true };
 }

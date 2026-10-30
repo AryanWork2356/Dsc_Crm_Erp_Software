@@ -100,21 +100,26 @@ describe("missing-report reminders escalate up the chain", () => {
 });
 
 describe("sending a site report", () => {
-  it("morning update needs a plan and a start-of-day photo; sending it records people, plan and lateness", async () => {
+  it("morning update needs a plan, a selfie at the site and a site photo; sending it records people, plan and lateness", async () => {
     const p = await proj("PRJ-00001");
     await loginAs("supervisor@dsc.demo");
     const base = { projectId: p.id, kind: "MORNING", manpower: 12 };
     expect((await submitSiteReport(fd({ ...base }))).ok).toBe(false);
-    const noPhoto = await submitSiteReport(fd({ ...base, planNext: "Tile work in hall" }));
-    expect(noPhoto.ok === false && noPhoto.error).toMatch(/start-of-day photo/);
-    const withPhoto = fd({ ...base, planNext: "Tile work in hall" }); withPhoto.append("photos", jpeg("morning.jpg"));
+    const noSelfie = fd({ ...base, planNext: "Tile work in hall" }); noSelfie.append("photos", jpeg("site.jpg"));
+    const r1 = await submitSiteReport(noSelfie);
+    expect(r1.ok === false && r1.error).toMatch(/selfie/);
+    const noSite = fd({ ...base, planNext: "Tile work in hall" }); noSite.set("selfie", jpeg("me.jpg"));
+    const r2 = await submitSiteReport(noSite);
+    expect(r2.ok === false && r2.error).toMatch(/photo of the site/);
+    const withPhoto = fd({ ...base, planNext: "Tile work in hall" }); withPhoto.set("selfie", jpeg("me.jpg")); withPhoto.append("photos", jpeg("morning.jpg"));
     const r = await submitSiteReport(withPhoto);
     expect(r.ok).toBe(true);
     const row = await db.dailyReport.findFirstOrThrow({ where: { projectId: p.id, reportDate: reportDay(), kind: "MORNING" } });
     expect(row.manpower).toBe(12);
     expect(row.planNext).toBe("Tile work in hall");
     expect(typeof row.onTime).toBe("boolean");
-    expect(row.photoIds).toHaveLength(1);
+    expect(row.photoIds).toHaveLength(2);
+    expect(await db.document.count({ where: { id: { in: row.photoIds }, name: { contains: "selfie" } } })).toBe(1);
   });
 
   it("sending again the same day updates the report instead of duplicating it (the morning photo is already there)", async () => {

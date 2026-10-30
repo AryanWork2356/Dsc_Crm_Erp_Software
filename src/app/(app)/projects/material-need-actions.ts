@@ -10,8 +10,8 @@ import { formToObject, zDate, zOptStr, zReqStr } from "@/lib/form";
 import { resolveActionsFor } from "@/lib/action-items";
 
 /**
- * The materials list of a project schedule, kept by hand (the Excel upload fills it too). Whoever plans the work or buys for it may change
- * it: people who add tasks, and people who raise purchase requests.
+ * The materials list of a project schedule, kept by hand (the Excel upload fills it too). Like the schedule, it is planned by the
+ * people who may add tasks (directors and admins); coordinators and managers see it.
  */
 const needSchema = z.object({
   description: zReqStr("Write the material"),
@@ -25,7 +25,7 @@ const needSchema = z.object({
 async function planner(): Promise<Ctx> {
   const c = await getCtx();
   if (!c) throw new Error("Your session has expired. Please sign in again.");
-  if (!c.can("tasks:create") && !c.can("purchase_requests:create")) throw new PermissionError("tasks:create");
+  if (!c.can("tasks:create")) throw new PermissionError("tasks:create"); // the materials list is part of the schedule: planned by directors and admins
   return c;
 }
 async function project(c: Ctx, projectId: string) {

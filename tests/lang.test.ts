@@ -14,6 +14,6 @@ describe("screen language", () => {
   it("builds a cookie that round-trips, and clears it for English", () => {
     for (const l of LANGS.filter((x) => x.code !== "en")) expect(langFromCookie(cookieFor(l.code))).toBe(l.code);
     expect(cookieFor("en")).toContain("max-age=0");
-    expect(LANGS.map((l) => l.code)).toEqual(["en", "hi", "mr", "gu"]);
+    expect(LANGS.map((l) => l.code)).toEqual(["en", "hi", "mr", "gu", "bho"]);
   });
 });

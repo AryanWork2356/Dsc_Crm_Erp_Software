@@ -2,7 +2,9 @@ import { requirePerm } from "@/lib/auth";
 import { USE_SALES_TEAM } from "@/lib/features";
 import { ensureEmployees } from "@/lib/employee-code";
 import { db } from "@/lib/db";
-import { ROLE_LABELS } from "@/lib/permissions";
+import { OFFERED_ROLES, ROLE_LABELS } from "@/lib/permissions";
+import { shortLoginId } from "@/lib/issued-password";
+import { StaffLogins } from "./staff-logins";
 import { flatten, listParams } from "@/lib/list";
 import { PageHeader, EmptyState } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
@@ -18,9 +20,8 @@ import type { Prisma, RoleKey } from "@prisma/client";
 
 export const metadata = { title: "Team & Users" };
 
-const roleOptions = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }));
-// "Sales" is not offered for new people while the company has no sales team (see lib/features.ts); editing a person who already has it still works
-const addRoleOptions = roleOptions.filter((o) => USE_SALES_TEAM || o.value !== "SALES");
+// DSC gives only its own roles (lib/permissions OFFERED_ROLES); a person who already has another role keeps it until changed
+const offered = (extra: RoleKey[] = []) => [...new Set<RoleKey>([...OFFERED_ROLES, ...(USE_SALES_TEAM ? ["SALES" as RoleKey] : []), ...extra])].map((value) => ({ value, label: ROLE_LABELS[value] }));
 
 export default async function TeamPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const c = await requirePerm("team:view");
@@ -43,11 +44,11 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
 
   const baseFields: FieldDef[] = [
     { name: "name", label: "Full name", required: true },
-    { name: "email", label: "Email (login)", type: "email", required: true },
+    { name: "email", label: "Login ID", required: true, placeholder: "e.g. aryan.s@dsc", hint: "First name, a dot, first letter of the surname, @dsc" },
     { name: "phone", label: "Phone", type: "tel" },
-    { name: "role", label: "Role", type: "select", required: true, options: roleOptions },
+    { name: "role", label: "Role", type: "select", required: true, options: offered(c.role === "OWNER" ? ["OWNER"] : []) },
   ];
-  const addFields = baseFields.map((f) => (f.name === "role" ? { ...f, options: addRoleOptions } : f));
+  const addFields = baseFields;
 
   return (
     <>
@@ -59,18 +60,19 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             <FormDialog
               title="Add user"
               trigger={<Button>Add user</Button>}
-              fields={[...addFields, { name: "password", label: "Temporary password", type: "password", required: true, hint: "At least 8 characters. Ask them to change it after first login." }]}
+              fields={[...addFields, { name: "password", label: "Password (leave empty for a 4-digit one)", type: "password", hint: "Leave it empty: the app makes a 4-digit password and shows it once." }]}
               action={createUser}
               successMessage="User created"
             />
           )
         }
       />
+      {c.role === "OWNER" && <StaffLogins />}
       <Card>
         <ListFilters
           placeholder="Search name or email…"
           filters={[
-            { key: "role", label: "Role", options: roleOptions },
+            { key: "role", label: "Role", options: offered(["OWNER"]) },
             { key: "status", label: "Status", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
           ]}
         />
@@ -94,7 +96,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                   <Tr key={u.id}>
                     <Td>
                       <p className="font-medium text-slate-900">{u.name}</p>
-                      <p className="text-xs text-slate-500">{u.email}</p>
+                      <p className="text-xs text-slate-500">{shortLoginId(u.email)}</p>
                     </Td>
                     <Td>{ROLE_LABELS[u.role]}</Td>
                     <Td>{u.phone ?? "—"}</Td>
@@ -106,13 +108,13 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                           <FormDialog
                             title={`Edit ${u.name}`}
                             trigger={<Button size="sm" variant="ghost">Edit</Button>}
-                            fields={baseFields.map((f) => ({ ...f, defaultValue: (u as unknown as Record<string, string | null>)[f.name] }))}
+                            fields={baseFields.map((f) => ({ ...f, ...(f.name === "role" ? { options: offered([u.role, ...(c.role === "OWNER" ? ["OWNER" as RoleKey] : [])]) } : {}), defaultValue: f.name === "email" ? shortLoginId(u.email) : (u as unknown as Record<string, string | null>)[f.name] }))}
                             action={updateUser.bind(null, u.id)}
                           />
                           <FormDialog
                             title={`Reset password – ${u.name}`}
                             trigger={<Button size="sm" variant="ghost">Reset password</Button>}
-                            fields={[{ name: "password", label: "New password (leave empty to make one like Gop@47)", type: "password", hint: "Shown once after you save: write it in your list." }]}
+                            fields={[{ name: "password", label: "New password (leave empty for a 4-digit one)", type: "password", hint: "Shown once after you save: write it in your list." }]}
                             action={resetPassword.bind(null, u.id)}
                             submitLabel="Reset password"
                           />

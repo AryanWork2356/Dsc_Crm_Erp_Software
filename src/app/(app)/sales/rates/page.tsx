@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate, num } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
 import { Table, THead, Th, Tr, Td } from "@/components/ui/table";
@@ -21,16 +21,15 @@ export default async function RatesPage() {
   });
   return (
     <>
-      <PageHeader title="Client rates" subtitle="DSC's cost per unit and the profit added for each client company. Used to fill and price a new BOQ in one click." />
+      <PageHeader title="Client rates" subtitle="The rates DSC quoted each client company. Used on that client's next BOQ when you press Use saved rates." />
       <Card>
         <Table>
-          <THead><tr><Th>Client</Th><Th className="text-right">Saved rates</Th><Th className="text-right">Profit on cost</Th><Th>Last updated</Th><Th /></tr></THead>
+          <THead><tr><Th>Client</Th><Th className="text-right">Saved rates</Th><Th>Last updated</Th><Th /></tr></THead>
           <tbody>
             {clients.map((cl) => (
               <Tr key={cl.id}>
                 <Td className="font-medium text-slate-900">{cl.name}</Td>
                 <Td className="text-right">{cl.rateCard ? cl.rateCard._count.rates : <Badge tone="slate">none yet</Badge>}</Td>
-                <Td className="text-right">{cl.rateCard ? `${num(cl.rateCard.profitPct)}%` : "—"}</Td>
                 <Td>{cl.rateCard ? `${formatDate(cl.rateCard.updatedAt)}${cl.rateCard.updatedBy ? ` · ${cl.rateCard.updatedBy}` : ""}` : "—"}</Td>
                 <Td className="text-right"><Link className="font-medium text-brand-700 hover:underline" href={`/sales/rates/${cl.id}`}>{cl.rateCard ? "View / change" : "Set up"}</Link></Td>
               </Tr>

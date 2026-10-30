@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   const buf = await renderPdf(company, {
     title: "PERFORMANCE EVALUATION",
     number: p.code,
-    meta: [["Project", p.name], ["Project manager", pm?.name ?? "—"], ["Site supervisor", sup?.name ?? "—"], ["Evaluation date", formatDate(r?.updatedAt ?? new Date())], ["Evaluated by", by?.name ?? "Not yet recorded"]],
+    meta: [["Project", p.name], ["Project manager", pm?.name ?? "—"], ["Project coordinator", sup?.name ?? "—"], ["Evaluation date", formatDate(r?.updatedAt ?? new Date())], ["Evaluated by", by?.name ?? "Not yet recorded"]],
     party: { heading: "Client", lines: [p.client.companyName ?? p.client.name, p.siteAddress ?? ""].filter(Boolean) },
     columns: [{ header: "Evaluation point", width: 250 }, { header: "Result", width: 80, align: "center" }, { header: "Remarks", width: 200 }],
     rows,

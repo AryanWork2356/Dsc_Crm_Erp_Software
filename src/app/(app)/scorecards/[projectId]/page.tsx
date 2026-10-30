@@ -31,7 +31,7 @@ export default async function ScorecardPage({ params }: { params: Promise<{ proj
       <PageHeader
         back={{ href: "/scorecards", label: "Scorecards" }}
         title={`${p.code} · ${p.name}`}
-        subtitle={`Project manager: ${pm?.name ?? "—"} · Site supervisor: ${sup?.name ?? "—"}`}
+        subtitle={`Project manager: ${pm?.name ?? "—"} · Project coordinator: ${sup?.name ?? "—"}`}
         actions={<>
           <Button asChild variant="secondary" size="sm"><a href={`/scorecards/${projectId}/pdf`} target="_blank" rel="noreferrer"><FileDown className="h-4 w-4" /> Evaluation form (PDF)</a></Button>
           {canReview && (

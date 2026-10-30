@@ -11,10 +11,18 @@ const DAY = 86400000;
 
 export type DayTask = { id: string; name: string; zone: string | null; trade: string | null; status: string; progress: number; due: Date | null; late: boolean };
 export type CrewRow = { trade: string; planned: number; present: number | null };
+export type Worker = { name: string; taskId: string | null; work: string | null; inTime: string | null; outTime: string | null };
 
 export async function siteDay(companyId: string, projectId: string, now: Date = new Date()) {
   const today = reportDay(now);
   const tomorrow = new Date(today.getTime() + DAY);
+  const [labour, lastDay, known] = await Promise.all([
+    db.siteLabour.findMany({ where: { companyId, projectId, date: today }, orderBy: { createdAt: "asc" } }),
+    db.siteLabour.findFirst({ where: { companyId, projectId, date: { lt: today } }, orderBy: { date: "desc" }, select: { date: true } }),
+    db.siteLabour.findMany({ where: { companyId, projectId, date: { gte: new Date(today.getTime() - 60 * DAY) } }, distinct: ["name"], select: { name: true }, orderBy: { name: "asc" }, take: 300 }),
+  ]);
+  const before = lastDay ? await db.siteLabour.findMany({ where: { companyId, projectId, date: lastDay.date }, orderBy: { createdAt: "asc" } }) : [];
+  const asWorker = (l: (typeof labour)[number]): Worker => ({ name: l.name, taskId: l.taskId, work: l.work, inTime: l.inTime, outTime: l.outTime });
   const [tasks, needs, logs, morning] = await Promise.all([
     db.projectTask.findMany({ where: { companyId, projectId, status: { not: "COMPLETED" }, OR: [{ startDate: { lte: tomorrow } }, { dueDate: { lte: tomorrow } }] }, orderBy: [{ startDate: "asc" }, { code: "asc" }], take: 60 }),
     db.resourceNeed.findMany({ where: { companyId, projectId, fromDate: { lte: today }, toDate: { gte: today } } }),
@@ -33,7 +41,12 @@ export async function siteDay(companyId: string, projectId: string, now: Date = 
   if (!needs.length) for (const t of tasks) if (t.requiredTrade && t.requiredHeadcount && startOf(t) <= today && endOf(t) >= today) plan.set(t.requiredTrade, (plan.get(t.requiredTrade) ?? 0) + t.requiredHeadcount);
   for (const l of logs) if (!plan.has(l.trade)) plan.set(l.trade, l.planned);
   const crew: CrewRow[] = [...plan.entries()].map(([trade, planned]) => ({ trade, planned, present: logs.find((l) => l.trade.toLowerCase() === trade.toLowerCase())?.present ?? null })).sort((a, b) => b.planned - a.planned);
-  return { today, todayTasks, tomorrowTasks, crew, morningManpower: morning?.manpower ?? null };
+  return {
+    today, todayTasks, tomorrowTasks, crew, morningManpower: morning?.manpower ?? null,
+    workers: labour.map(asWorker), // already on today's list (from the morning update)
+    lastWorkers: before.map((l) => ({ ...asWorker(l), inTime: null, outTime: null })), // the last working day's people, to copy
+    knownNames: known.map((k) => k.name), // names used on this site lately, offered while typing
+  };
 }
 
 /** The work of the day as one or two lines, to start the plan with. */

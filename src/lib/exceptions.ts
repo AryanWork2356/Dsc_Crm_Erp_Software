@@ -63,7 +63,7 @@ export async function exceptionReport(c: Ctx, now: Date = new Date()): Promise<E
   const since = new Date(today.getTime() - STALE_DAYS * 86400000);
   const reports = await db.dailyReport.groupBy({ by: ["projectId"], where: { projectId: { in: ids }, reportDate: { gte: since } }, _count: true });
   const reported = new Set(reports.map((r) => r.projectId));
-  add({ key: "no_update", title: `Sites with no daily report for ${STALE_DAYS} days`, hint: "The site is running but nobody has reported. Ask the supervisor.", tone: "bad", rows: projects.filter((p) => (RUNNING as readonly string[]).includes(p.status) && !reported.has(p.id)).map(proj) });
+  add({ key: "no_update", title: `Sites with no daily report for ${STALE_DAYS} days`, hint: "The site is running but nobody has reported. Ask the coordinator.", tone: "bad", rows: projects.filter((p) => (RUNNING as readonly string[]).includes(p.status) && !reported.has(p.id)).map(proj) });
 
   // dates
   add({
@@ -95,7 +95,7 @@ export async function exceptionReport(c: Ctx, now: Date = new Date()): Promise<E
     },
     orderBy: { dueDate: "asc" }, take: 100,
   });
-  add({ key: "actions", title: "Serious or late actions", hint: "High or critical actions, and anything past its date.", tone: "bad", rows: openActions.map((a) => ({ id: a.id, title: `${a.number} ${a.title}`, detail: `${a.severity.toLowerCase()} · due ${dayLabel(a.dueDate)}`, link: "/actions?view=open" })) });
+  add({ key: "actions", title: "Serious or late problems", hint: "Problems the app raised (late material, short crew, blocked work…) that are serious or past their date. Each one closes by itself when it is sorted.", tone: "bad", rows: openActions.map((a) => ({ id: a.id, title: a.title, detail: `${a.severity.toLowerCase()} · sort out by ${dayLabel(a.dueDate)}`, link: a.link ?? (a.projectId ? `/projects/${a.projectId}` : "/exceptions") })) });
   add({ key: "other_late", title: "Other items past their time limit", hint: "Everything else on the Time Limits board that is late.", tone: "warn", rows: late.filter((i) => !["approvals", "action_overdue"].includes(i.ruleKey)).slice(0, 60).map((i) => ({ id: `${i.ruleKey}:${i.id}`, title: i.title, detail: i.rule.title, link: i.link })) });
 
   // variations

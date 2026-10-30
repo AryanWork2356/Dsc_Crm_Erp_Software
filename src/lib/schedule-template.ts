@@ -26,7 +26,7 @@ export async function scheduleTemplate(): Promise<Buffer> {
     "One row for each piece of work. Delete the example rows and type your own. Keep the first row (the column names) as it is.",
     "Task: what is to be done. This is the only box that must always be filled.",
     "Area / zone: where on the site (Hall, Kitchen, Whole flat).  Trade: who does it (Carpenter, Electrician, Painter, Civil).  People needed: how many.",
-    "Assigned to: the person in charge of this work, as their name or login appears in the app (a supervisor, an engineer, or a worker with a login). They see it in Today's Plan or on their phone. Leave empty if not decided.",
+    "Assigned to: the person in charge of this work, as their name or login appears in the app (a coordinator, an engineer, or a worker with a login). They see it in Today's Plan or on their phone. Leave empty if not decided.",
     "Dates: either type Start and Due as real dates (for example 05-11-2026), OR use Start day and End day: day 1 is the day the project starts, day 25 is 24 days later. Day numbers need the project's start date to be set first.",
     "Depends on: the Sl No of a task ABOVE this row that must finish first (for example 8), or its exact name. Leave empty if it can start any time.",
     "Planned quantity and Unit: how much work there is (98, sqft). Priority: Low, Medium, High or Urgent.",

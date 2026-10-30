@@ -82,7 +82,7 @@ export default async function SiteReportsPage() {
         namedOnAny ? (
           <EmptyState title="None of your projects is live yet" hint="Reports appear here once a project reaches the Execution stage. Ask your project manager to move it forward." />
         ) : (
-          <EmptyState title="You are not named on any project yet" hint="Ask the Owner, Management or Admin to open the project and choose you as Site supervisor or Site engineer (Projects → the project → Edit). It then appears here by itself." />
+          <EmptyState title="You are not named on any project yet" hint="Ask the Owner, Management or Admin to open the project and choose you as Project coordinator or Site engineer (Projects → the project → Edit). It then appears here by itself." />
         )
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Prisma, Priority, TicketStatus } from "@prisma/client";
 import { requirePerm } from "@/lib/auth";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { flatten, listParams } from "@/lib/list";
 import { PRIORITY_OPTS, TICKET_STATUS_OPTS } from "@/lib/enums";
@@ -14,11 +15,13 @@ import { Button } from "@/components/ui/button";
 import { ListFilters } from "@/components/list/list-filters";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { createTicket } from "./actions";
+import { USE_SUPPORT } from "@/lib/features";
 
 export const metadata = { title: "Customer Support" };
 const OPEN: TicketStatus[] = ["OPEN", "ASSIGNED", "IN_PROGRESS", "WAITING"];
 
 export default async function SupportPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  if (!USE_SUPPORT) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("support:view");
   const sp = flatten(await searchParams);
   const lp = listParams(sp, "createdAt", "desc", 20);

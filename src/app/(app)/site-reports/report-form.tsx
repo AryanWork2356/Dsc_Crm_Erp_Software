@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Minus, Plus, X } from "lucide-react";
+import { Camera, Mic, Plus, Square, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Field, Select, Textarea } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { compressImage } from "@/lib/image-compress";
@@ -13,7 +13,9 @@ type Kind = "MORNING" | "EVENING";
 type Site = { id: string; label: string };
 type Task = { id: string; name: string; zone: string | null; trade: string | null; status: string; progress: number; late: boolean };
 type Crew = { trade: string; planned: number; present: number | null };
+type Worker = { name: string; taskId: string | null; work: string | null; inTime: string | null; outTime: string | null };
 type Initial = { manpower: number; workDone: string; planNext: string; materialStatus: "OK" | "SHORT_SOON" | "WORK_STOPPED"; issues: string; existingPhotos: number };
+type Row = Worker & { key: number };
 
 const MATERIAL = [
   { value: "OK", label: "All material is here", hint: "Nothing needed", tone: "border-emerald-500 bg-emerald-50 text-emerald-900" },
@@ -21,44 +23,117 @@ const MATERIAL = [
   { value: "WORK_STOPPED", label: "Work stopped – no material", hint: "Urgent", tone: "border-red-500 bg-red-50 text-red-900" },
 ] as const;
 const STEPS = [0, 25, 50, 75, 100];
+const OTHER = "__other";
+let k = 0;
+const nowHHMM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
-function Stepper({ value, onChange, label, big }: { value: number; onChange: (n: number) => void; label: string; big?: boolean }) {
+/** Records a voice note in the browser (Android: WebM, iPhone: MP4). Optional, up to about 3 minutes. */
+function VoiceNote({ value, onChange }: { value: File | null; onChange: (f: File | null) => void }) {
+  const [rec, setRec] = React.useState<MediaRecorder | null>(null);
+  const [secs, setSecs] = React.useState(0);
+  const [err, setErr] = React.useState<string | null>(null);
+  const url = React.useMemo(() => (value ? URL.createObjectURL(value) : null), [value]);
+  React.useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  React.useEffect(() => { if (!rec) return; const t = setInterval(() => setSecs((s) => { if (s >= 179) rec.stop(); return s + 1; }), 1000); return () => clearInterval(t); }, [rec]);
+
+  async function start() {
+    setErr(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const type = ["audio/webm", "audio/mp4", "audio/ogg"].find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) ?? "";
+      const r = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      const parts: Blob[] = [];
+      r.ondataavailable = (e) => e.data.size && parts.push(e.data);
+      r.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const mime = r.mimeType || type || "audio/webm";
+        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
+        onChange(new File(parts, `voice.${ext}`, { type: mime.split(";")[0] }));
+        setRec(null);
+      };
+      r.start();
+      setSecs(0);
+      setRec(r);
+    } catch {
+      setErr("The microphone could not be opened. Allow the microphone for this app in the phone settings.");
+    }
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <Button type="button" variant="secondary" className={big ? "h-14 w-14" : "h-11 w-11"} onClick={() => onChange(Math.max(0, value - 1))} aria-label={`${label}: one less`}><Minus className="h-5 w-5" /></Button>
-      <input inputMode="numeric" aria-label={label} value={value} onChange={(e) => onChange(Math.max(0, Math.min(2000, Number(e.target.value.replace(/\D/g, "")) || 0)))}
-        className={cn("rounded-lg border border-slate-300 text-center font-semibold", big ? "h-14 w-24 text-2xl" : "h-11 w-16 text-lg")} />
-      <Button type="button" variant="secondary" className={big ? "h-14 w-14" : "h-11 w-11"} onClick={() => onChange(Math.min(2000, value + 1))} aria-label={`${label}: one more`}><Plus className="h-5 w-5" /></Button>
+    <div>
+      <p className="mb-2 text-sm font-medium text-slate-700">Voice note (optional)</p>
+      {rec ? (
+        <Button type="button" variant="danger" className="h-12 w-full" onClick={() => rec.stop()}><Square className="h-5 w-5" /> Stop recording ({Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")})</Button>
+      ) : value && url ? (
+        <div className="flex items-center gap-2">
+          <audio controls src={url} className="h-10 flex-1" />
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)} aria-label="Delete the voice note"><Trash2 className="h-4 w-4" /></Button>
+        </div>
+      ) : (
+        <Button type="button" variant="secondary" className="h-12 w-full" onClick={start}><Mic className="h-5 w-5" /> Record a voice note</Button>
+      )}
+      {err && <p className="mt-1 text-xs text-red-600">{err}</p>}
     </div>
   );
 }
 
-export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTasks }: { kind: Kind; sites: Site[]; projectId: string; initial: Initial; day: { tasks: Task[]; crew: Crew[] }; canUpdateTasks: boolean }) {
+function PhotoPicker({ label, hint, required, photos, setPhotos, front, max = 10 }: { label: string; hint?: string; required?: boolean; photos: { file: File; url: string }[]; setPhotos: React.Dispatch<React.SetStateAction<{ file: File; url: string }[]>>; front?: boolean; max?: number }) {
+  async function add(list: FileList | null) {
+    if (!list) return;
+    const small = await Promise.all([...list].map((f) => compressImage(f)));
+    setPhotos((cur) => [...cur, ...small.map((file) => ({ file, url: URL.createObjectURL(file) }))].slice(-max));
+  }
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-slate-700">{label} {required && <span className="text-red-500">*</span>}</p>
+      <label className="flex h-16 cursor-pointer items-center justify-center gap-3 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 text-base font-medium text-brand-800 active:bg-brand-100">
+        {front ? <UserRound className="h-6 w-6" /> : <Camera className="h-6 w-6" />} {front ? "Take your selfie" : "Take or choose photos"}
+        <input type="file" accept="image/*" {...(front ? { capture: "user" as const } : {})} multiple={max > 1} className="sr-only" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
+      </label>
+      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {photos.length > 0 && (
+        <ul className="mt-3 grid grid-cols-3 gap-2">
+          {photos.map((p, i) => (
+            <li key={p.url} className="relative aspect-square overflow-hidden rounded-lg bg-slate-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={`${label} ${i + 1}`} className="h-full w-full object-cover" />
+              <button type="button" aria-label={`Remove photo ${i + 1}`} onClick={() => setPhotos((cur) => cur.filter((x) => x !== p))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white"><X className="h-4 w-4" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTasks }: {
+  kind: Kind; sites: Site[]; projectId: string; initial: Initial; canUpdateTasks: boolean;
+  day: { tasks: Task[]; crew: Crew[]; workers: Worker[]; lastWorkers: Worker[]; knownNames: string[]; hasSelfie: boolean };
+}) {
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = React.useTransition();
   const [site, setSite] = React.useState(projectId);
   const morning = kind === "MORNING";
-  // morning: who came, per trade planned in the schedule (one count for the day: it also fills the Manpower record)
-  const [crew, setCrew] = React.useState(day.crew.map((r) => ({ ...r, present: r.present ?? r.planned })));
-  const [extra, setExtra] = React.useState(0);
-  const [manpower, setManpower] = React.useState(initial.manpower);
+  // the worker list: the site attendance (name, work, coming and going time); in the evening it starts from the morning list
+  const [rows, setRows] = React.useState<Row[]>(() => day.workers.map((w) => ({ ...w, key: k++, ...(morning ? {} : { outTime: w.outTime ?? nowHHMM() }) })));
   const [done, setDone] = React.useState<Record<string, number>>(() => Object.fromEntries(day.tasks.map((t) => [t.id, t.progress])));
   const [material, setMaterial] = React.useState<(typeof MATERIAL)[number]["value"]>(initial.materialStatus);
+  const [selfie, setSelfie] = React.useState<{ file: File; url: string }[]>([]);
   const [photos, setPhotos] = React.useState<{ file: File; url: string }[]>([]);
+  const [voice, setVoice] = React.useState<File | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const perTrade = morning && crew.length > 0;
-  const short = perTrade && crew.some((r) => r.present < r.planned);
-  const total = perTrade ? crew.reduce((s, r) => s + r.present, 0) + extra : manpower;
+  const listId = React.useId();
   const changed = day.tasks.filter((t) => done[t.id] !== t.progress);
 
-  React.useEffect(() => () => photos.forEach((p) => URL.revokeObjectURL(p.url)), [photos]);
+  const tradeOf = new Map(day.tasks.map((t) => [t.id, (t.trade ?? "").toLowerCase()]));
+  const shortTrades = morning ? day.crew.filter((c) => rows.filter((r) => r.taskId && tradeOf.get(r.taskId) === c.trade.toLowerCase()).length < c.planned) : [];
+  const perWork = new Map<string, number>();
+  for (const r of rows) { const w = r.taskId ? day.tasks.find((t) => t.id === r.taskId)?.name ?? "Other" : r.work || "Other"; perWork.set(w, (perWork.get(w) ?? 0) + 1); }
 
-  async function addPhotos(list: FileList | null) {
-    if (!list) return;
-    const small = await Promise.all([...list].map((f) => compressImage(f)));
-    setPhotos((cur) => [...cur, ...small.map((file) => ({ file, url: URL.createObjectURL(file) }))].slice(0, 10));
-  }
+  const setRow = (key: number, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const addRow = (w?: Worker) => setRows((rs) => [...rs, { name: w?.name ?? "", taskId: w?.taskId ?? (day.tasks.length === 1 ? day.tasks[0].id : null), work: w?.work ?? null, inTime: morning ? nowHHMM() : null, outTime: morning ? null : nowHHMM(), key: k++ }]);
+  const copyLast = () => setRows((rs) => [...rs, ...day.lastWorkers.filter((w) => !rs.some((r) => r.name.toLowerCase() === w.name.toLowerCase())).map((w) => ({ ...w, taskId: w.taskId && day.tasks.some((t) => t.id === w.taskId) ? w.taskId : null, inTime: nowHHMM(), outTime: null, key: k++ }))]);
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,12 +141,16 @@ export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTask
     const fd = new FormData();
     fd.set("projectId", site);
     fd.set("kind", kind);
-    fd.set("manpower", String(total));
-    if (perTrade) { fd.set("crew", JSON.stringify(crew.map(({ trade, planned, present }) => ({ trade, planned, present })))); fd.set("crewReason", String(f.get("crewReason") ?? "")); }
+    const list = rows.filter((r) => r.name.trim()).map(({ key: _k, ...r }) => ({ ...r, name: r.name.trim() }));
+    fd.set("manpower", String(list.length || initial.manpower));
+    if (list.length) fd.set("workers", JSON.stringify(list));
+    if (shortTrades.length) fd.set("crewReason", String(f.get("crewReason") ?? ""));
     if (!morning && canUpdateTasks) fd.set("tasks", JSON.stringify(changed.map((t) => ({ id: t.id, progress: done[t.id] }))));
     fd.set("materialStatus", material);
-    for (const k of ["workDone", "planNext", "issues"]) if (f.get(k)) fd.set(k, String(f.get(k)));
+    for (const key of ["workDone", "planNext", "issues"]) if (f.get(key)) fd.set(key, String(f.get(key)));
+    if (selfie[0]) fd.set("selfie", selfie[0].file);
     photos.forEach((p) => fd.append("photos", p.file));
+    if (voice) fd.set("voice", voice);
     setError(null);
     start(async () => {
       const r = await submitSiteReport(fd);
@@ -93,39 +172,44 @@ export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTask
         </Field>
       )}
 
-      {perTrade ? (
-        <div>
-          <p className="mb-1 text-sm font-medium text-slate-700">Who came today?</p>
-          <p className="mb-3 text-xs text-slate-500">The plan is from the schedule. Change the number if fewer or more came. This also fills the Manpower record, so it is not typed again.</p>
-          <div className="space-y-3">
-            {crew.map((r, i) => (
-              <div key={r.trade} className={cn("flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2", r.present < r.planned ? "border-amber-400 bg-amber-50" : "border-slate-200")}>
-                <div><p className="font-medium text-slate-900">{r.trade}</p><p className="text-xs text-slate-500">planned {r.planned}</p></div>
-                <Stepper label={`${r.trade} who came`} value={r.present} onChange={(n) => setCrew((cs) => cs.map((x, j) => (j === i ? { ...x, present: n } : x)))} />
+      {/* the site attendance */}
+      <div>
+        <p className="mb-1 text-sm font-medium text-slate-700">{morning ? "Who is working on site today?" : "Workers today – going time"}</p>
+        <p className="mb-3 text-xs text-slate-500">{morning ? "One line per worker: name, the work they are on, the time they came. This is their attendance." : "Put the time each one left. Add anyone who came later."}</p>
+        <datalist id={listId}>{day.knownNames.map((n) => <option key={n} value={n} />)}</datalist>
+        <ul className="space-y-2">
+          {rows.map((r, i) => (
+            <li key={r.key} className="rounded-xl border border-slate-200 p-2">
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-right text-xs text-slate-400">{i + 1}</span>
+                <Input value={r.name} list={listId} onChange={(e) => setRow(r.key, { name: e.target.value })} placeholder="Worker name" className="h-11 flex-1 text-base" aria-label={`Worker ${i + 1} name`} />
+                <button type="button" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))} className="rounded p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label={`Remove worker ${i + 1}`}><X className="h-4 w-4" /></button>
               </div>
-            ))}
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2">
-              <div><p className="font-medium text-slate-900">Others</p><p className="text-xs text-slate-500">helpers, anyone not in the plan</p></div>
-              <Stepper label="Others on site" value={extra} onChange={setExtra} />
-            </div>
-          </div>
-          <p className="mt-2 text-sm font-semibold text-slate-800">On site today: {total}</p>
-          {short && (
-            <Field label="Why did fewer people come?" required className="mt-3" hint="Recorded against the vendor, and the person who arranges crews is told.">
-              <Textarea name="crewReason" rows={2} className="text-base" />
-            </Field>
-          )}
+              <div className="mt-2 grid grid-cols-[1fr_auto] gap-2 pl-7">
+                {day.tasks.length ? (
+                  <Select value={r.taskId ?? (r.work ? OTHER : "")} onChange={(e) => setRow(r.key, e.target.value === OTHER ? { taskId: null, work: r.work ?? "" } : { taskId: e.target.value || null, work: null })} className="h-11 text-sm" aria-label={`Worker ${i + 1} work`}>
+                    <option value="">Which work?</option>
+                    {day.tasks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    <option value={OTHER}>Other work…</option>
+                  </Select>
+                ) : <Input value={r.work ?? ""} onChange={(e) => setRow(r.key, { work: e.target.value })} placeholder="Work (a few words)" className="h-11 text-sm" aria-label={`Worker ${i + 1} work`} />}
+                <Input type="time" value={(morning ? r.inTime : r.outTime) ?? ""} onChange={(e) => setRow(r.key, morning ? { inTime: e.target.value } : { outTime: e.target.value })} className="h-11 w-28 text-sm" aria-label={`Worker ${i + 1} ${morning ? "coming" : "going"} time`} />
+                {day.tasks.length > 0 && r.taskId === null && r.work !== null && <Input value={r.work} onChange={(e) => setRow(r.key, { work: e.target.value })} placeholder="What work? (a few words)" className="col-span-2 h-10 text-sm" aria-label={`Worker ${i + 1} other work`} />}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" className="h-11" onClick={() => addRow()}><Plus className="h-4 w-4" /> Add a worker</Button>
+          {morning && day.lastWorkers.length > 0 && <Button type="button" variant="ghost" className="h-11" onClick={copyLast}>Same people as last day ({day.lastWorkers.length})</Button>}
         </div>
-      ) : (
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate-700">How many people are working on site today?</p>
-          <div className="flex items-center gap-3">
-            <Stepper big label="People on site" value={manpower} onChange={setManpower} />
-            <div className="ml-2 flex gap-2">{[5, 10].map((n) => <Button key={n} type="button" variant="ghost" className="h-14" onClick={() => setManpower((m) => Math.min(2000, m + n))}>+{n}</Button>)}</div>
-          </div>
-          {!morning && <p className="mt-1 text-xs text-slate-500">Filled from this morning&apos;s update. Change it only if it changed.</p>}
-        </div>
-      )}
+        {rows.length > 0 && <p className="mt-2 text-sm font-semibold text-slate-800">On site: {rows.filter((r) => r.name.trim()).length} · {[...perWork.entries()].map(([w, n]) => `${w}: ${n}`).join(" · ")}</p>}
+        {shortTrades.length > 0 && (
+          <Field label={`Fewer than planned: ${shortTrades.map((c) => `${c.trade} (${rows.filter((r) => r.taskId && tradeOf.get(r.taskId) === c.trade.toLowerCase()).length} of ${c.planned})`).join(", ")}. Why?`} required className="mt-3" hint="Recorded against the vendor, and the person who arranges crews is told.">
+            <Textarea name="crewReason" rows={2} className="text-base" />
+          </Field>
+        )}
+      </div>
 
       {morning ? (
         <Field label="What is today's plan?" required hint={day.tasks.length ? "Filled from the schedule. Add or change anything." : "One or two lines. Example: tile work in master bedroom, electrician for ceiling points."}>
@@ -161,25 +245,9 @@ export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTask
         </>
       )}
 
-      <div>
-        <p className="mb-2 text-sm font-medium text-slate-700">{morning ? "Start-of-day photo" : "End-of-day photos"} <span className="text-red-500">*</span></p>
-        <label className="flex h-16 cursor-pointer items-center justify-center gap-3 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 text-base font-medium text-brand-800 active:bg-brand-100">
-          <Camera className="h-6 w-6" /> Take or choose photos
-          <input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { void addPhotos(e.target.files); e.target.value = ""; }} />
-        </label>
-        {initial.existingPhotos > 0 && <p className="mt-2 text-xs text-slate-500">{initial.existingPhotos} photo(s) already sent earlier today.</p>}
-        {photos.length > 0 && (
-          <ul className="mt-3 grid grid-cols-3 gap-2">
-            {photos.map((p, i) => (
-              <li key={p.url} className="relative aspect-square overflow-hidden rounded-lg bg-slate-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
-                <button type="button" aria-label={`Remove photo ${i + 1}`} onClick={() => setPhotos((cur) => cur.filter((x) => x !== p))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white"><X className="h-4 w-4" /></button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {morning && <PhotoPicker label="Your selfie at the site" required={!day.hasSelfie} hint={day.hasSelfie ? "Already sent this morning. Take a new one only if needed." : "Stand at the site so the place can be seen behind you."} photos={selfie} setPhotos={setSelfie} front max={1} />}
+      <PhotoPicker label={morning ? "Site photo (start of the day)" : "End-of-day photos"} required={initial.existingPhotos === 0} photos={photos} setPhotos={setPhotos} />
+      {initial.existingPhotos > 0 && <p className="-mt-4 text-xs text-slate-500">{initial.existingPhotos} photo(s) already sent earlier today.</p>}
 
       <div>
         <p className="mb-2 text-sm font-medium text-slate-700">Material today</p>
@@ -199,9 +267,10 @@ export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTask
         </Field>
       )}
 
-      <Field label={morning ? "Any problem or help needed? (optional)" : "Any problem to report? (optional)"} hint="Shortage, delay, client instruction, safety – the project manager is told at once.">
+      <Field label={morning ? "Notes, problems or help needed (optional)" : "Notes or problems (optional)"} hint="Shortage, delay, client instruction, safety – the project manager is told at once.">
         <Textarea name="issues" rows={2} className="text-base" defaultValue={initial.issues} />
       </Field>
+      <VoiceNote value={voice} onChange={setVoice} />
 
       {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
       <Button type="submit" size="lg" className="h-14 w-full text-lg" loading={pending}>{pending ? "Sending…" : morning ? "Send morning update" : "Send evening report"}</Button>

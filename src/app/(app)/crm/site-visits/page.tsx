@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { requirePerm } from "@/lib/auth";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { leadScope } from "@/lib/scope";
 import { flatten, listParams } from "@/lib/list";
@@ -16,10 +17,12 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { completeSiteVisit, createSiteVisit, deleteSiteVisit, updateSiteVisit } from "../actions";
 import { siteVisitFields } from "./visit-fields";
+import { USE_SITE_VISITS } from "@/lib/features";
 
 export const metadata = { title: "Site Visits" };
 
 export default async function SiteVisitsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  if (!USE_SITE_VISITS) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("sitevisits:view");
   const sp = flatten(await searchParams);
   const lp = listParams(sp, "visitDate", "desc", 20);

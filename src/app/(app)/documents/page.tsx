@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { clientScope, leadScope, projectDocScope } from "@/lib/scope";
+import { DOWNLOADS_FOLDER, REPORT_FOLDER } from "@/lib/doc-access";
 import { flatten, listParams } from "@/lib/list";
 import { DOCUMENT_TYPE_OPTS } from "@/lib/enums";
 import { ENTITY_TYPES } from "@/lib/doc-access";
@@ -23,15 +24,18 @@ export const metadata = { title: "Documents" };
 /** Rows of the library the user is allowed to see (each download is re-checked individually). */
 async function visibleWhere(c: Awaited<ReturnType<typeof requirePerm>>): Promise<Prisma.DocumentWhereInput> {
   const base: Prisma.DocumentWhereInput = { companyId: c.companyId, deletedAt: null };
-  if (["OWNER", "MANAGEMENT", "ADMIN"].includes(c.role) || c.can("documents:manage")) return base;
+  if (["OWNER", "MANAGEMENT"].includes(c.role)) return base;
+  // project files are for directors only (except Downloadables and the daily report photos)
+  const notPrivateProjectFile: Prisma.DocumentWhereInput = { NOT: { entityType: "PROJECT", OR: [{ folder: null }, { folder: { notIn: [DOWNLOADS_FOLDER, REPORT_FOLDER] } }] } };
+  if (c.role === "ADMIN" || c.can("documents:manage")) return { ...base, ...notPrivateProjectFile };
   const [projects, clients, leads] = await Promise.all([
     db.project.findMany({ where: projectDocScope(c), select: { id: true } }),
     db.client.findMany({ where: clientScope(c), select: { id: true } }),
     db.lead.findMany({ where: leadScope(c), select: { id: true } }),
   ]);
   const or: Prisma.DocumentWhereInput[] = [
-    { uploadedById: c.userId },
-    { entityType: "PROJECT", entityId: { in: projects.map((p) => p.id) } },
+    { uploadedById: c.userId, NOT: { entityType: "PROJECT" } },
+    { entityType: "PROJECT", entityId: { in: projects.map((p) => p.id) }, folder: { in: [DOWNLOADS_FOLDER, REPORT_FOLDER] } }, // other project files: directors only
     { entityType: "CLIENT", entityId: { in: clients.map((p) => p.id) } },
     { entityType: "LEAD", entityId: { in: leads.map((p) => p.id) } },
   ];

@@ -330,9 +330,9 @@ export async function checkIn(target?: string, lat?: number, lng?: number, accur
     let projectId: string | null = null;
     if (user.workerId) {
       worker = await db.worker.findFirst({ where: { id: user.workerId, companyId: c.companyId, isActive: true } });
-      if (!worker) throw new UserError("Your worker profile is inactive. Contact your supervisor.");
+      if (!worker) throw new UserError("Your worker profile is inactive. Contact your coordinator.");
       projectId = target && target !== "office" ? target : worker.currentProjectId;
-      if (!projectId) throw new UserError("You aren't assigned to a site yet. Ask your supervisor.");
+      if (!projectId) throw new UserError("You aren't assigned to a site yet. Ask your coordinator.");
     } else {
       const emp = await db.employee.findFirst({ where: { companyId: c.companyId, userId: c.userId } });
       if (!emp) throw new UserError("No employee profile is linked to your login.");

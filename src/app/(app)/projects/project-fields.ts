@@ -19,7 +19,7 @@ export function projectFields(o: { clients: Opt[]; pms: Opt[]; designers: Opt[];
     { name: "plannedEndDate", label: "Planned completion", type: "date", defaultValue: toDateInput(p?.plannedEndDate as Date | null) },
     { name: "projectManagerId", label: "Project manager", type: "select", options: withCurrent(o.pms, "projectManagerId"), defaultValue: v("projectManagerId") },
     { name: "designerId", label: "Designer", type: "select", options: withCurrent(o.designers, "designerId"), defaultValue: v("designerId") },
-    { name: "supervisorId", label: "Site supervisor / engineer", type: "select", options: withCurrent(o.site, "supervisorId"), defaultValue: v("supervisorId") },
+    { name: "supervisorId", label: "Project coordinator", type: "select", options: withCurrent(o.site, "supervisorId"), defaultValue: v("supervisorId") },
     ...(p ? [{ name: "dateChangeReason", label: "Why is the completion date changing?", type: "textarea" as const, full: true, hint: "Needed only if you change a date that was already set. It is recorded.", defaultValue: null }] : []),
     { name: "outstation", label: "Outstation site", type: "checkbox", defaultValue: !!p?.outstation, hint: "Outstation sites send their morning update earlier (9:30 instead of 10:00)" },
   ];

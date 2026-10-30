@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Save, Ruler, Calculator, BookmarkPlus } from "lucide-react";
+import { Plus, Trash2, Save, Ruler, BookmarkPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
@@ -9,7 +9,6 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { boqItemTotals, boqSummary } from "@/lib/money";
 import { basisFor, blankLine, finalQty, lineProblem, lineValue, type MeasureLine } from "@/lib/measure";
 import { cn, formatINR, humanize } from "@/lib/utils";
-import { sellFromCost } from "@/lib/rate-card";
 import { BOQ_CATEGORY_OPTS, UNIT_OPTS } from "@/lib/enums";
 import type { ActionResult } from "@/lib/action";
 
@@ -61,39 +60,21 @@ export function BoqEditor({
   catalog: { id: string; name: string; unit: string; cost: number }[];
   profitPct: number | null;
   clientName: string | null;
-  saveRates: ((profitPct: number) => Promise<ActionResult>) | null;
+  saveRates: ((profitPct?: number | null) => Promise<ActionResult>) | null;
 }) {
+  // DSC types only the RATE (profit already in it); the app works out every amount. `canCosts` = may see rates and amounts.
   const router = useRouter();
   const toast = useToast();
-  const [profit, setProfit] = React.useState<number | "">(profitPct ?? "");
-  const [rows, setRows] = React.useState<EditorItem[]>(() =>
-    initial.map((i) => {
-      const cost = v(i.materialCost) + v(i.labourCost) + v(i.otherCost);
-      return { ...toEditorItem(i), auto: v(i.sellingRate) === 0 || (profitPct !== null && cost > 0 && v(i.sellingRate) === sellFromCost(cost, profitPct)) };
-    }),
-  );
+  const profit = profitPct ?? null; // kept as it is: there is no profit box any more
+  const [rows, setRows] = React.useState<EditorItem[]>(() => initial.map((i) => toEditorItem(i)));
   const [dirty, setDirty] = React.useState(false);
   const [pending, start] = React.useTransition();
   const [open, setOpen] = React.useState<Set<string>>(new Set());
   const listId = React.useId();
 
-  const costOf = (r: EditorItem) => v(r.materialCost) + v(r.labourCost) + v(r.otherCost);
-  /** while a row is "auto", its selling rate is always cost + profit % */
-  const priced = (r: EditorItem, p: number | ""): EditorItem => (r.auto && p !== "" && costOf(r) > 0 ? { ...r, sellingRate: sellFromCost(costOf(r), p) } : r);
   const set = (key: string, patch: Partial<EditorItem>) => {
-    const manual = "sellingRate" in patch;
-    const rateTouched = ["materialCost", "labourCost", "otherCost", "sellingRate"].some((k) => k in patch); // a person looked at the rate
-    setRows((rs) => rs.map((r) => (r.key === key ? priced({ ...r, ...patch, ...(manual ? { auto: false } : {}), ...(rateTouched ? { rateNote: undefined } : {}) }, profit) : r)));
-    setDirty(true);
-  };
-  const changeProfit = (p: number | "") => {
-    setProfit(p);
-    setRows((rs) => rs.map((r) => priced(r, p)));
-    setDirty(true);
-  };
-  const priceAll = () => {
-    if (profit === "") return;
-    setRows((rs) => rs.map((r) => (costOf(r) > 0 ? priced({ ...r, auto: true }, profit) : r)));
+    const rateTouched = "sellingRate" in patch; // a person looked at the rate: the "check" note goes
+    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch, ...(rateTouched ? { rateNote: undefined } : {}) } : r)));
     setDirty(true);
   };
 
@@ -110,7 +91,7 @@ export function BoqEditor({
 
   function onItem(r: EditorItem, value: string) {
     const hit = catalog.find((c) => c.name.toLowerCase() === value.toLowerCase());
-    if (hit) set(r.key, { item: value, materialId: hit.id, unit: hit.unit, materialCost: canCosts && !v(r.materialCost) ? hit.cost : r.materialCost });
+    if (hit) set(r.key, { item: value, materialId: hit.id, unit: hit.unit });
     else set(r.key, { item: value, materialId: null });
   }
 
@@ -119,7 +100,7 @@ export function BoqEditor({
       .filter((r) => r.item.trim() || v(r.sellingRate) || qtyOf(r) > 0)
       .map(({ key: _k, auto: _a, lines, ...r }) => ({ ...r, quantity: lines.length ? finalQty(lines, r.unit) : v(r.quantity), measurements: lines.length ? { lines } : null, materialCost: v(r.materialCost), labourCost: v(r.labourCost), otherCost: v(r.otherCost), sellingRate: v(r.sellingRate) }));
     start(async () => {
-      const r = await save(JSON.stringify(payload), profit === "" ? null : profit);
+      const r = await save(JSON.stringify(payload), profit);
       if (r.ok) {
         toast.success(r.message ?? "Saved");
         setDirty(false);
@@ -129,14 +110,14 @@ export function BoqEditor({
   }
 
   function doSaveRates() {
-    if (!saveRates || profit === "") return;
+    if (!saveRates) return;
     const payload = rows
       .filter((r) => r.item.trim() || v(r.sellingRate) || qtyOf(r) > 0)
       .map(({ key: _k, auto: _a, lines, ...r }) => ({ ...r, quantity: lines.length ? finalQty(lines, r.unit) : v(r.quantity), measurements: lines.length ? { lines } : null, materialCost: v(r.materialCost), labourCost: v(r.labourCost), otherCost: v(r.otherCost), sellingRate: v(r.sellingRate) }));
     start(async () => {
       const saved = await save(JSON.stringify(payload), profit); // the rates come from the saved rows, so save first
       if (!saved.ok) return void toast.error(saved.error);
-      const r = await saveRates(profit);
+      const r = await saveRates();
       if (r.ok) {
         toast.success(r.message ?? "Rates saved");
         setDirty(false);
@@ -152,33 +133,11 @@ export function BoqEditor({
 
   return (
     <div className="space-y-5">
-      <div className={cn("grid gap-3", canCosts ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-1 sm:grid-cols-2")}>
-        {canCosts && <Tile label="Estimated cost" value={formatINR(sum.cost)} />}
-        <Tile label="Selling total (excl. GST)" value={formatINR(sum.revenue)} />
-        {canCosts && <Tile label="Gross margin" value={formatINR(sum.margin)} tone={sum.margin < 0 ? "bad" : "good"} />}
-        {canCosts && <Tile label="Margin %" value={`${sum.marginPct.toFixed(1)}%`} tone={sum.marginPct < 15 ? "bad" : "good"} />}
+      <div className={cn("grid gap-3", canCosts ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2")}>
+        <Tile label="Items" value={String(rows.length)} />
+        {canCosts && <Tile label="BOQ total (excl. GST)" value={formatINR(sum.revenue)} />}
       </div>
-
-      {canCosts && (
-        <Card>
-          <CardBody className="space-y-3">
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="text-sm font-medium text-slate-700">
-                Profit added on cost{clientName ? ` for ${clientName}` : ""}
-                <span className="mt-1 flex items-center gap-2">
-                  <Input type="number" min="0" max="500" step="any" inputMode="decimal" value={profit} disabled={!editable} onChange={(e) => changeProfit(e.target.value === "" ? "" : Number(e.target.value))} className="h-10 w-28 text-right" aria-label="Profit percent" />
-                  <span className="text-sm text-slate-500">%</span>
-                </span>
-              </label>
-              {editable && <Button size="sm" variant="secondary" onClick={priceAll} disabled={profit === ""}><Calculator className="h-4 w-4" /> Calculate selling rates for all rows</Button>}
-              {editable && saveRates && <Button size="sm" variant="secondary" onClick={doSaveRates} loading={pending} disabled={profit === ""}><BookmarkPlus className="h-4 w-4" /> Remember these rates for {clientName}</Button>}
-            </div>
-            <p className="text-xs text-slate-500">
-              Type DSC&apos;s cost <b>per unit</b> (for example per sq ft) in Material, Labour and Other. The selling rate, the row total, the profit and the BOQ total are worked out for you. Typing a selling rate yourself switches that row to manual.
-            </p>
-          </CardBody>
-        </Card>
-      )}
+      {canCosts && editable && <p className="text-xs text-slate-500">Type only the <b>rate</b> per unit (your profit already in it). The amount of each row, each category and the BOQ total are worked out for you.</p>}
 
       <Card>
         <CardHeader>
@@ -186,13 +145,14 @@ export function BoqEditor({
           {editable && (
             <div className="flex items-center gap-2">
               {dirty && <span className="text-xs font-medium text-amber-600">Unsaved changes</span>}
+              {saveRates && <Button size="sm" variant="secondary" onClick={doSaveRates} loading={pending} title="Next time this client sends a BOQ, these rates can be filled in by themselves"><BookmarkPlus className="h-4 w-4" /> Save rates for {clientName}</Button>}
               <Button size="sm" onClick={doSave} loading={pending} disabled={!dirty}><Save className="h-4 w-4" /> Save</Button>
             </div>
           )}
         </CardHeader>
         <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.name} />)}</datalist>
         <div className="overflow-x-auto">
-          <table className={cn("w-full text-sm", canCosts ? "min-w-[1100px]" : "min-w-[760px]")}>
+          <table className={cn("w-full text-sm", canCosts ? "min-w-[860px]" : "min-w-[640px]")}>
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="w-8 px-2 py-2 text-left">#</th>
@@ -200,17 +160,12 @@ export function BoqEditor({
                 <th className="px-1 py-2 text-left">Item</th>
                 <th className="w-20 px-1 py-2 text-left">Unit</th>
                 <th className="w-20 px-1 py-2 text-right">Qty</th>
-                {canCosts && <><th className="w-24 px-1 py-2 text-right">Material/unit</th><th className="w-24 px-1 py-2 text-right">Labour/unit</th><th className="w-24 px-1 py-2 text-right">Other/unit</th></>}
-                <th className="w-28 px-1 py-2 text-right">Sell rate</th>
-                {canCosts && <th className="w-28 px-2 py-2 text-right">Est. cost</th>}
-                <th className="w-28 px-2 py-2 text-right">Total</th>
-                {canCosts && <th className="w-16 px-2 py-2 text-right">Margin</th>}
+                {canCosts && <><th className="w-28 px-1 py-2 text-right">Rate</th><th className="w-32 px-2 py-2 text-right">Amount</th></>}
                 {editable && <th className="w-8" />}
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => {
-                const m = calc[i].total > 0 ? ((calc[i].total - calc[i].estimatedCost) / calc[i].total) * 100 : 0;
                 return (
                   <React.Fragment key={r.key}>
                     <tr className="border-t border-slate-100">
@@ -221,7 +176,7 @@ export function BoqEditor({
                         </Select>
                       </td>
                       <td className="px-1 pt-1.5 align-top"><Input value={r.item} list={listId} disabled={!editable} onChange={(e) => onItem(r, e.target.value)} placeholder="Item name" className="h-8 px-2 text-xs" aria-label={`Item ${i + 1}`} />
-                        {canCosts && r.rateNote && <p className="mt-1 rounded bg-amber-50 px-1.5 py-1 text-[11px] leading-snug text-amber-800"><b>Check:</b> {r.rateNote}{editable && <button type="button" className="ml-1 font-semibold text-amber-900 underline" onClick={() => { setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, rateNote: undefined } : x))); setDirty(true); }}>OK</button>}</p>}
+                        {canCosts && r.rateNote && <p className="mt-1 rounded bg-amber-50 px-1.5 py-1 text-[11px] leading-snug text-amber-800"><b>Check:</b> {r.rateNote}{editable && <><button type="button" className="ml-1 font-semibold text-amber-900 underline" onClick={() => { setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, rateNote: undefined } : x))); setDirty(true); }}>Yes, same</button><button type="button" className="ml-2 font-semibold text-red-700 underline" onClick={() => { setRows((rs) => rs.map((x) => (x.key === r.key ? { ...x, rateNote: undefined, sellingRate: 0, materialCost: 0, labourCost: 0, otherCost: 0 } : x))); setDirty(true); }}>No, different</button></>}</p>}
                       </td>
                       <td className="px-1 pt-1.5 align-top">
                         <Select value={r.unit} disabled={!editable} onChange={(e) => set(r.key, { unit: e.target.value })} className="h-8 px-2 text-xs">
@@ -234,15 +189,10 @@ export function BoqEditor({
                       </td>
                       {canCosts && (
                         <>
-                          <td className="px-1 pt-1.5 align-top">{num({ value: r.materialCost, onChange: (x) => set(r.key, { materialCost: x }), label: `Material cost ${i + 1}` })}</td>
-                          <td className="px-1 pt-1.5 align-top">{num({ value: r.labourCost, onChange: (x) => set(r.key, { labourCost: x }), label: `Labour cost ${i + 1}` })}</td>
-                          <td className="px-1 pt-1.5 align-top">{num({ value: r.otherCost, onChange: (x) => set(r.key, { otherCost: x }), label: `Other cost ${i + 1}` })}</td>
+                          <td className="px-1 pt-1.5 align-top">{num({ value: r.sellingRate, onChange: (x) => set(r.key, { sellingRate: x }), label: `Rate ${i + 1}` })}</td>
+                          <td className="tabular px-2 pt-3 text-right align-top text-xs font-medium text-slate-900">{formatINR(calc[i].total)}</td>
                         </>
                       )}
-                      <td className="px-1 pt-1.5 align-top">{num({ value: r.sellingRate, onChange: (x) => set(r.key, { sellingRate: x }), label: `Selling rate ${i + 1}` })}</td>
-                      {canCosts && <td className="tabular px-2 pt-3 text-right align-top text-xs text-slate-600">{formatINR(calc[i].estimatedCost)}</td>}
-                      <td className="tabular px-2 pt-3 text-right align-top text-xs font-medium text-slate-900">{formatINR(calc[i].total)}</td>
-                      {canCosts && <td className={cn("tabular px-2 pt-3 text-right align-top text-xs", m < 10 ? "font-medium text-red-600" : "text-emerald-700")}>{calc[i].total ? `${m.toFixed(0)}%` : "—"}</td>}
                       {editable && (
                         <td className="px-1 pt-1.5 align-top">
                           <button onClick={() => { setRows((rs) => rs.filter((x) => x.key !== r.key)); setDirty(true); }} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label={`Remove item ${i + 1}`}><Trash2 className="h-3.5 w-3.5" /></button>
@@ -251,7 +201,7 @@ export function BoqEditor({
                     </tr>
                     <tr>
                       <td />
-                      <td colSpan={canCosts ? 10 : 6} className="px-1 pb-1.5">
+                      <td colSpan={canCosts ? 7 : 5} className="px-1 pb-1.5">
                         <div className="flex items-center gap-2">
                           <Input value={r.specification} disabled={!editable} onChange={(e) => set(r.key, { specification: e.target.value })} placeholder="Specification / brand / finish (optional)" className="h-7 flex-1 border-dashed px-2 text-xs" aria-label={`Specification ${i + 1}`} />
                           {(editable || r.lines.length > 0) && (
@@ -266,7 +216,7 @@ export function BoqEditor({
                     {open.has(r.key) && (
                       <tr>
                         <td />
-                        <td colSpan={canCosts ? 10 : 6} className="px-1 pb-3">
+                        <td colSpan={canCosts ? 7 : 5} className="px-1 pb-3">
                           <MeasurePanel unit={r.unit} lines={r.lines} editable={editable} onChange={(lines) => set(r.key, { lines })} />
                         </td>
                       </tr>
@@ -291,16 +241,14 @@ export function BoqEditor({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr><th className="px-4 py-2 text-left">Category</th><th className="px-4 py-2 text-right">Items</th>{canCosts && <th className="px-4 py-2 text-right">Est. cost</th>}<th className="px-4 py-2 text-right">Selling</th>{canCosts && <th className="px-4 py-2 text-right">Margin</th>}</tr>
+                <tr><th className="px-4 py-2 text-left">Category</th><th className="px-4 py-2 text-right">Items</th>{canCosts && <th className="px-4 py-2 text-right">Amount</th>}</tr>
               </thead>
               <tbody>
                 {[...byCat.entries()].map(([cat, x]) => (
                   <tr key={cat} className="border-t border-slate-100">
                     <td className="px-4 py-2 font-medium">{humanize(cat)}</td>
                     <td className="tabular px-4 py-2 text-right">{x.count}</td>
-                    {canCosts && <td className="tabular px-4 py-2 text-right">{formatINR(x.cost)}</td>}
-                    <td className="tabular px-4 py-2 text-right">{formatINR(x.total)}</td>
-                    {canCosts && <td className="tabular px-4 py-2 text-right">{x.total ? `${(((x.total - x.cost) / x.total) * 100).toFixed(1)}%` : "—"}</td>}
+                    {canCosts && <td className="tabular px-4 py-2 text-right">{formatINR(x.total)}</td>}
                   </tr>
                 ))}
               </tbody>

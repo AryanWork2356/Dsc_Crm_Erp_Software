@@ -14,6 +14,7 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { addWarrantyClaim, decideWarrantyClaim, setTicketStatus, toggleWarranty, updateTicket } from "../actions";
+import { USE_SUPPORT } from "@/lib/features";
 
 const NEXT: Record<string, { to: string; label: string; needsNote?: boolean }[]> = {
   OPEN: [{ to: "IN_PROGRESS", label: "Start work" }, { to: "WAITING", label: "Waiting on client" }, { to: "RESOLVED", label: "Resolve", needsNote: true }],
@@ -25,6 +26,7 @@ const NEXT: Record<string, { to: string; label: string; needsNote?: boolean }[]>
 };
 
 export default async function TicketDetail({ params }: { params: Promise<{ id: string }> }) {
+  if (!USE_SUPPORT) notFound(); // switched off at DSC (lib/features.ts)
   const { id } = await params;
   const c = await requirePerm("support:view");
   const t = await db.supportTicket.findFirst({ where: { id, companyId: c.companyId }, include: { client: true, project: true, claims: { orderBy: { createdAt: "asc" } } } });

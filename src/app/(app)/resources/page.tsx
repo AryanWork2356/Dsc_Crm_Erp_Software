@@ -136,7 +136,7 @@ export default async function ResourcesPage({ searchParams }: { searchParams: Pr
 
       <Card className="mt-5">
         <CardHeader><CardTitle>Vendor reliability (last 90 days)</CardTitle></CardHeader>
-        <p className="px-5 pb-2 text-xs text-slate-500">Built only from the headcounts supervisors record. People came ÷ people planned, and people on time ÷ people who came. A figure appears after {MIN_DAYS_FOR_SCORE} recorded days.</p>
+        <p className="px-5 pb-2 text-xs text-slate-500">Built only from the headcounts coordinators record. People came ÷ people planned, and people on time ÷ people who came. A figure appears after {MIN_DAYS_FOR_SCORE} recorded days.</p>
         {labourVendors.length === 0 ? (
           <CardBody className="text-sm text-slate-500">Add the trades a vendor provides (Procurement → Vendors → Edit) and record headcounts, and reliability appears here.</CardBody>
         ) : (

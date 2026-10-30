@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { requireCtx } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PRIORITY_OPTS } from "@/lib/enums";
@@ -10,10 +10,12 @@ import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { createClientTicket } from "../actions";
+import { USE_SUPPORT } from "@/lib/features";
 
 export const metadata = { title: "Support & Warranty" };
 
 export default async function ClientSupport() {
+  if (!USE_SUPPORT) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requireCtx();
   if (c.role !== "CLIENT" || !c.clientId) redirect("/");
   const [tickets, projects] = await Promise.all([

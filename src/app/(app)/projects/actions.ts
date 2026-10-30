@@ -18,7 +18,7 @@ import { humanize, num } from "@/lib/utils";
 import { applyDateChange } from "@/lib/baseline";
 import { dueIn, raiseAction, resolveActionsFor } from "@/lib/action-items";
 import { readScheduleFile } from "@/lib/schedule-file";
-import { parseMaterialNeeds, parseSchedule } from "@/lib/schedule-import";
+import { parseMaterialNeeds, parseSchedule, pastedRows, type Raw } from "@/lib/schedule-import";
 
 async function getProject(c: Ctx, id: string, tx: Tx | typeof db = db) {
   const p = await tx.project.findFirst({ where: { id, ...projectScope(c) } });
@@ -49,7 +49,7 @@ function checkDates(d: { startDate?: Date; plannedEndDate?: Date }) {
 }
 
 async function syncMembers(tx: Tx, projectId: string, d: z.infer<typeof projectSchema>) {
-  const wanted: [string | undefined, string][] = [[d.projectManagerId, "Project Manager"], [d.designerId, "Designer"], [d.siteEngineerId, "Site Engineer"], [d.supervisorId, "Supervisor"]];
+  const wanted: [string | undefined, string][] = [[d.projectManagerId, "Project Manager"], [d.designerId, "Designer"], [d.siteEngineerId, "Site Engineer"], [d.supervisorId, "Project Coordinator"]];
   for (const [uid, label] of wanted) {
     if (uid) await tx.projectMember.upsert({ where: { projectId_userId: { projectId, userId: uid } }, update: { roleLabel: label }, create: { projectId, userId: uid, roleLabel: label } });
   }
@@ -235,9 +235,25 @@ export async function importSchedule(projectId: string, fd: FormData) {
     const p = await getProject(c, projectId);
     const file = fd.get("file");
     if (!(file instanceof File) || file.size === 0) throw new UserError("Choose the schedule file (Excel or CSV).");
+    return addSchedule(c, p, await readScheduleFile(file), fd.get("addToExisting") === "on");
+  });
+}
+
+/** The same, from rows copied in Excel and pasted into the app (the first pasted row must be the column names). */
+export async function pasteSchedule(projectId: string, fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("tasks:create");
+    const p = await getProject(c, projectId);
+    const work = pastedRows(String(fd.get("work") ?? "")), materials = pastedRows(String(fd.get("materials") ?? ""));
+    if (!work.length && !materials.length) throw new UserError("Paste the rows from Excel, with the row of column names on top.");
+    return addSchedule(c, p, { work, materials }, fd.get("addToExisting") === "on");
+  });
+}
+
+async function addSchedule(c: Ctx, p: Awaited<ReturnType<typeof getProject>>, sheets: { work: Raw[]; materials: Raw[] }, addToExisting: boolean) {
+    const projectId = p.id;
     const [existing, existingNeeds] = await Promise.all([db.projectTask.count({ where: { projectId } }), db.materialNeed.count({ where: { projectId } })]);
-    if (existing + existingNeeds > 0 && fd.get("addToExisting") !== "on") throw new UserError(`This project already has ${existing} task${existing === 1 ? "" : "s"} and ${existingNeeds} material line${existingNeeds === 1 ? "" : "s"}. Tick “Add these to what is already there” if you want the file added as well.`);
-    const sheets = await readScheduleFile(file);
+    if (existing + existingNeeds > 0 && !addToExisting) throw new UserError(`This project already has ${existing} task${existing === 1 ? "" : "s"} and ${existingNeeds} material line${existingNeeds === 1 ? "" : "s"}. Tick “Add these to what is already there” if you want the file added as well.`);
     if (!sheets.work.length && !sheets.materials.length) throw new UserError("The file has no rows. Use the template: the first sheet is the work, and a sheet called Materials is the material it needs.");
     const work = sheets.work.length ? parseSchedule(sheets.work, p.startDate) : { tasks: [], errors: [] };
     const mats = parseMaterialNeeds(sheets.materials, p.startDate, work.tasks);
@@ -277,7 +293,6 @@ export async function importSchedule(projectId: string, fd: FormData) {
     revalidatePath("/projects/tasks");
     revalidatePath("/procurement/needs");
     return { message: `${work.tasks.length} tasks and ${mats.lines.length} material lines added to the schedule` };
-  });
 }
 
 export async function updateTask(taskId: string, fd: FormData) {

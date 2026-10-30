@@ -131,7 +131,8 @@ export async function saveBoqItems(id: string, itemsJson: string, profitPct?: nu
       const old = new Map(b.items.map((i) => [i.id, i]));
       items = items.map((i) => {
         const o = i.id ? old.get(i.id) : undefined;
-        return { ...i, materialCost: o ? num(o.materialCost) : 0, labourCost: o ? num(o.labourCost) : 0, otherCost: o ? num(o.otherCost) : 0 };
+        // people who may not see rates never change them (they do not see them on screen either)
+        return { ...i, materialCost: o ? num(o.materialCost) : 0, labourCost: o ? num(o.labourCost) : 0, otherCost: o ? num(o.otherCost) : 0, sellingRate: o ? num(o.sellingRate) : 0, rateNote: o?.rateNote ?? null };
       });
     }
     const rows = itemRows(items);

@@ -182,7 +182,7 @@ describe("reports", () => {
     expect(keys(designer)).not.toContain("invoices");
     expect(keys(sales)).not.toContain("profitability");
     expect(keys(sales)).toContain("sales");
-    expect(keys(pm)).toContain("profitability");
+    expect(keys(pm)).not.toContain("profitability"); // DSC: profit is for the directors only
     expect(keys(pm)).not.toContain("payments");
   });
 

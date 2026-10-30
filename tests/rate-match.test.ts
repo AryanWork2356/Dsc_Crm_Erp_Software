@@ -27,40 +27,36 @@ describe("the same item, worded differently", () => {
 
 const item = (o: Record<string, unknown>) => ({ category: "OTHER", item: "x", unit: "sqft", quantity: 10, materialCost: 0, labourCost: 0, otherCost: 0, sellingRate: 0, ...o });
 
-describe("filling a BOQ from the rates DSC already has", () => {
-  it("exact from this client, worded differently from this client, and from another client: the last two are marked to check", async () => {
+describe("filling a BOQ from this client's saved rates", () => {
+  it("same item: filled; worded differently: filled and marked to check; only another client has it: left empty", async () => {
     await loginAs("director@dsc.demo");
     const company = await db.company.findFirstOrThrow();
     const mk = (name: string) => { const tag = `${Date.now().toString(36)}${Math.floor(Math.random() * 9999)}`; return db.client.create({ data: { companyId: company.id, code: `CL-RM${tag}`, name: `${name} ${tag}` } }); };
     const [mine, other] = await Promise.all([mk("Match client"), mk("Other client")]);
-    // other client: saved rates for laminate
     const ob = ((await createBoq(fd({ title: "Other", clientId: other.id }))) as { data: { id: string } }).data.id;
-    await saveBoqItems(ob, JSON.stringify([item({ item: "Supply and fixing of 1 mm laminate", materialCost: 60, labourCost: 15 })]), 20);
-    expect((await saveRatesForClient(ob, 20)).ok).toBe(true);
-    // this client: saved rates for ply and painting
+    await saveBoqItems(ob, JSON.stringify([item({ item: "Supply and fixing of 1 mm laminate", sellingRate: 90 })]));
+    expect((await saveRatesForClient(ob)).ok).toBe(true);
     const first = ((await createBoq(fd({ title: "Mine 1", clientId: mine.id }))) as { data: { id: string } }).data.id;
-    await saveBoqItems(first, JSON.stringify([item({ item: "Providing and fixing 18 mm BWP ply", materialCost: 100, labourCost: 20 }), item({ item: "Emulsion paint 2 coats", materialCost: 20, labourCost: 10 })]), 25);
-    expect((await saveRatesForClient(first, 25)).ok).toBe(true);
+    await saveBoqItems(first, JSON.stringify([item({ item: "Providing and fixing 18 mm BWP ply", sellingRate: 150 }), item({ item: "Emulsion paint 2 coats", sellingRate: 37.5 })]));
+    expect((await saveRatesForClient(first)).ok).toBe(true);
 
     const second = ((await createBoq(fd({ title: "Mine 2", clientId: mine.id }))) as { data: { id: string } }).data.id;
     await saveBoqItems(second, JSON.stringify([
-      item({ item: "Emulsion paint 2 coats" }), // exact
+      item({ item: "Emulsion paint 2 coats" }), // same
       item({ item: "Supply & installation of 18mm BWP plywood" }), // worded differently
       item({ item: "Providing and fixing 1mm laminate" }), // only the other client has it
-      item({ item: "Brand new item" }), // nobody has it
+      item({ item: "Brand new item" }),
     ]));
     const r = await applyLastRates(second);
     expect(r.ok).toBe(true);
-    expect((r as unknown as { data: object }).data).toEqual({ exact: 1, worded: 1, otherClient: 1, left: 1 });
+    expect((r as unknown as { data: object }).data).toEqual({ exact: 1, worded: 1, left: 2 });
     const rows = await db.boqItem.findMany({ where: { boqId: second }, orderBy: { sortOrder: "asc" } });
-    expect(rows.map((x) => Number(x.sellingRate))).toEqual([37.5, 150, 93.75, 0]); // cost + this client's 25 %
+    expect(rows.map((x) => Number(x.sellingRate))).toEqual([37.5, 150, 0, 0]);
     expect(rows[0].rateNote).toBeNull();
     expect(rows[1].rateNote).toMatch(/worded differently/);
-    expect(rows[2].rateNote).toMatch(/^Rate from Other client/);
-    // the person looks and saves: the note goes when it is cleared in the editor (saved without it)
-    await saveBoqItems(second, JSON.stringify(rows.map((x) => ({ id: x.id, category: x.category, item: x.item, unit: x.unit, quantity: Number(x.quantity), materialCost: Number(x.materialCost), labourCost: Number(x.labourCost), otherCost: Number(x.otherCost), sellingRate: Number(x.sellingRate), rateNote: x === rows[1] ? null : x.rateNote }))));
-    const after = await db.boqItem.findMany({ where: { boqId: second }, orderBy: { sortOrder: "asc" } });
-    expect(after.map((x) => !!x.rateNote)).toEqual([false, false, true, false]);
+    // the person checks and saves: the note goes
+    await saveBoqItems(second, JSON.stringify(rows.map((x) => ({ id: x.id, category: x.category, item: x.item, unit: x.unit, quantity: Number(x.quantity), sellingRate: Number(x.sellingRate), rateNote: null }))));
+    expect(await db.boqItem.count({ where: { boqId: second, rateNote: { not: null } } })).toBe(0);
   });
 });
 

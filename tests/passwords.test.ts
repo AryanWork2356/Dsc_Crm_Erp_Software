@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { loginAs, logout, fd } from "./setup";
 import { passwordProblem } from "@/lib/password-rules";
-import { fullLoginId, givenName, issuedPassword, loginIdFor } from "@/lib/issued-password";
+import { fullLoginId, givenName, issuedPassword, loginIdFor, shortLoginId } from "@/lib/issued-password";
 import { changeMyPassword } from "@/app/change-password/actions";
 import { requestPasswordReset } from "@/app/forgot-password/actions";
 import { login } from "@/app/login/actions";
@@ -38,34 +38,39 @@ describe("password rules", () => {
 });
 
 describe("passwords and login IDs the company gives out", () => {
-  it("a password is the first three letters of the name, @, and two digits", () => {
+  it("a password is four random digits, never an obvious one", () => {
     expect(givenName("Gopal Sharma")).toBe("Gopal");
     expect(givenName("Mohd. Shamshad Alam")).toBe("Shamshad");
     expect(givenName("Mohd Kaif")).toBe("Kaif");
-    expect(givenName("Test login: Project Manager")).toBe("Projectmanager");
-    for (let i = 0; i < 100; i++) {
-      expect(issuedPassword("Krishna Maurya")).toMatch(/^Kri@\d{2}$/);
-      expect(issuedPassword("Mohd Kaif")).toMatch(/^Kai@\d{2}$/);
-      expect(issuedPassword("Dinesh Sharma")).toMatch(/^Din@\d{2}$/);
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const p = issuedPassword("Krishna Maurya");
+      expect(p).toMatch(/^\d{4}$/);
+      expect(["0000", "1111", "1234", "4321", "9999"]).not.toContain(p);
+      seen.add(p);
     }
+    expect(seen.size).toBeGreaterThan(250); // random, not the same few
   });
 
-  it("a login ID is the first name plus the first letter of the surname; a clash adds the next surname letter", () => {
+  it("a login ID is first name, a dot and the first letter of the surname; a clash adds the next surname letter", () => {
     const taken = new Set<string>();
-    expect(loginIdFor("Gopal Sharma", taken)).toBe("gopals@dscinterior.com");
-    expect(loginIdFor("Gopal Shukla", taken)).toBe("gopalsh@dscinterior.com");
-    expect(loginIdFor("Gopal Shah", taken)).toBe("gopalsha@dscinterior.com");
-    expect(loginIdFor("Gopal Shah", taken)).toBe("gopalshah@dscinterior.com");
-    expect(loginIdFor("Gopal Shah", taken)).toBe("gopalshah2@dscinterior.com"); // letters used up: a number
-    expect(loginIdFor("Mohd. Shamshad Alam", new Set())).toBe("shamshada@dscinterior.com");
-    expect(loginIdFor("Mohd Kaif", new Set())).toBe("kaif@dscinterior.com");
+    expect(loginIdFor("Aryan Shetty", taken)).toBe("aryan.s@dscinterior.com");
+    expect(loginIdFor("Gopal Sharma", taken)).toBe("gopal.s@dscinterior.com");
+    expect(loginIdFor("Gopal Shukla", taken)).toBe("gopal.sh@dscinterior.com");
+    expect(loginIdFor("Gopal Shah", taken)).toBe("gopal.sha@dscinterior.com");
+    expect(loginIdFor("Gopal Shah", taken)).toBe("gopal.shah@dscinterior.com");
+    expect(loginIdFor("Gopal Shah", taken)).toBe("gopal.shah2@dscinterior.com"); // letters used up: a number
+    expect(loginIdFor("Mohd. Shamshad Alam", new Set())).toBe("shamshad.a@dscinterior.com");
     expect(loginIdFor("Arya", new Set())).toBe("arya@dscinterior.com");
   });
 
-  it("typing only the short ID is enough at sign-in", () => {
-    expect(fullLoginId("Gopals")).toBe("gopals@dscinterior.com");
-    expect(fullLoginId("  gopals  ")).toBe("gopals@dscinterior.com");
+  it("people type name.initial@dsc (or without @dsc); it is shown the same short way", () => {
+    expect(fullLoginId("Aryan.S@dsc")).toBe("aryan.s@dscinterior.com");
+    expect(fullLoginId("  aryan.s  ")).toBe("aryan.s@dscinterior.com");
+    expect(fullLoginId("aryan.s@dscinterior.com")).toBe("aryan.s@dscinterior.com");
     expect(fullLoginId("pm@dsc.demo")).toBe("pm@dsc.demo");
+    expect(shortLoginId("aryan.s@dscinterior.com")).toBe("aryan.s@dsc");
+    expect(shortLoginId("pm@dsc.demo")).toBe("pm@dsc.demo");
   });
 
   it("are accepted at sign-in, and nobody is sent to change them", async () => {
@@ -132,7 +137,7 @@ describe("forgot password", () => {
     expect(r.ok).toBe(true);
     const msg = r.ok ? r.message ?? "" : "";
     const temp = /: (\S+)\s/.exec(msg)?.[1] ?? "";
-    expect(temp).toMatch(/^Pw@\d{2}$/); // first letters of "Pw tester …", then @ and two digits
+    expect(temp).toMatch(/^\d{4}$/); // four random digits
     const after = await db.user.findUniqueOrThrow({ where: { id: u.id } });
     expect(after.mustChangePassword).toBe(false);
     expect(after.resetRequestedAt).toBeNull();

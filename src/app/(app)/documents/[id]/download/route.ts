@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch {
     return new Response("File is missing from storage", { status: 410 });
   }
-  const inline = req.nextUrl.searchParams.get("inline") === "1" && (d.mimeType.startsWith("image/") || d.mimeType === "application/pdf");
+  const inline = req.nextUrl.searchParams.get("inline") === "1" && (d.mimeType.startsWith("image/") || d.mimeType.startsWith("audio/") || d.mimeType === "application/pdf");
   if (!inline) await audit(c, { action: "DOWNLOAD", entityType: "Document", entityId: id, summary: `Downloaded “${d.name}”` });
   const ext = d.storageKey.split(".").pop();
   const filename = d.name.includes(".") ? d.name : `${d.name}.${ext}`;
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       "Content-Type": d.mimeType,
       "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(filename)}"`,
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+      "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox",
       "Cache-Control": "private, no-store",
     },
   });

@@ -165,7 +165,8 @@ describe("leave", () => {
   it("employee applies → HR decides; nobody approves their own; overlaps are blocked", async () => {
     await loginAs("designer@dsc.demo");
     const from = new Date(Date.now() + 30 * 86400000);
-    while (from.getDay() !== 1) from.setDate(from.getDate() + 1); // next Monday
+    from.setUTCHours(6, 0, 0, 0); // a time that is the same date in India and in UTC, whenever the test runs
+    while (from.getUTCDay() !== 1) from.setUTCDate(from.getUTCDate() + 1); // next Monday
     const to = new Date(from.getTime() + 2 * 86400000);
     const f = from.toISOString().slice(0, 10);
     const t = to.toISOString().slice(0, 10);

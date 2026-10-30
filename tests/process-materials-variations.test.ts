@@ -6,7 +6,7 @@ import { deliveryLines, riskOf, syncDeliveryRisks } from "@/lib/delivery-risk";
 import { updateDeliveryLine } from "@/app/(app)/procurement/delivery-actions";
 import { recordWaste } from "@/app/(app)/inventory/waste/actions";
 import { reconcileProject } from "@/lib/waste";
-import { approveExtraWorkInternally, completeExtraWork, createExtraWork, linkExtraWorkInvoice, recordClientDecision, sendExtraWork, startExtraWork, verifyExtraWork } from "@/app/(app)/extra-work/actions";
+import { approveExtraWorkInternally, completeExtraWork, createExtraWork, linkExtraWorkInvoice, recordClientDecision, sendExtraWork, startExtraWork, verifyExtraWork, setExtraWorkPrice } from "@/app/(app)/extra-work/actions";
 
 beforeEach(() => logout());
 
@@ -129,7 +129,7 @@ describe("waste, damage, offcuts and reconciliation", () => {
 describe("extra work: what kind is it, who approves, what is billed", () => {
   it("work already in the contract, or DSC's own mistake, can never carry a price", async () => {
     const { project } = await basics();
-    await loginAs("supervisor@dsc.demo");
+    await loginAs("director@dsc.demo"); // the directors put prices on extra work
     expect((await createExtraWork(fd({ projectId: project.id, title: "Fix wrongly cut shutter", kind: "OWN_REWORK", amount: 5000, scopeNote: "Cut to the wrong size" }))).ok).toBe(false);
     expect((await createExtraWork(fd({ projectId: project.id, title: "Fix wrongly cut shutter", kind: "OWN_REWORK", amount: 0 }))).ok).toBe(false); // needs the reason
     expect((await createExtraWork(fd({ projectId: project.id, title: "Fix wrongly cut shutter", kind: "OWN_REWORK", amount: 0, scopeNote: "Cut to the wrong size", costEstimate: 3000 }))).ok).toBe(true);
@@ -147,6 +147,20 @@ describe("extra work: what kind is it, who approves, what is billed", () => {
     expect((await verifyExtraWork(own.id, fd({ note: "Re-cut shutters measured and fitted" }))).ok).toBe(true);
     await loginAs("accounts@dsc.demo");
     expect((await linkExtraWorkInvoice(own.id, fd({ invoiceId: "x" }))).ok).toBe(false);
+  });
+
+  it("the site team describes extra work without a price; the directors are told and put the price on it", async () => {
+    const { project } = await basics();
+    await loginAs("supervisor@dsc.demo");
+    expect((await createExtraWork(fd({ projectId: project.id, title: "Extra loft in bedroom 2", description: "Client asked on site, 8 ft x 2 ft", kind: "CHARGEABLE", inOriginalScope: "NO", amount: 50000, costEstimate: 20000 }))).ok).toBe(true);
+    const w = await db.additionalWork.findFirstOrThrow({ where: { projectId: project.id, title: "Extra loft in bedroom 2" } });
+    expect([Number(w.amount), Number(w.costEstimate)]).toEqual([0, 0]); // a price typed by the site team is ignored
+    expect(await db.notification.count({ where: { dedupeKey: `aw-price:${w.id}` } })).toBeGreaterThan(0);
+    expect((await createExtraWork(fd({ projectId: project.id, title: "Free gift", kind: "CONCESSION", scopeNote: "x" }))).ok).toBe(false);
+    expect((await setExtraWorkPrice(w.id, fd({ amount: 30000 }))).ok).toBe(false);
+    await loginAs("director@dsc.demo");
+    expect((await setExtraWorkPrice(w.id, fd({ amount: 30000, costEstimate: 12000 }))).ok).toBe(true);
+    expect(Number((await db.additionalWork.findUniqueOrThrow({ where: { id: w.id } })).amount)).toBe(30000);
   });
 
   it("an emergency needs a director before it starts, someone else approving, and then chases the client's written approval", async () => {
@@ -183,7 +197,7 @@ describe("extra work: what kind is it, who approves, what is billed", () => {
 
   it("a concession records its value and needs a director; it is never sent to the client", async () => {
     const { project } = await basics();
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     expect((await createExtraWork(fd({ projectId: project.id, title: "Free shoe rack for a good client", kind: "CONCESSION", amount: 0, scopeNote: "Goodwill" }))).ok).toBe(false); // value must be on record
     expect((await createExtraWork(fd({ projectId: project.id, title: "Free shoe rack for a good client", kind: "CONCESSION", amount: 12000, costEstimate: 7000, scopeNote: "Goodwill: repeat client" }))).ok).toBe(true);
     const w = await db.additionalWork.findFirstOrThrow({ where: { projectId: project.id, kind: "CONCESSION" } });

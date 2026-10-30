@@ -1,6 +1,6 @@
 import type { RoleKey } from "@prisma/client";
 import type { PermissionKey } from "./permissions";
-import { USE_CONTRACTORS, USE_LEADS } from "./features";
+import { featureOff } from "./features";
 
 export type NavItem = { label: string; href: string; perm?: PermissionKey };
 export type NavGroup = { label?: string; icon: string; items: NavItem[]; href?: string; perm?: PermissionKey };
@@ -208,7 +208,7 @@ export type MenuGroup = { label?: string; icon: string; href?: string; items: Na
 export function menuFor(role: RoleKey, can: (p: PermissionKey) => boolean): MenuGroup[] {
   const only = SIMPLE_MENU[role];
   const ok = (href: string, perm?: PermissionKey) => (!perm || can(perm)) && (!only || only.includes(href));
-  return NAV.map((g) => ({ label: g.label, icon: g.icon, href: g.href, items: g.items.filter((i) => ok(i.href, i.perm) && (USE_CONTRACTORS || !i.href.startsWith("/workforce/contractors")) && (USE_LEADS || !["/crm/leads", "/crm/follow-ups"].includes(i.href))), top: g.href ? ok(g.href, g.perm) : false }))
+  return NAV.map((g) => ({ label: g.label, icon: g.icon, href: g.href, items: g.items.filter((i) => ok(i.href, i.perm) && !featureOff(i.href)), top: g.href ? ok(g.href, g.perm) && !featureOff(g.href) : false }))
     .filter((g) => (g.href ? g.top : g.items.length > 0))
     .map(({ top: _t, ...g }) => g);
 }

@@ -34,7 +34,7 @@ export async function sendMorningPlans(companyId: string, now: Date = new Date()
       ...lines,
       late.length ? `Running late: ${late.length} job${late.length === 1 ? "" : "s"}` : null,
       people.size ? `Crew: ${[...people.entries()].map(([t, n]) => `${n} ${t}`).join(", ")}` : null,
-      "Send the morning update with a start-of-day photo.",
+      "Send the morning update: your selfie at the site and a site photo.",
     ].filter(Boolean).join("\n");
     const who = [p.supervisorId, p.siteEngineerId, p.projectManagerId, ...mine.map((t) => t.assignedToId)].filter((x): x is string => !!x);
     const before = await db.notification.count({ where: { dedupeKey: `plan:${p.id}:${date}` } });

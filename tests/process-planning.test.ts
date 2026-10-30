@@ -157,7 +157,7 @@ describe("tasks: zone, quantity, trade and an honest status", () => {
 
   it("zone, planned and actual quantity and the trade are kept; blocking a task raises one action and unblocking closes it", async () => {
     const { p, pm } = await liveProject();
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo"); // DSC: the directors plan the work; the PM and coordinator update it
     const r = await createTask(p.id, fd({ name: "Install cabinets", zone: "Zone B", plannedQty: 12, qtyUnit: "nos", requiredTrade: "Carpenter", requiredHeadcount: 4, dueDate: iso(5) }));
     expect(r.ok).toBe(true);
     const t = await db.projectTask.findFirstOrThrow({ where: { projectId: p.id, name: "Install cabinets" } });

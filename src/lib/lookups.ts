@@ -34,6 +34,6 @@ export async function vendorOptions(companyId: string): Promise<Opt[]> {
 export const SALES_ROLES: RoleKey[] = ["SALES", "OWNER", "MANAGEMENT", "ADMIN"];
 /** The "Project manager" list shows project managers only. */
 export const PM_ROLES: RoleKey[] = ["PROJECT_MANAGER"];
-/** One list for the person on site: site supervisors and site engineers are the same job here. */
+/** One list for the person on site: project coordinators and site engineers are the same job here. */
 export const SITE_ROLES: RoleKey[] = ["SITE_SUPERVISOR", "SITE_ENGINEER"];
 export const DESIGNER_ROLES: RoleKey[] = ["DESIGNER"];

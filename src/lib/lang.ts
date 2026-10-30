@@ -1,5 +1,5 @@
 /**
- * Screen language. The app is written in English; Hindi, Marathi and Gujarati are shown by translating the page
+ * Screen language. The app is written in English; Hindi, Marathi, Gujarati and Bhojpuri are shown by translating the page
  * in the browser (Google Translate, switched on by the "googtrans" cookie). Nothing is translated on our server.
  */
 export const LANGS = [
@@ -7,6 +7,7 @@ export const LANGS = [
   { code: "hi", label: "हिन्दी" },
   { code: "mr", label: "मराठी" },
   { code: "gu", label: "ગુજરાતી" },
+  { code: "bho", label: "भोजपुरी" },
 ] as const;
 export type LangCode = (typeof LANGS)[number]["code"];
 

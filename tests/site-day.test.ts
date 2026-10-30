@@ -35,7 +35,7 @@ async function scheduleFile(rows: (string | number)[][], header = ["Sl No", "Tas
 
 describe("the schedule plans the crew once", () => {
   it("each task with a trade and people becomes a crew need that follows the task, and goes with it", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const p = await newProject();
     expect((await importSchedule(p.id, await scheduleFile([[1, "Carcass", "Carpenter", 6, "", 1, 5], [2, "Wiring", "Electrician", 2, "", 2, 3], [3, "Cleaning", "", "", "", 6, 6]]))).ok).toBe(true);
     const needs = await db.resourceNeed.findMany({ where: { projectId: p.id }, orderBy: { trade: "asc" } });
@@ -47,13 +47,12 @@ describe("the schedule plans the crew once", () => {
     expect((await updateTask(carcass.id, fd({ name: "Carcass", requiredTrade: "Carpenter", requiredHeadcount: 8, startDate: iso(inDays(1)), dueDate: iso(inDays(4)), priority: "MEDIUM" }))).ok).toBe(true);
     const moved = await db.resourceNeed.findUniqueOrThrow({ where: { id: needs[0].id } });
     expect([moved.required, iso(moved.fromDate), moved.confirmed]).toEqual([8, iso(inDays(1)), 6]);
-    await loginAs("owner@dsc.demo");
     expect((await deleteTask(carcass.id)).ok).toBe(true);
     expect(await db.resourceNeed.count({ where: { id: needs[0].id } })).toBe(0);
   });
 
   it("Assigned to must be someone with a login; then the job is theirs", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const p = await newProject();
     const bad = await importSchedule(p.id, await scheduleFile([[1, "Carcass", "Carpenter", 6, "Nobody Such", 1, 5]]));
     expect(bad.ok === false && bad.error).toMatch(/row 2: nobody called “Nobody Such”/);
@@ -64,7 +63,7 @@ describe("the schedule plans the crew once", () => {
   });
 
   it("tomorrow's work can start today: start moves, finish stays, and it waits for the job before it", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const p = await newProject();
     await importSchedule(p.id, await scheduleFile([[1, "Wiring", "Electrician", 2, "", 1, 1], [2, "Ceiling", "", "", "", 2, 4]], ["Sl No", "Task", "Trade", "People needed", "Assigned to", "Start day", "End day"]));
     const [wiring, ceiling] = await db.projectTask.findMany({ where: { projectId: p.id }, orderBy: { code: "asc" } });
@@ -81,14 +80,14 @@ describe("the schedule plans the crew once", () => {
 
 describe("the morning update and evening report", () => {
   it("morning: who came per trade fills the Manpower record; fewer than planned needs a reason and raises one action", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const p = await newProject();
     await importSchedule(p.id, await scheduleFile([[1, "Carcass", "Carpenter", 6, "", 1, 5], [2, "Wiring", "Electrician", 2, "", 1, 1]]));
     const day = await siteDay(p.companyId, p.id);
     expect(day.crew).toEqual([{ trade: "Carpenter", planned: 6, present: null }, { trade: "Electrician", planned: 2, present: null }]);
     expect(day.todayTasks.map((t) => t.name)).toEqual(["Carcass", "Wiring"]);
     await loginAs("supervisor@dsc.demo");
-    const form = (crew: unknown, reason = "") => { const x = fd({ projectId: p.id, kind: "MORNING", manpower: 7, planNext: "Carcass; Wiring", crew: JSON.stringify(crew), crewReason: reason }); x.append("photos", jpeg()); return x; };
+    const form = (crew: unknown, reason = "") => { const x = fd({ projectId: p.id, kind: "MORNING", manpower: 7, planNext: "Carcass; Wiring", crew: JSON.stringify(crew), crewReason: reason }); x.set("selfie", jpeg("me.jpg")); x.append("photos", jpeg()); return x; };
     const short = [{ trade: "Carpenter", planned: 6, present: 5 }, { trade: "Electrician", planned: 2, present: 2 }];
     const noWhy = await submitSiteReport(form(short));
     expect(noWhy.ok === false && noWhy.error).toMatch(/write why/);
@@ -99,7 +98,7 @@ describe("the morning update and evening report", () => {
   });
 
   it("evening: pressing how far each job got updates the schedule and the project progress; no typing needed", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const p = await newProject();
     await importSchedule(p.id, await scheduleFile([[1, "Carcass", "Carpenter", 6, "", 1, 3], [2, "Wiring", "Electrician", 2, "", 1, 1]]));
     const [carcass, wiring] = await db.projectTask.findMany({ where: { projectId: p.id }, orderBy: { code: "asc" } });
@@ -115,6 +114,40 @@ describe("the morning update and evening report", () => {
     const rep = await db.dailyReport.findFirstOrThrow({ where: { projectId: p.id, kind: "EVENING", reportDate: today } });
     expect(rep.workDone).toMatch(/Carcass: 50%; Wiring: finished/);
     expect(rep.progressPct).toBe(63);
+  });
+
+  it("the worker list is the attendance: name, work, coming and going time; it counts the crew per trade and keeps a voice note", async () => {
+    await loginAs("director@dsc.demo");
+    const p = await newProject();
+    await importSchedule(p.id, await scheduleFile([[1, "Carcass", "Carpenter", 3, "", 1, 5], [2, "Wiring", "Electrician", 1, "", 1, 1]]));
+    const [carcass, wiring] = await db.projectTask.findMany({ where: { projectId: p.id }, orderBy: { code: "asc" } });
+    await loginAs("supervisor@dsc.demo");
+    const workers = [
+      { name: "Ramesh", taskId: carcass.id, inTime: "09:05" }, { name: "Suresh", taskId: carcass.id, inTime: "09:10" },
+      { name: "Imran", taskId: wiring.id, inTime: "09:30" }, { name: "Babu", work: "Cleaning", inTime: "10:00" },
+    ];
+    const m = fd({ projectId: p.id, kind: "MORNING", manpower: 0, planNext: "Carcass; Wiring", workers: JSON.stringify(workers) });
+    m.set("selfie", jpeg("me.jpg")); m.append("photos", jpeg());
+    const noWhy = await submitSiteReport(m);
+    expect(noWhy.ok === false && noWhy.error).toMatch(/Carpenter: 2 of 3/); // one carpenter short: say why
+    m.set("crewReason", "One carpenter on leave");
+    const voice = new File([new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41, 0x20, 0, 0, 0, 0])], "voice.m4a", { type: "audio/mp4" });
+    m.set("voice", voice);
+    expect((await submitSiteReport(m)).ok).toBe(true);
+    const rep = await db.dailyReport.findFirstOrThrow({ where: { projectId: p.id, kind: "MORNING", reportDate: today } });
+    expect(rep.manpower).toBe(4);
+    const docs = await db.document.findMany({ where: { id: { in: rep.photoIds } } });
+    expect(docs.map((d) => d.mimeType).sort()).toEqual(["audio/mp4", "image/jpeg", "image/jpeg"]);
+    const att = await db.siteLabour.findMany({ where: { projectId: p.id, date: today }, orderBy: { name: "asc" } });
+    expect(att.map((a) => [a.name, a.work, a.inTime])).toEqual([["Babu", "Cleaning", "10:00"], ["Imran", "Wiring", "09:30"], ["Ramesh", "Carcass", "09:05"], ["Suresh", "Carcass", "09:10"]]);
+    const logs = await db.manpowerLog.findMany({ where: { projectId: p.id, date: today }, orderBy: { trade: "asc" } });
+    expect(logs.map((l) => [l.trade, l.planned, l.present])).toEqual([["Carpenter", 3, 2], ["Electrician", 1, 1]]);
+    // the evening report puts the going time; the same name twice is refused
+    const twice = fd({ projectId: p.id, kind: "EVENING", manpower: 0, workDone: "x", workers: JSON.stringify([{ name: "Ramesh", outTime: "18:00" }, { name: "ramesh", outTime: "18:00" }]) }); twice.append("photos", jpeg());
+    expect((await submitSiteReport(twice)).ok).toBe(false);
+    const e = fd({ projectId: p.id, kind: "EVENING", manpower: 0, workDone: "Carcass half", workers: JSON.stringify(att.map((a) => ({ name: a.name, taskId: a.taskId, work: a.work, inTime: a.inTime, outTime: "18:30" }))) }); e.append("photos", jpeg());
+    expect((await submitSiteReport(e)).ok).toBe(true);
+    expect((await db.siteLabour.findMany({ where: { projectId: p.id, date: today } })).every((a) => a.outTime === "18:30" && a.inTime)).toBe(true);
   });
 
   it("progress weighs each job by its days", () => {
@@ -149,7 +182,7 @@ describe("working late", () => {
 
 describe("the morning message", () => {
   it("sends each site's work of the day once, from 6:30, to the supervisor and the project manager", async () => {
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     const p = await newProject();
     await importSchedule(p.id, await scheduleFile([[1, "Carcass", "Carpenter", 6, "", 1, 5]]));
     const sup = await db.user.findFirstOrThrow({ where: { email: "supervisor@dsc.demo" } });

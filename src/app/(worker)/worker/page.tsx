@@ -23,7 +23,7 @@ export default async function WorkerHome() {
     db.projectTask.findMany({ where: { companyId: c.companyId, status: { not: "COMPLETED" }, OR: [{ workerId: c.workerId }, { assignedToId: c.userId }] }, include: { project: { select: { name: true } } }, orderBy: [{ dueDate: "asc" }], take: 10 }),
   ]);
   const present = today && today.status !== "ABSENT" && today.status !== "LEAVE";
-  const supervisor = project?.supervisorId ? await db.user.findUnique({ where: { id: project.supervisorId }, select: { name: true, phone: true } }) : null;
+  const coordinator = project?.supervisorId ? await db.user.findUnique({ where: { id: project.supervisorId }, select: { name: true, phone: true } }) : null;
 
   return (
     <div className="space-y-5">
@@ -34,9 +34,9 @@ export default async function WorkerHome() {
           <>
             <p className="mt-1 text-xl font-bold text-slate-900">{project.name}</p>
             {project.siteAddress && <p className="mt-1 flex items-start gap-1.5 text-sm text-slate-600"><MapPin className="mt-0.5 h-4 w-4 shrink-0" />{project.siteAddress}</p>}
-            {supervisor && <p className="mt-2 text-sm text-slate-600">Supervisor: <b className="text-slate-900">{supervisor.name}</b>{supervisor.phone && <> · <a href={`tel:${supervisor.phone}`} className="font-medium text-brand-700">Call</a></>}</p>}
+            {coordinator && <p className="mt-2 text-sm text-slate-600">Supervisor: <b className="text-slate-900">{coordinator.name}</b>{coordinator.phone && <> · <a href={`tel:${coordinator.phone}`} className="font-medium text-brand-700">Call</a></>}</p>}
           </>
-        ) : <p className="mt-1 text-base text-slate-700">No site assigned yet. Please ask your supervisor.</p>}
+        ) : <p className="mt-1 text-base text-slate-700">No site assigned yet. Please ask your coordinator.</p>}
       </section>
 
       {present ? (
@@ -74,7 +74,7 @@ export default async function WorkerHome() {
         <FormDialog title="Request material" description="Tell us what you need on site. Your project manager will approve it." trigger={<button className="flex h-28 w-full flex-col items-center justify-center gap-2 rounded-2xl bg-white text-base font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"><PackagePlus className="h-8 w-8 text-brand-700" />Need material</button>}
           fields={[{ name: "item", label: "What do you need?", required: true, full: true, placeholder: "e.g. 18mm plywood" }, { name: "quantity", label: "How many?", type: "number", required: true }, { name: "unit", label: "Unit", type: "select", options: UNIT_OPTS, defaultValue: "nos" }, { name: "note", label: "Anything else?", type: "textarea" }]}
           action={workerRequestMaterial} submitLabel="Send request" />
-        <FormDialog title="Report a problem" description="Your supervisor and project manager will be told right away." trigger={<button className="flex h-28 w-full flex-col items-center justify-center gap-2 rounded-2xl bg-white text-base font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"><TriangleAlert className="h-8 w-8 text-amber-600" />Report problem</button>}
+        <FormDialog title="Report a problem" description="Your coordinator and project manager will be told right away." trigger={<button className="flex h-28 w-full flex-col items-center justify-center gap-2 rounded-2xl bg-white text-base font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 active:bg-slate-50"><TriangleAlert className="h-8 w-8 text-amber-600" />Report problem</button>}
           fields={[{ name: "issue", label: "What is the problem?", type: "textarea", required: true, full: true }]} action={workerReportIssue} submitLabel="Send" />
       </section>
     </div>

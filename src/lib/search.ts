@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import type { Ctx } from "./auth";
 import { clientScope, leadScope, projectScope, projectDocScope } from "./scope";
+import { USE_SUPPORT } from "./features";
 
 export type Hit = { id: string; title: string; sub?: string; href: string };
 export type Group = { key: string; label: string; hits: Hit[] };
@@ -37,7 +38,7 @@ export async function globalSearch(c: Ctx, raw: string): Promise<Group[]> {
     const vis: Prisma.DocumentWhereInput = wide ? {} : { OR: [{ uploadedById: c.userId }, { entityType: "PROJECT", entityId: { in: projects } }, { entityType: "CLIENT", ...(c.can("clients:view") ? {} : { id: "none" }) }, { entityType: "VENDOR", ...(c.can("vendors:view") ? {} : { id: "none" }) }] };
     return (await db.document.findMany({ where: { companyId: co, deletedAt: null, AND: [vis, { OR: [{ name: ci(q) }, { tags: ci(q) }, { folder: ci(q) }] }] }, take: LIMIT })).map((x) => ({ id: x.id, title: x.name, sub: `${x.type.toLowerCase().replace(/_/g, " ")}${x.folder ? ` · ${x.folder}` : ""}`, href: `/documents?q=${encodeURIComponent(x.name)}` }));
   });
-  add("support:view", "tickets", "Support tickets", async () => (await db.supportTicket.findMany({ where: { companyId: co, OR: [{ number: ci(q) }, { subject: ci(q) }, { client: { name: ci(q) } }] }, take: LIMIT })).map((x) => ({ id: x.id, title: x.subject, sub: x.number, href: `/support/${x.id}` })));
+  if (USE_SUPPORT) add("support:view", "tickets", "Support tickets", async () => (await db.supportTicket.findMany({ where: { companyId: co, OR: [{ number: ci(q) }, { subject: ci(q) }, { client: { name: ci(q) } }] }, take: LIMIT })).map((x) => ({ id: x.id, title: x.subject, sub: x.number, href: `/support/${x.id}` })));
 
   return (await Promise.all(jobs)).filter((g): g is Group => g !== null);
 }

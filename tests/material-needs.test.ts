@@ -57,16 +57,17 @@ async function newProject() {
 }
 
 describe("the materials list of a project", () => {
-  it("is kept by people who plan or buy, on projects they can open, and not by the store", async () => {
+  it("is kept by the people who plan (directors, admins); the site team, managers and the store only see it", async () => {
     const p = await newProject();
     await loginAs("store@dsc.demo");
     expect((await createMaterialNeed(p.id, fd({ description: "Tile adhesive", quantity: "10", unit: "bags", neededBy: iso(inDays(5)) }))).ok).toBe(false);
     await loginAs("supervisor@dsc.demo"); // may plan, but is not on this project
     expect((await createMaterialNeed(p.id, fd({ description: "Tile adhesive", quantity: "10", unit: "bags", neededBy: iso(inDays(5)) }))).ok).toBe(false);
-    await loginAs("pm@dsc.demo");
+    await loginAs("pm@dsc.demo"); // managers see the list but do not plan it
+    expect((await createMaterialNeed(p.id, fd({ description: "Tile adhesive", quantity: "10", unit: "bags", neededBy: iso(inDays(5)) }))).ok).toBe(false);
+    await loginAs("director@dsc.demo");
     expect((await createMaterialNeed(p.id, fd({ description: "Tile adhesive", quantity: "0", neededBy: iso(inDays(5)) }))).ok).toBe(false);
     expect((await createMaterialNeed(p.id, fd({ description: "Tile adhesive", quantity: "10", unit: "bags", neededBy: iso(inDays(5)) }))).ok).toBe(true);
-    await loginAs("procurement@dsc.demo");
     const n = await db.materialNeed.findFirstOrThrow({ where: { projectId: p.id } });
     expect((await updateMaterialNeed(n.id, fd({ description: "Tile adhesive", quantity: "12", unit: "bags", neededBy: iso(inDays(6)) }))).ok).toBe(true);
     expect(Number((await db.materialNeed.findUniqueOrThrow({ where: { id: n.id } })).quantity)).toBe(12);
@@ -75,7 +76,7 @@ describe("the materials list of a project", () => {
   it("warns Procurement once when nobody has asked for it, stops when it is requested, and closes when the line goes", async () => {
     const p = await newProject();
     const company = await db.company.findFirstOrThrow();
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     await createMaterialNeed(p.id, fd({ description: "Gypsum board 12.5 mm", quantity: "60", unit: "sheets", neededBy: iso(inDays(5)) }));
     await createMaterialNeed(p.id, fd({ description: "Emulsion paint", quantity: "80", unit: "litres", neededBy: iso(inDays(40)) }));
     const [gypsum, paint] = await db.materialNeed.findMany({ where: { projectId: p.id }, orderBy: { neededBy: "asc" } });
@@ -105,7 +106,7 @@ describe("the materials list of a project", () => {
     await syncMaterialNeeds(company.id);
     expect(await db.actionItem.count({ where: { sourceType: "MaterialNeed", sourceId: gypsum.id, status: { in: ["OPEN", "IN_PROGRESS"] } } })).toBe(1);
 
-    await loginAs("pm@dsc.demo");
+    await loginAs("director@dsc.demo");
     expect((await deleteMaterialNeed(gypsum.id)).ok).toBe(true);
     expect(await db.actionItem.count({ where: { sourceType: "MaterialNeed", sourceId: gypsum.id, status: { in: ["OPEN", "IN_PROGRESS"] } } })).toBe(0);
   });

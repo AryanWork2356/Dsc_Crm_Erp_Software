@@ -59,16 +59,16 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
   },
   PROJECT_MANAGER: {
     modules: {
-      dashboard: R, clients: R, sitevisits: RW, quotations: R, boq: RWX, projects: ["view", "edit", "export"],
-      tasks: ALL, purchase_requests: RW, purchase_orders: R, vendors: R, materials: R, inventory: R,
+      dashboard: R, clients: R, boq: R, projects: ["view", "edit", "export"],
+      tasks: ["view", "edit"], purchase_requests: RW, purchase_orders: R, vendors: R, materials: R, inventory: R,
       workers: R, contractors: R, attendance: RW, site_reports: RWX, transfers: ["view", "create", "approve"], bill_certification: ["view", "approve"], extra_work: RWX, closure: ["view", "edit"], scorecards: ["view", "edit"], actions: RW, resources: RW, feasibility: RW, exceptions: R, expenses: RW, documents: RW, approvals: ["view", "approve"],
-      support: RW, whatsapp: R, reports: R, notifications: R, leaves: ["view", "create"],
+      whatsapp: R, reports: R, notifications: R, leaves: ["view", "create"],
     },
-    special: ["margins:view"],
+    special: [], // DSC: managers see the BOQ without rates, and no costs or profit (directors only)
   },
   DESIGNER: {
     modules: { leaves: ["view", "create"],
-      dashboard: R, clients: R, sitevisits: RW, quotations: RW, boq: RW, projects: R, tasks: RW, actions: RW, feasibility: R,
+      dashboard: R, clients: R, quotations: RW, boq: RW, projects: R, tasks: ["view", "edit"], actions: RW, feasibility: R,
       documents: RW, approvals: R, notifications: R,
     },
     special: [],
@@ -109,15 +109,15 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
   },
   SITE_ENGINEER: {
     modules: { expenses: ["view", "create"], leaves: ["view", "create"],
-      dashboard: R, projects: R, tasks: RW, boq: R, attendance: RW, site_reports: RW, transfers: ["view", "create"], extra_work: ["view", "create"], scorecards: R, workers: R, inventory: ["view", "create"],
+      dashboard: R, projects: R, tasks: ["view", "edit"], boq: R, attendance: RW, site_reports: RW, transfers: ["view", "create"], extra_work: ["view", "create"], scorecards: R, workers: R, inventory: ["view", "create"],
       materials: R, purchase_requests: RW, sitevisits: RW, documents: RW, support: RW, notifications: R, actions: RW, resources: ["view", "create"],
     },
     special: [],
   },
   SITE_SUPERVISOR: {
     modules: { expenses: ["view", "create"], leaves: ["view", "create"],
-      dashboard: R, projects: R, tasks: RW, attendance: RW, site_reports: RW, transfers: ["view", "create"], extra_work: ["view", "create"], scorecards: R, workers: R, inventory: ["view", "create"],
-      purchase_requests: RW, documents: RW, notifications: R, actions: RW, resources: ["view", "create"],
+      dashboard: R, projects: R, tasks: ["view", "edit"], boq: R, attendance: RW, site_reports: RW, transfers: ["view", "create"], extra_work: ["view", "create"], scorecards: R, workers: R, inventory: ["view", "create"],
+      purchase_requests: RW, documents: ["view", "create"], notifications: R, actions: RW, resources: ["view", "create"],
     },
     special: [],
   },
@@ -162,19 +162,24 @@ export const isWorkerRole = (r: RoleKey) => r === "WORKER";
 /** Roles that see every project (others see only projects they are assigned to) */
 export const SEES_ALL_PROJECTS: RoleKey[] = ["OWNER", "MANAGEMENT", "ADMIN", "ACCOUNTS", "PROCUREMENT", "STORE", "HR"];
 
+/** The roles DSC gives to people (the others stay in the app for old logins, portals and tests, but are not offered). */
+export const OFFERED_ROLES: RoleKey[] = ["SITE_SUPERVISOR", "PROJECT_MANAGER", "DESIGNER", "ADMIN", "MANAGEMENT", "HR", "ACCOUNTS"];
+/** Directors: they plan (schedule, materials), see every project document, prices and profit. */
+export const DIRECTOR_ROLES: RoleKey[] = ["OWNER", "MANAGEMENT"];
+
 export const ROLE_LABELS: Record<RoleKey, string> = {
-  OWNER: "Owner / Super Admin",
-  MANAGEMENT: "Management / Director",
+  OWNER: "Director (full access)",
+  MANAGEMENT: "Director",
   ADMIN: "Admin",
   SALES: "Sales",
   PROJECT_MANAGER: "Project Manager",
   DESIGNER: "Designer",
   PROCUREMENT: "Procurement",
-  ACCOUNTS: "Accounts / Finance",
+  ACCOUNTS: "Accounts",
   HR: "HR",
   STORE: "Store / Inventory",
   SITE_ENGINEER: "Site Engineer",
-  SITE_SUPERVISOR: "Site Supervisor",
+  SITE_SUPERVISOR: "Project Coordinator",
   WORKER: "Worker",
   VENDOR: "Vendor",
   CLIENT: "Client",

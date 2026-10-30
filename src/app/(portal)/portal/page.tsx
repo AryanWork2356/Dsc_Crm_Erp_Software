@@ -6,6 +6,7 @@ import { formatDate, formatINR, humanize, num, startOfDay } from "@/lib/utils";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatCard, Progress, EmptyState } from "@/components/ui/page";
 import { StatusBadge } from "@/components/ui/badge";
+import { USE_SUPPORT } from "@/lib/features";
 
 export const metadata = { title: "My Projects" };
 
@@ -29,7 +30,7 @@ export default async function ClientHome() {
         <StatCard label="Projects" value={projects.length} />
         <StatCard label="Amount due" value={formatINR(due)} tone={overdue ? "bad" : due ? "warn" : "good"} href="/portal/invoices" sub={overdue ? `${formatINR(overdue)} overdue` : undefined} />
         <StatCard label="Quotations to review" value={quotes} tone={quotes ? "warn" : "default"} href="/portal/quotations" />
-        <StatCard label="Open requests" value={tickets} href="/portal/support" />
+        {USE_SUPPORT && <StatCard label="Open requests" value={tickets} href="/portal/support" />}
       </div>
       {projects.length === 0 ? <Card><EmptyState title="No projects yet" hint="Your project will appear here once your quotation is accepted." /></Card> : projects.map((p) => {
         const next = p.milestones.find((m) => !m.completedAt);

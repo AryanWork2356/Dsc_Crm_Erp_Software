@@ -14,6 +14,8 @@ import { projectScope } from "@/lib/scope";
 import { putFile, deleteFile, validateUpload, UploadError } from "@/lib/storage";
 import { formToObject, zOptStr } from "@/lib/form";
 import { isOnTime, reportDay } from "@/lib/site-reports";
+import { siteDay } from "@/lib/site-day";
+import { REPORT_FOLDER } from "@/lib/doc-access";
 import { reportTimes } from "@/lib/site-report-reminders";
 
 const MAX_PHOTOS = 10;
@@ -31,8 +33,11 @@ const schema = z.object({
 });
 
 /**
- * Morning update (who is on site, today's plan, blockers) or evening report (work done, photos, progress,
- * material status, tomorrow's plan). One per site per day per kind – sending again the same day updates it.
+ * Morning update or evening report. One per site per day per kind – sending again the same day updates it.
+ *   morning: who is on site (each worker: name, the work they are on, coming time), today's plan, a SELFIE at the site and a site photo
+ *   evening: going time of each worker, how far each job got, end-of-day photos, tomorrow's plan
+ *   both: material status, problems, and an optional voice note
+ * The worker list is the site attendance, and it also fills the Manpower record per trade (no counting twice).
  */
 export async function submitSiteReport(fd: FormData) {
   return run(async () => {
@@ -42,59 +47,66 @@ export async function submitSiteReport(fd: FormData) {
     const project = await db.project.findFirst({ where: { id: d.projectId, ...projectScope(c) } });
     if (!project) throw new UserError("Site not found or you aren't assigned to it.");
     if (project.status === "COMPLETED" || project.status === "CANCELLED") throw new UserError("This project is closed – reports can't be added.");
+    const morning = d.kind === "MORNING";
 
-    // morning: who came per trade (one count: it also fills the Manpower record); evening: how far each job of the day got
-    const crew = parseList(fd.get("crew"), crewRow);
+    const workers = parseList(fd.get("workers"), workerRow);
+    const names = workers.map((w) => w.name.toLowerCase());
+    if (names.some((n, i) => names.indexOf(n) !== i)) throw new UserError("The same name is in the worker list twice. Add the surname or a number to tell them apart.");
+    for (const w of workers) for (const t of [w.inTime, w.outTime]) if (t && !HHMM.test(t)) throw new UserError(`${w.name}: the time “${t}” is not a time like 09:30.`);
+    // who came per trade: worked out from the worker list (or sent as numbers by older screens)
+    const crew = workers.length && morning ? await crewFromWorkers(c.companyId, project.id, workers) : parseList(fd.get("crew"), crewRow);
     const crewReason = String(fd.get("crewReason") ?? "").trim();
-    if (crew.some((r) => r.present < r.planned) && !crewReason) throw new UserError("Fewer people came than planned: write why, in a line.");
+    if (crew.some((r) => r.present < r.planned) && !crewReason) throw new UserError(`Fewer people came than planned (${crew.filter((r) => r.present < r.planned).map((r) => `${r.trade}: ${r.present} of ${r.planned}`).join(", ")}): write why, in a line.`);
     const taskUpdates = d.kind === "EVENING" ? parseList(fd.get("tasks"), taskRow) : [];
     if (taskUpdates.length && !c.can("tasks:edit")) throw new UserError("You can't update the schedule. Write the work done instead.");
-    if (d.kind === "MORNING" && !d.planNext) throw new UserError("Write today's plan in a line or two.");
-    if (d.kind === "EVENING" && !d.workDone && !taskUpdates.length) throw new UserError("Write what work was done today, or press how far each job got.");
+    if (morning && !d.planNext) throw new UserError("Write today's plan in a line or two.");
+    if (!morning && !d.workDone && !taskUpdates.length) throw new UserError("Write what work was done today, or press how far each job got.");
 
     const files = fd.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-    if (files.length > MAX_PHOTOS) throw new UserError(`Add at most ${MAX_PHOTOS} photos per report.`);
+    const selfie = fd.get("selfie") instanceof File && (fd.get("selfie") as File).size > 0 ? (fd.get("selfie") as File) : null;
+    const voice = fd.get("voice") instanceof File && (fd.get("voice") as File).size > 0 ? (fd.get("voice") as File) : null;
+    if (files.length + (selfie ? 1 : 0) > MAX_PHOTOS) throw new UserError(`Add at most ${MAX_PHOTOS} photos per report.`);
 
     const day = reportDay();
     const existing = await db.dailyReport.findUnique({ where: { projectId_reportDate_kind: { projectId: project.id, reportDate: day, kind: d.kind } } });
-    if (files.length + (existing?.photoIds.length ?? 0) === 0) throw new UserError(d.kind === "MORNING" ? "Add a start-of-day photo of the site." : "Add at least one end-of-day photo of the site.");
+    const before = existing?.photoIds.length ? await db.document.findMany({ where: { id: { in: existing.photoIds } }, select: { name: true, mimeType: true } }) : [];
+    const hadSelfie = before.some((x) => /selfie/i.test(x.name)), hadSite = before.some((x) => x.mimeType.startsWith("image/") && !/selfie/i.test(x.name));
+    if (morning && !selfie && !hadSelfie) throw new UserError("Add your selfie at the site (the first photo).");
+    if (!files.length && !hadSite) throw new UserError(morning ? "Add a photo of the site at the start of the day." : "Add at least one end-of-day photo of the site.");
     if (existing && existing.submittedById !== c.userId && !c.can("site_reports:edit")) throw new UserError("Someone else already sent this report.");
 
     const saved: string[] = [];
     const photoIds: string[] = [];
     try {
       let n = (existing?.photoIds.length ?? 0) + 1;
-      for (const f of files) {
+      const stamp = `${project.code} ${morning ? "morning" : "evening"} ${day.toISOString().slice(0, 10)}`;
+      const keep = async (f: File, label: string, audio = false) => {
         const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-        if (!IMAGE_EXT.includes(ext)) throw new UserError("Photos must be JPG, PNG or WebP images.");
+        if (!(audio ? AUDIO_EXT : IMAGE_EXT).includes(ext)) throw new UserError(audio ? "The voice note could not be read. Record it again." : "Photos must be JPG, PNG or WebP images.");
         let v;
-        try {
-          v = await validateUpload(f);
-        } catch (e) {
-          if (e instanceof UploadError) throw new UserError(e.message);
-          throw e;
-        }
+        try { v = await validateUpload(f); } catch (e) { if (e instanceof UploadError) throw new UserError(e.message); throw e; }
         const key = await putFile(c.companyId, v.bytes, v.ext);
         saved.push(key);
         const doc = await db.document.create({
-          data: {
-            companyId: c.companyId, name: `${project.code} ${d.kind === "MORNING" ? "morning" : "evening"} ${day.toISOString().slice(0, 10)} #${n++}.${v.ext}`,
-            type: "SITE_PHOTO", folder: "Daily reports", entityType: "PROJECT", entityId: project.id, storageKey: key, mimeType: v.mime, size: v.size, uploadedById: c.userId,
-          },
+          data: { companyId: c.companyId, name: `${stamp} ${label}.${v.ext}`, type: audio ? "OTHER" : "SITE_PHOTO", folder: REPORT_FOLDER, entityType: "PROJECT", entityId: project.id, storageKey: key, mimeType: v.mime, size: v.size, uploadedById: c.userId },
         });
         photoIds.push(doc.id);
-      }
+      };
+      if (selfie) await keep(selfie, "selfie");
+      for (const f of files) await keep(f, `#${n++}`);
+      if (voice) await keep(voice, "voice note", true);
 
       const now = new Date();
       const t = await reportTimes(c.companyId);
       const lateUntil = d.kind === "EVENING" ? (await db.lateWork.findUnique({ where: { projectId_date: { projectId: project.id, date: day } } }))?.until : null;
       // the schedule first, so the report keeps the project progress it led to
       const tasksDone = taskUpdates.length ? await applyTaskProgress(c, project.id, taskUpdates) : [];
+      if (workers.length) await saveAttendance(c, project.id, day, workers);
       if (crew.length) await recordCrew(c, project, day, crew, crewReason);
       const progress = taskUpdates.length ? (await db.project.findUnique({ where: { id: project.id }, select: { progress: true } }))?.progress ?? null : null;
       const workDone = [tasksDone.length ? tasksDone.join("; ") : null, d.workDone].filter(Boolean).join(". ") || null;
       const data = {
-        manpower: d.manpower, progressPct: progress ?? d.progressPct ?? existing?.progressPct ?? null, workDone, planNext: d.planNext ?? null,
+        manpower: workers.length ? workers.length : d.manpower, progressPct: progress ?? d.progressPct ?? existing?.progressPct ?? null, workDone, planNext: d.planNext ?? null,
         materialStatus: d.materialStatus, issues: d.issues ?? null,
       };
       const report = existing
@@ -124,6 +136,34 @@ export async function submitSiteReport(fd: FormData) {
       for (const key of saved) await deleteFile(key); // no orphan files if saving failed
       if (photoIds.length) await db.document.deleteMany({ where: { id: { in: photoIds } } });
       throw e;
+    }
+  });
+}
+
+const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
+const AUDIO_EXT = ["webm", "ogg", "m4a", "mp4"];
+const workerRow = z.object({ name: z.string().trim().min(1).max(80), taskId: z.string().max(40).optional().nullable(), work: z.string().trim().max(120).optional().nullable(), inTime: z.string().trim().max(5).optional().nullable(), outTime: z.string().trim().max(5).optional().nullable() });
+type WorkerIn = z.infer<typeof workerRow>;
+
+/** Planned per trade (the crew plan of the day, from the schedule) against the workers listed on the jobs of that trade. */
+async function crewFromWorkers(companyId: string, projectId: string, workers: WorkerIn[]) {
+  const day = await siteDay(companyId, projectId);
+  if (!day.crew.length) return [];
+  const tasks = await db.projectTask.findMany({ where: { id: { in: workers.map((w) => w.taskId).filter((x): x is string => !!x) }, projectId }, select: { id: true, requiredTrade: true } });
+  const tradeOf = new Map(tasks.map((t) => [t.id, (t.requiredTrade ?? "").toLowerCase()]));
+  return day.crew.map((r) => ({ trade: r.trade, planned: r.planned, present: workers.filter((w) => w.taskId && tradeOf.get(w.taskId) === r.trade.toLowerCase()).length }));
+}
+
+/** The worker list of the day is the site attendance: one row per name, replaced by the latest report of the day. */
+async function saveAttendance(c: Ctx, projectId: string, day: Date, workers: WorkerIn[]) {
+  const tasks = await db.projectTask.findMany({ where: { id: { in: workers.map((w) => w.taskId).filter((x): x is string => !!x) }, projectId }, select: { id: true, name: true } });
+  const taskName = new Map(tasks.map((t) => [t.id, t.name]));
+  await db.$transaction(async (tx) => {
+    await tx.siteLabour.deleteMany({ where: { projectId, date: day, name: { notIn: workers.map((w) => w.name) } } });
+    for (const w of workers) {
+      const taskId = w.taskId && taskName.has(w.taskId) ? w.taskId : null;
+      const data = { work: (taskId ? taskName.get(taskId) : w.work)?.slice(0, 120) || null, taskId, inTime: w.inTime || null, outTime: w.outTime || null, markedById: c.userId };
+      await tx.siteLabour.upsert({ where: { projectId_date_name: { projectId, date: day, name: w.name } }, create: { companyId: c.companyId, projectId, date: day, name: w.name, ...data }, update: data });
     }
   });
 }

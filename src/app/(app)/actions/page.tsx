@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { requirePerm } from "@/lib/auth";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { projectScope } from "@/lib/scope";
 import { userOptions } from "@/lib/lookups";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { cancelActionItem, createActionItem, reassignActionItem, resolveActionItem, startActionItem } from "./actions";
+import { USE_ACTIONS } from "@/lib/features";
 
 export const metadata = { title: "Actions and blockers" };
 
@@ -25,6 +27,7 @@ const SEVERITY = [
 const TONE = { CRITICAL: "red", HIGH: "amber", MEDIUM: "blue", LOW: "slate" } as const;
 
 export default async function ActionsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  if (!USE_ACTIONS) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("actions:view");
   const { view = "mine" } = await searchParams;
   const today = startOfDay(new Date());

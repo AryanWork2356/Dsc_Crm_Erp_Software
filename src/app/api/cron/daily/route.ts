@@ -11,7 +11,8 @@ import { sendMorningPlans } from "@/lib/morning-plan";
 import { runWeeklyDigest } from "@/lib/director-reports";
 
 /**
- * Scheduler hook – called once a day (7:00 IST) by Vercel Cron (see vercel.json) or any scheduler:
+ * Scheduler hook – called by Vercel Cron (see vercel.json): at 7:00 IST for everything (the morning message, reminders, checks),
+ * and at 10:30 and 19:30 IST (?slot=…) only to chase missing morning updates and evening reports. Any scheduler can call it:
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/daily
  * Disabled unless CRON_SECRET is set.
  */
@@ -22,6 +23,10 @@ async function handle(req: NextRequest) {
   if (!ok) return new Response("Unauthorized", { status: 401 });
   const companies = await db.company.findMany({ select: { id: true } });
   const results: Record<string, unknown> = {};
+  if (req.nextUrl.searchParams.get("slot")?.endsWith("-reports")) {
+    for (const c of companies) results[c.id] = { siteReportReminders: (await runReportReminders(c.id)).sent };
+    return Response.json({ ok: true, results });
+  }
   for (const c of companies) results[c.id] = { morningPlans: (await sendMorningPlans(c.id)).sent, ...(await runDailyAutomations(c.id)), siteReportReminders: (await runReportReminders(c.id)).sent, crewShortages: (await syncResourceShortages(c.id)).raised, lateDeliveries: (await syncDeliveryRisks(c.id)).raised, materialNeeds: (await syncMaterialNeeds(c.id)).raised, overdueItems: (await runTimeLimitReminders(c.id)).overdue, weeklyDigestSent: (await runWeeklyDigest(c.id)).sent };
   return Response.json({ ok: true, results });
 }

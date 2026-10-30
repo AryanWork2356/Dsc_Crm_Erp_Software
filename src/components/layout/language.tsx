@@ -40,7 +40,7 @@ export function TranslateLoader() {
     if (code === "en") return; // the Google translator is loaded only when a language is chosen
 
     window.googleTranslateElementInit = () => {
-      if (window.google) new window.google.translate.TranslateElement({ pageLanguage: "en", includedLanguages: "hi,mr,gu", autoDisplay: false }, "google_translate_element");
+      if (window.google) new window.google.translate.TranslateElement({ pageLanguage: "en", includedLanguages: LANGS.filter((l) => l.code !== "en").map((l) => l.code).join(","), autoDisplay: false }, "google_translate_element");
     };
     if (!document.getElementById("google-translate-script")) {
       const s = document.createElement("script");

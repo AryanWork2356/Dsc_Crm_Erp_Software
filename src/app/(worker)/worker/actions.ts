@@ -45,7 +45,7 @@ export async function workerTaskStatus(taskId: string, status: string) {
       if (s === "COMPLETED" || s === "BLOCKED") await notifyUsers([p.projectManagerId, p.supervisorId].filter((u): u is string => !!u), { companyId: c.companyId, type: "GENERAL", title: `${t.name}: ${s === "COMPLETED" ? "completed" : "BLOCKED"} by ${c.name}`, body: p.name, link: `/projects/${p.id}?tab=tasks` }, tx);
     });
     revalidatePath("/worker");
-    return { message: s === "COMPLETED" ? "Done – well done!" : s === "BLOCKED" ? "Marked as stuck – your supervisor has been told" : "Started" };
+    return { message: s === "COMPLETED" ? "Done – well done!" : s === "BLOCKED" ? "Marked as stuck – your coordinator has been told" : "Started" };
   });
 }
 
@@ -55,7 +55,7 @@ export async function workerRequestMaterial(fd: FormData) {
     const c = await workerCtx();
     const d = z.object({ item: zReqStr("What do you need?"), quantity: z.coerce.number({ message: "How many?" }).positive("How many?"), unit: z.string().trim().default("nos"), note: zOptStr }).parse(formToObject(fd));
     const { p } = await myProject(c);
-    if (!p) throw new UserError("You aren't assigned to a site yet. Ask your supervisor.");
+    if (!p) throw new UserError("You aren't assigned to a site yet. Ask your coordinator.");
     await db.$transaction(async (tx) => {
       const number = await nextNumber(tx, c.companyId, "PR");
       const pr = await tx.purchaseRequest.create({
@@ -76,12 +76,13 @@ export async function workerReportIssue(fd: FormData) {
     const d = z.object({ issue: z.string().trim().min(3, "Please describe the problem").max(1000) }).parse(formToObject(fd));
     const { p } = await myProject(c);
     const people = p ? [p.projectManagerId, p.supervisorId, p.siteEngineerId].filter((u): u is string => !!u) : [];
-    if (!people.length) throw new UserError("No supervisor is assigned to your site yet. Please tell someone in person.");
+    if (!people.length) throw new UserError("No coordinator is assigned to your site yet. Please tell someone in person.");
     // kept as an action with an owner and a date, so it is not lost in the notifications
     const owner = p?.supervisorId ?? p?.siteEngineerId ?? p?.projectManagerId ?? people[0];
     await raiseAction(db, { companyId: c.companyId, title: `${p ? `${p.code}: ` : ""}issue reported by ${c.name}`, detail: d.issue, severity: "HIGH", ownerId: owner, createdById: c.userId, projectId: p?.id ?? null, dueDate: dueIn("HIGH") });
-    await notifyUsers(people, { companyId: c.companyId, type: "GENERAL", title: `⚠ Issue reported on site by ${c.name}`, body: d.issue, link: "/actions" });
+    // the owner of the action is told by the action itself; the others on the site are told here
+    await notifyUsers(people.filter((u) => u !== owner), { companyId: c.companyId, type: "GENERAL", title: `⚠ Issue reported on site by ${c.name}`, body: d.issue, link: p ? `/projects/${p.id}` : "/notifications" });
     await audit(c, { action: "CREATE", entityType: "SiteIssue", entityId: p?.id, summary: `${c.name} reported a site issue${p ? ` at ${p.code}` : ""}: ${d.issue.slice(0, 160)}` });
-    return { message: "Your supervisor has been told" };
+    return { message: "Your coordinator has been told" };
   });
 }

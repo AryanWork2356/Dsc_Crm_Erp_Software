@@ -66,9 +66,21 @@ export async function canViewEntity(c: Ctx, type: string | null, id: string | nu
   }
 }
 
+/**
+ * DSC rule for a project's files: anyone on the project may UPLOAD, but only directors open them. Two folders are for the whole
+ * project team: "Downloadables" (drawings and files the directors share with the site) and the daily report photos and voice notes.
+ */
+export const DOWNLOADS_FOLDER = "Downloadables";
+export const REPORT_FOLDER = "Daily reports";
+export const isDirector = (c: Pick<Ctx, "role">) => c.role === "OWNER" || c.role === "MANAGEMENT";
+/** Who may put files in Downloadables: directors and admins. */
+export const canShareDownloads = (c: Pick<Ctx, "role">) => isDirector(c) || c.role === "ADMIN";
+export const teamFolder = (folder: string | null) => folder === DOWNLOADS_FOLDER || folder === REPORT_FOLDER;
+
 export async function canOpenDocument(c: Ctx, d: Document): Promise<boolean> {
   if (d.companyId !== c.companyId || d.deletedAt) return false;
   if (c.role === "CLIENT" || c.role === "VENDOR") return d.isPortalVisible && (await canViewEntity(c, d.entityType, d.entityId));
+  if (d.entityType === "PROJECT" && !isDirector(c) && !teamFolder(d.folder)) return false; // directors only, even for the person who uploaded it
   if (d.uploadedById === c.userId) return true;
   return canViewEntity(c, d.entityType, d.entityId);
 }

@@ -5,7 +5,9 @@ import { RoleKey } from "@prisma/client";
 import { db } from "@/lib/db";
 import { assertPerm, hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { issuedPassword } from "@/lib/issued-password";
+import { fullLoginId, issuedPassword, shortLoginId } from "@/lib/issued-password";
+import { planStaffLogins } from "@/lib/staff-logins";
+import { ROLE_LABELS } from "@/lib/permissions";
 import { nextEmployeeCode } from "@/lib/employee-code";
 import { run, UserError } from "@/lib/action";
 import { formToObject, zEmail, zGstin, zNumPos, zOptStr, zPan, zPhone, zReqStr } from "@/lib/form";
@@ -53,10 +55,10 @@ export async function saveCompanySettings(fd: FormData) {
 
 const userSchema = z.object({
   name: zReqStr("Name is required"),
-  email: z.string().trim().toLowerCase().email("Enter a valid email"),
+  email: z.string().trim().min(1, "Enter the login ID").transform(fullLoginId).pipe(z.string().email("Enter a login ID like aryan.s@dsc")),
   phone: zPhone,
   role: z.nativeEnum(RoleKey, { message: "Select a role" }),
-  password: z.string().min(8, "Use at least 8 characters").optional(),
+  password: z.string().min(4, "Use at least 4 characters").optional(),
 });
 
 function guardRole(actorRole: RoleKey, target: RoleKey) {
@@ -68,13 +70,14 @@ function guardRole(actorRole: RoleKey, target: RoleKey) {
 export async function createUser(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("users:manage");
-    const d = userSchema.extend({ password: z.string().min(8, "Use at least 8 characters") }).parse(formToObject(fd));
+    const d = userSchema.extend({ password: z.string().min(4, "Use at least 4 characters").optional() }).parse(formToObject(fd));
+    const password = d.password ?? issuedPassword();
     guardRole(c.role, d.role);
     const exists = await db.user.findFirst({ where: { companyId: c.companyId, email: d.email, deletedAt: null } });
     if (exists) throw new UserError("A user with this email already exists.");
     const u = await db.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { companyId: c.companyId, name: d.name, email: d.email, phone: d.phone, role: d.role, passwordHash: await hashPassword(d.password) },
+        data: { companyId: c.companyId, name: d.name, email: d.email, phone: d.phone, role: d.role, passwordHash: await hashPassword(password) },
       });
       const staff = !["WORKER", "CLIENT", "VENDOR"].includes(d.role);
       if (staff) {
@@ -86,7 +89,7 @@ export async function createUser(fd: FormData) {
       return user;
     });
     revalidatePath("/settings/team");
-    return { message: `User ${u.name} created`, data: { id: u.id } };
+    return { message: `${u.name} added. Login ID: ${shortLoginId(u.email)}${d.password ? "" : `   Password: ${password}   (shown once: write it down and give it to them privately)`}`, data: { id: u.id } };
   });
 }
 
@@ -129,7 +132,7 @@ export async function setUserActive(id: string, active: boolean) {
 export async function resetPassword(id: string, fd: FormData) {
   return run(async () => {
     const c = await assertPerm("users:manage");
-    const d = z.object({ password: z.string().min(8, "Use at least 8 characters").optional() }).parse(formToObject(fd));
+    const d = z.object({ password: z.string().min(4, "Use at least 4 characters").optional() }).parse(formToObject(fd));
     const user = await db.user.findFirst({ where: { id, companyId: c.companyId } });
     if (!user) throw new UserError("User not found.");
     guardRole(c.role, user.role);
@@ -168,5 +171,39 @@ export async function createPortalLogin(kind: "CLIENT" | "VENDOR", id: string, f
     await audit(c, { action: "CREATE", entityType: "User", entityId: u.id, summary: `Created ${kind.toLowerCase()} portal login for ${rec.name}`, newValue: { email: d.email, role: kind } });
     revalidatePath("/settings/team");
     return { message: `Portal login created for ${rec.name}` };
+  });
+}
+
+/** Owner only: shows each person's new role and login ID before anything changes. */
+export async function previewStaffLogins() {
+  return run(async () => {
+    const c = await assertPerm("users:manage");
+    if (c.role !== "OWNER") throw new UserError("Only a director with full access can do this.");
+    const rows = await planStaffLogins(c.companyId);
+    return { message: `${rows.length} people`, data: { rows: rows.map((r) => ({ ...r, oldId: shortLoginId(r.oldId), newId: shortLoginId(r.newId), oldRoleLabel: ROLE_LABELS[r.oldRole], newRoleLabel: ROLE_LABELS[r.newRole] })) } };
+  });
+}
+
+/**
+ * Owner only: gives every staff member their role, a login ID like aryan.s@dsc and a new 4-digit password, all at once.
+ * The passwords are returned ONCE (the app keeps only scrambled copies).
+ */
+export async function applyStaffLogins() {
+  return run(async () => {
+    const c = await assertPerm("users:manage");
+    if (c.role !== "OWNER") throw new UserError("Only a director with full access can do this.");
+    const rows = await planStaffLogins(c.companyId);
+    const out: { name: string; role: string; loginId: string; password: string }[] = [];
+    for (const r of rows) {
+      const password = issuedPassword();
+      await db.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: r.userId }, data: { email: r.newId, role: r.newRole, passwordHash: await hashPassword(password), mustChangePassword: false, resetRequestedAt: null, passwordChangedAt: new Date() } });
+        await tx.employee.updateMany({ where: { userId: r.userId }, data: { email: r.newId } });
+        await audit(c, { action: "UPDATE", entityType: "User", entityId: r.userId, summary: `Staff login set: ${r.name} is ${ROLE_LABELS[r.newRole]}, login ${shortLoginId(r.newId)} (new password)`, oldValue: { email: r.oldId, role: r.oldRole }, newValue: { email: r.newId, role: r.newRole } }, tx);
+      });
+      out.push({ name: r.name, role: ROLE_LABELS[r.newRole], loginId: shortLoginId(r.newId), password });
+    }
+    revalidatePath("/settings/team");
+    return { message: `${out.length} logins set. Download or print the list now: the passwords are not shown again.`, data: { rows: out } };
   });
 }

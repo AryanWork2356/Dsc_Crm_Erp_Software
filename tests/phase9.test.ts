@@ -15,6 +15,7 @@ import { validateUpload, UploadError } from "@/lib/storage";
 import { createCampaign } from "@/app/(app)/marketing/actions";
 import { POST as cronPost } from "@/app/api/cron/daily/route";
 import { GET as healthGet } from "@/app/api/health/route";
+import { USE_SUPPORT } from "@/lib/features";
 
 beforeEach(() => logout());
 
@@ -106,7 +107,7 @@ describe("documents", () => {
   });
 });
 
-describe("support tickets and warranty", () => {
+describe.skipIf(!USE_SUPPORT)("support tickets and warranty", () => {
   it("detects warranty from the handover date and assigns the project manager", async () => {
     await loginAs("sales@dsc.demo");
     const done = await proj("PRJ-00005"); // completed ~40 days ago → in warranty

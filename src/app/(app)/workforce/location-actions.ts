@@ -25,7 +25,7 @@ function radius(fd: FormData, blankOk: boolean): number | null {
   return r;
 }
 
-/** Saves where a project's site is. Anyone who can edit the project, and the site supervisor or engineer who is actually standing at the site, may set it. */
+/** Saves where a project's site is. Anyone who can edit the project, and the project coordinator or engineer who is actually standing at the site, may set it. */
 export async function setSiteLocation(projectId: string, fd: FormData) {
   return run(async () => {
     const c = await assertPerm("projects:view");

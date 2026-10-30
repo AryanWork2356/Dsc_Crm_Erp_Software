@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/forms/action-button";
 import { FormDialog } from "@/components/forms/form-dialog";
-import { approveExtraWorkInternally, completeExtraWork, createExtraWork, linkExtraWorkInvoice, recordClientDecision, sendExtraWork, startExtraWork, verifyExtraWork } from "./actions";
+import { approveExtraWorkInternally, completeExtraWork, createExtraWork, linkExtraWorkInvoice, recordClientDecision, sendExtraWork, setExtraWorkPrice, startExtraWork, verifyExtraWork } from "./actions";
 
 export const metadata = { title: "Extra work" };
 
@@ -49,15 +49,17 @@ export default async function ExtraWorkPage({ searchParams }: { searchParams: Pr
         title="Extra work"
         subtitle="Work outside the agreed scope. It cannot start until the client has approved it in writing."
         actions={c.can("extra_work:create") && projects.length > 0 ? (
-          <FormDialog title="Raise extra work" description="Describe the work and its cost. The project manager sends it to the client for approval." wide trigger={<Button>New extra work</Button>}
+          <FormDialog title="Raise extra work" description={canCosts ? "Describe the work and its price. It is then sent to the client for approval." : "Describe the work: what, where, how much, and why. The directors put the price on it and send it to the client."} wide trigger={<Button>New extra work</Button>}
             fields={[
               { name: "projectId", label: "Project", type: "select", required: true, options: projects.map((p) => ({ value: p.id, label: `${p.code} – ${p.name}` })) },
-              { name: "kind", label: "What kind of work is it?", type: "select", required: true, options: KIND_OPTS, defaultValue: "CHARGEABLE", full: true },
+              { name: "kind", label: "What kind of work is it?", type: "select", required: true, options: canCosts ? KIND_OPTS : KIND_OPTS.filter((o) => o.value !== "CONCESSION"), defaultValue: "CHARGEABLE", full: true },
               { name: "title", label: "What is the extra work?", required: true },
               { name: "inOriginalScope", label: "Is it already in the contract?", type: "select", options: [{ value: "NO", label: "No, it is outside the contract" }, { value: "YES", label: "Yes, it is already in the contract" }], defaultValue: "NO", hint: "Check the BOQ and drawings first" },
               { name: "description", label: "Details", type: "textarea", full: true },
-              { name: "amount", label: "Price to the client (₹, excl. GST)", type: "number", defaultValue: 0, hint: "0 for included work and DSC's own rework; for a concession, the value given free" },
-              { name: "costEstimate", label: "DSC's own extra cost (₹)", type: "number", defaultValue: 0 },
+              ...(canCosts ? [
+                { name: "amount", label: "Price to the client (₹, excl. GST)", type: "number" as const, defaultValue: 0, hint: "0 for included work and DSC's own rework; for a concession, the value given free" },
+                { name: "costEstimate", label: "DSC's own extra cost (₹)", type: "number" as const, defaultValue: 0 },
+              ] : []),
               { name: "scheduleImpactDays", label: "Days it adds to the schedule", type: "number", defaultValue: 0 },
               { name: "scopeNote", label: "Scope check, or the reason", type: "textarea", full: true, hint: "Required for emergency work, concessions and rework: what happened and why" },
             ]} action={createExtraWork} submitLabel="Save as draft" />
@@ -73,7 +75,7 @@ export default async function ExtraWorkPage({ searchParams }: { searchParams: Pr
                   <p className="text-sm font-semibold text-slate-900">{w.number} · {w.title}</p>
                   <p className="text-xs text-slate-500">{w.project.code} – {w.project.name} · raised by {who.get(w.requestedById) ?? "—"} on {formatDateTime(w.createdAt)}</p>
                 </div>
-                <div className="flex items-center gap-2"><span className="tabular text-sm font-semibold">{formatINR(w.amount)}</span>{w.kind !== "CHARGEABLE" && <Badge tone={w.kind === "EMERGENCY" ? "red" : "slate"}>{KIND_LABEL[w.kind]}</Badge>}<Badge tone={TONE[w.status]}>{LABEL[w.status]}</Badge></div>
+                <div className="flex items-center gap-2">{canCosts && (Number(w.amount) > 0 || !BILLABLE.includes(w.kind) ? <span className="tabular text-sm font-semibold">{formatINR(w.amount)}</span> : BILLABLE.includes(w.kind) && <Badge tone="amber">Price to be added</Badge>)}{w.kind !== "CHARGEABLE" && <Badge tone={w.kind === "EMERGENCY" ? "red" : "slate"}>{KIND_LABEL[w.kind]}</Badge>}<Badge tone={TONE[w.status]}>{LABEL[w.status]}</Badge></div>
               </div>
               {w.description && <p className="mt-2 text-sm text-slate-700">{w.description}</p>}
               {(w.scopeNote || w.scheduleImpactDays !== 0 || (canCosts && Number(w.costEstimate) > 0)) && (
@@ -91,7 +93,12 @@ export default async function ExtraWorkPage({ searchParams }: { searchParams: Pr
               {(w.kind === "EMERGENCY" || w.kind === "CONCESSION") && !w.internalApprovedAt && w.status === "DRAFT" && <div className="mt-3"><Alert tone="warn">A director must approve this before it can start.</Alert></div>}
               {canEdit && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {BILLABLE.includes(w.kind) && (w.status === "DRAFT" || w.status === "REJECTED") && <ActionButton action={sendExtraWork.bind(null, w.id)} confirm={{ title: "Send to the client?", body: "They get a notification and can approve in their portal.", confirmLabel: "Send" }}>Send to client</ActionButton>}
+                  {canCosts && BILLABLE.includes(w.kind) && (w.status === "DRAFT" || w.status === "REJECTED") && (
+                    <FormDialog title={`Price – ${w.number}`} description={w.title} trigger={<Button variant={Number(w.amount) > 0 ? "ghost" : "primary"}>{Number(w.amount) > 0 ? "Change price" : "Add price"}</Button>}
+                      fields={[{ name: "amount", label: "Price to the client (₹, excl. GST)", type: "number", required: true, defaultValue: Number(w.amount) || null }, { name: "costEstimate", label: "DSC's own extra cost (₹)", type: "number", defaultValue: Number(w.costEstimate) || 0 }]}
+                      action={setExtraWorkPrice.bind(null, w.id)} submitLabel="Save price" />
+                  )}
+                  {canCosts && BILLABLE.includes(w.kind) && (w.status === "DRAFT" || w.status === "REJECTED") && Number(w.amount) > 0 && <ActionButton action={sendExtraWork.bind(null, w.id)} confirm={{ title: "Send to the client?", body: "They get a notification and can approve in their portal.", confirmLabel: "Send" }}>Send to client</ActionButton>}
                   {BILLABLE.includes(w.kind) && (w.status === "DRAFT" || w.status === "SENT" || (w.kind === "EMERGENCY" && ["IN_PROGRESS", "COMPLETED"].includes(w.status) && !w.decidedAt)) && (
                     <>
                       <FormDialog title={`Record client approval – ${w.number}`} description="Upload the client's written approval: signed letter, e-mail or message screenshot." trigger={<Button variant="secondary">Record client approval</Button>}

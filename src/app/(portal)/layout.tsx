@@ -4,6 +4,7 @@ import { Building2, LogOut } from "lucide-react";
 import { requireCtx } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logout } from "../login/actions";
+import { USE_SUPPORT } from "@/lib/features";
 
 /** Shared frame for the client and vendor portals: light, mobile-friendly, no internal menus. */
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -15,7 +16,7 @@ export default async function PortalLayout({ children }: { children: React.React
   ]);
   const base = c.role === "CLIENT" ? "/portal" : "/vendor-portal";
   const links = c.role === "CLIENT"
-    ? [["Overview", "/portal"], ["Quotations", "/portal/quotations"], ["Invoices", "/portal/invoices"], ["Support", "/portal/support"]]
+    ? [["Overview", "/portal"], ["Quotations", "/portal/quotations"], ["Invoices", "/portal/invoices"], ...(USE_SUPPORT ? [["Support", "/portal/support"]] : [])]
     : [["Orders", "/vendor-portal"], ["Payments", "/vendor-portal/payments"]];
   return (
     <div className="min-h-screen bg-slate-50">

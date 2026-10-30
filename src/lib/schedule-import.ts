@@ -170,3 +170,16 @@ export function parseMaterialNeeds(rows: Raw[], projectStart: Date | null, tasks
   });
   return { lines, errors };
 }
+
+/**
+ * Rows copied from Excel and pasted: one line per row, cells separated by tabs (or commas when there is no tab). The first line is the
+ * column names. Empty lines are skipped.
+ */
+export function pastedRows(text: string): Raw[] {
+  const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const sep = lines[0].includes("\t") ? "\t" : ",";
+  const cells = (l: string) => l.split(sep).map((x) => x.trim().replace(/^"(.*)"$/, "$1"));
+  const header = cells(lines[0]);
+  return lines.slice(1).map((l) => { const v = cells(l); return Object.fromEntries(header.map((h, i) => [h, v[i] ?? ""])); });
+}

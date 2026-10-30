@@ -41,7 +41,7 @@ export default async function TimeLimitSettingsPage() {
             <p className="flex justify-between"><span>Morning update – city sites</span><b>{t.reportMorningDue}</b></p>
             <p className="flex justify-between"><span>Morning update – outstation sites</span><b>{t.reportMorningDueOutstation}</b></p>
             <p className="flex justify-between"><span>Evening report</span><b>{t.reportEveningDue}</b></p>
-            <p className="border-t border-slate-100 pt-2 text-xs text-slate-500">If a report is missing: the supervisor is reminded, after 1 hour the project manager, after 3 hours the owner and management.</p>
+            <p className="border-t border-slate-100 pt-2 text-xs text-slate-500">If a report is missing: the coordinator is reminded, after 1 hour the project manager, after 3 hours the owner and management.</p>
           </CardBody>
         </Card>
         <Card>

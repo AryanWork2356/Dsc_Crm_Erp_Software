@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { num } from "@/lib/utils";
+import { sellFromCost } from "@/lib/rate-card";
 import { PageHeader } from "@/components/ui/page";
 import { RateCardEditor } from "./rate-card-editor";
 import { saveRateCard } from "../../boq/rate-actions";
@@ -17,12 +18,11 @@ export default async function ClientRatesPage({ params }: { params: Promise<{ cl
   const card = client.rateCard;
   return (
     <>
-      <PageHeader back={{ href: "/sales/rates", label: "All client rates" }} title={`${client.name} – rates`} subtitle="Cost per unit (per sq ft, per rft …) and the profit DSC adds for this client." />
+      <PageHeader back={{ href: "/sales/rates", label: "All client rates" }} title={`${client.name} – rates`} subtitle="The rate DSC quotes this client for each item (per sq ft, per rft …), profit already in it. Used only when you press Use saved rates on this client's BOQ." />
       <RateCardEditor
         editable={c.can("boq:edit")}
-        profitPct={card ? num(card.profitPct) : 0}
         save={saveRateCard.bind(null, clientId)}
-        initial={(card?.rates ?? []).map((r) => ({ name: r.name, unit: r.unit, category: r.category, materialRate: num(r.materialRate), labourRate: num(r.labourRate), otherRate: num(r.otherRate) }))}
+        initial={(card?.rates ?? []).map((r) => ({ name: r.name, unit: r.unit, category: r.category, rate: num(r.rate) > 0 ? num(r.rate) : sellFromCost(num(r.materialRate) + num(r.labourRate) + num(r.otherRate), num(card!.profitPct)) }))}
       />
     </>
   );

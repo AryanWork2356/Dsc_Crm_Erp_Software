@@ -24,7 +24,7 @@ export default async function ScorecardsPage() {
 
   const people = new Map<string, { role: string; scores: number[] }>();
   for (const { p, score } of rows) {
-    for (const [id, role] of [[p.projectManagerId, "Project manager"], [p.supervisorId, "Site supervisor"]] as const) {
+    for (const [id, role] of [[p.projectManagerId, "Project manager"], [p.supervisorId, "Project coordinator"]] as const) {
       if (!id) continue;
       const e = people.get(id) ?? { role, scores: [] };
       e.scores.push(score.total);

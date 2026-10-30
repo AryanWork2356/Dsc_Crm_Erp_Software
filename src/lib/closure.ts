@@ -21,7 +21,7 @@ export const CLOSURE_ITEMS: ClosureDef[] = [
   { key: "launch_photos", title: "Project launch photographs", hint: "Photos from the launch / opening", docRequired: true, auto: false },
   { key: "material_recon", title: "Material reconciliation report", hint: "Material bought, used, returned and wasted", docRequired: true, auto: false },
   { key: "expense_closure", title: "Site expense closure confirmation", hint: "Checked automatically – no site expense is waiting for verification", docRequired: false, auto: true },
-  { key: "supervisor_cert", title: "Supervisor performance certificate", hint: "Confirm the supervisor's performance review is done", docRequired: false, auto: false },
+  { key: "supervisor_cert", title: "Coordinator performance certificate", hint: "Confirm the coordinator's performance review is done", docRequired: false, auto: false },
   { key: "pm_cert", title: "Project manager performance certificate", hint: "Confirm the project manager's review is done", docRequired: false, auto: false },
   { key: "lessons", title: "Project lessons-learned certificate", hint: "Checked automatically – the Project Director has written the lessons learned", docRequired: false, auto: true },
   { key: "final_checklist", title: "Final project closure checklist", hint: "Signed checklist covering everything above", docRequired: true, auto: false },

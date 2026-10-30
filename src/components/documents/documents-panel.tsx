@@ -10,12 +10,21 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { deleteDocument, setPortalVisibility, uploadDocument } from "@/app/(app)/documents/actions";
+import { canShareDownloads, DOWNLOADS_FOLDER, isDirector } from "@/lib/doc-access";
 
 const SHAREABLE = ["PROJECT", "QUOTATION", "INVOICE", "BOQ", "PO", "TICKET"];
 
-/** Files attached to one record (project, client, vendor…). Upload, download, version history, delete. */
-export async function DocumentsPanel({ c, entityType, entityId, title = "Documents" }: { c: Ctx; entityType: string; entityId: string; title?: string }) {
-  const docs = await db.document.findMany({ where: { companyId: c.companyId, entityType, entityId, deletedAt: null }, orderBy: [{ name: "asc" }, { version: "desc" }] });
+/**
+ * Files attached to one record (project, client, vendor…). Upload, download, version history, delete.
+ * A project has two lists (DSC rule, see lib/doc-access): `private` = the project's documents, which anyone on the project may upload
+ * but only directors see; `downloads` = Downloadables, which directors and admins share with the whole project team (drawings…).
+ */
+export async function DocumentsPanel({ c, entityType, entityId, title = "Documents", view = "all" }: { c: Ctx; entityType: string; entityId: string; title?: string; view?: "all" | "private" | "downloads" }) {
+  const downloads = view === "downloads";
+  const hidden = view === "private" && !isDirector(c); // they may upload, but not see the list
+  const folderWhere = downloads ? { folder: DOWNLOADS_FOLDER } : view === "private" ? { OR: [{ folder: null }, { folder: { not: DOWNLOADS_FOLDER } }] } : {};
+  const docs = hidden ? [] : await db.document.findMany({ where: { companyId: c.companyId, entityType, entityId, deletedAt: null, ...folderWhere }, orderBy: [{ name: "asc" }, { version: "desc" }] });
+  const canUpload = downloads ? c.can("documents:create") && canShareDownloads(c) : c.can("documents:create");
   const latest = docs.filter((d, i) => docs.findIndex((x) => x.name.toLowerCase() === d.name.toLowerCase()) === i);
   const users = await db.user.findMany({ where: { id: { in: [...new Set(docs.map((d) => d.uploadedById).filter(Boolean) as string[])] } }, select: { id: true, name: true } });
   const who = new Map(users.map((u) => [u.id, u.name]));
@@ -24,17 +33,17 @@ export async function DocumentsPanel({ c, entityType, entityId, title = "Documen
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title} ({latest.length})</CardTitle>
-        {c.can("documents:create") && (
+        <CardTitle>{title}{!hidden && ` (${latest.length})`}</CardTitle>
+        {canUpload && (
           <FormDialog
-            title="Upload a file" description="PDF, images, Excel, Word, CSV or text – up to 10 MB. Uploading a file with the same name saves a new version." wide
+            title={downloads ? "Share a file with the site team" : "Upload a file"} description={downloads ? "Everyone on this project can open and download it (drawings, approved designs, schedules…). PDF, images, Excel, Word – up to 10 MB." : hidden ? "Only directors can open project documents. You can upload here; you will not see the list." : "PDF, images, Excel, Word, CSV or text – up to 10 MB. Uploading a file with the same name saves a new version."} wide
             trigger={<Button size="sm">Upload</Button>}
             fields={[
               { name: "entityType", label: "Type", type: "hidden", defaultValue: entityType }, { name: "entityId", label: "Id", type: "hidden", defaultValue: entityId },
               { name: "file", label: "File", type: "file", required: true, full: true },
-              { name: "type", label: "Document type", type: "select", options: DOCUMENT_TYPE_OPTS, defaultValue: "OTHER" },
+              { name: "type", label: "Document type", type: "select", options: DOCUMENT_TYPE_OPTS, defaultValue: downloads ? "DRAWING" : "OTHER" },
               { name: "name", label: "Name (optional)", hint: "Defaults to the file name" },
-              { name: "folder", label: "Folder", placeholder: "e.g. Drawings / Rev 2" }, { name: "tags", label: "Tags", placeholder: "comma separated" },
+              ...(downloads ? [{ name: "folder", label: "Folder", type: "hidden" as const, defaultValue: DOWNLOADS_FOLDER }] : [{ name: "folder", label: "Folder", placeholder: "e.g. Drawings / Rev 2" }]), { name: "tags", label: "Tags", placeholder: "comma separated" },
               { name: "expiresAt", label: "Expires on (optional)", type: "date", hint: "You'll be reminded before it expires" },
               ...(canShare ? [{ name: "isPortalVisible", label: "Share with client / vendor portal", type: "checkbox" as const }] : []),
             ]}
@@ -42,7 +51,7 @@ export async function DocumentsPanel({ c, entityType, entityId, title = "Documen
           />
         )}
       </CardHeader>
-      {latest.length === 0 ? <EmptyState title="No files yet" hint="Upload drawings, photos, contracts or bills." /> : (
+      {hidden ? <EmptyState title="Only directors can open project documents" hint="Upload anything the directors should have (bills, photos, papers from the client). Files shared with you are in Downloadables." /> : latest.length === 0 ? <EmptyState title="No files yet" hint={downloads ? "Directors put drawings and files for the site here." : "Upload drawings, photos, contracts or bills."} /> : (
         <ul className="divide-y divide-slate-100">
           {latest.map((d) => {
             const older = docs.filter((x) => x.name.toLowerCase() === d.name.toLowerCase() && x.id !== d.id);

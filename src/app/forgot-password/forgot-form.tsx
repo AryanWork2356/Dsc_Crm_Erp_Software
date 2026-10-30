@@ -18,7 +18,7 @@ export function ForgotForm() {
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">Your login ID</label>
         <div className="relative">
           <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input id="email" name="email" type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" required autoFocus placeholder="for example gopals" className="h-12 w-full rounded-xl border border-slate-300 bg-slate-50 pl-11 pr-4 text-base focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100" />
+          <input id="email" name="email" type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" required autoFocus placeholder="for example aryan.s@dsc" className="h-12 w-full rounded-xl border border-slate-300 bg-slate-50 pl-11 pr-4 text-base focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100" />
         </div>
       </div>
       {state?.error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{state.error}</p>}

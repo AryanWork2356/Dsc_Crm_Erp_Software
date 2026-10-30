@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { assertPerm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { run, UserError } from "@/lib/action";
-import { canUploadTo, ENTITY_TYPES } from "@/lib/doc-access";
+import { canShareDownloads, canUploadTo, DOWNLOADS_FOLDER, ENTITY_TYPES } from "@/lib/doc-access";
 import { putFile, deleteFile, validateUpload, UploadError } from "@/lib/storage";
 import { formToObject, zOptDate, zOptStr } from "@/lib/form";
 
@@ -33,6 +33,7 @@ export async function uploadDocument(fd: FormData) {
     if (!(ENTITY_TYPES as readonly string[]).includes(entityType)) throw new UserError("Unknown record type.");
     if (entityType === "GENERAL") entityId = null;
     if (!(await canUploadTo(c, entityType, entityId))) throw new UserError("You don't have access to attach files to that record.");
+    if (d.folder?.trim().toLowerCase() === DOWNLOADS_FOLDER.toLowerCase() && !canShareDownloads(c)) throw new UserError("Only directors and admins put files in Downloadables.");
     if (d.isPortalVisible && !c.can("documents:manage") && !["PROJECT_MANAGER", "SALES", "ACCOUNTS"].includes(c.role)) throw new UserError("You can't share files with clients or vendors.");
 
     const file = fd.get("file");

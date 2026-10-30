@@ -13,7 +13,7 @@ export const FEASIBILITY_ITEMS = [
   { key: "scope", label: "Scope", question: "Are drawings, BOQ, specifications, exclusions and client expectations clear?" },
   { key: "commercial", label: "Commercial", question: "What is the expected margin, payment schedule and cash requirement?" },
   { key: "manpower", label: "Manpower", question: "How many workers of each skill are needed, and when?" },
-  { key: "vendors", label: "Vendors", question: "Are capacity, rates, supervisor and backup vendors confirmed?" },
+  { key: "vendors", label: "Vendors", question: "Are capacity, rates, coordinator and backup vendors confirmed?" },
   { key: "materials", label: "Materials", question: "What is in stock, what must be bought, and when will it arrive?" },
   { key: "factory", label: "Factory", question: "Can production, machines and dispatch meet the dates?" },
   { key: "schedule", label: "Schedule", question: "Are dependencies, site access, travel and handovers realistic?" },
@@ -31,7 +31,7 @@ export const LAUNCH_ITEMS = [
   { key: "d2_materials", day: 2, label: "Stock checked and purchase orders placed", question: "Reserved from stock, or ordered with a promised arrival date." },
   { key: "d2_factory", day: 2, label: "Factory capacity and logistics confirmed", question: "Production slots and transport are booked." },
   { key: "d3_site", day: 3, label: "Site ready", question: "Site access, drawings and approvals are in place." },
-  { key: "d3_people", day: 3, label: "Critical people and first deliveries confirmed", question: "Supervisor, workers and first-week material are confirmed." },
+  { key: "d3_people", day: 3, label: "Critical people and first deliveries confirmed", question: "Coordinator, workers and first-week material are confirmed." },
   { key: "d3_week", day: 3, label: "First-week plan agreed", question: "Daily plan for the first week is written and shared." },
 ] as const;
 

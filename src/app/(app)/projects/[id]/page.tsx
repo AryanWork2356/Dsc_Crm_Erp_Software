@@ -55,7 +55,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     { key: "milestones", label: "Milestones", href: `/projects/${id}?tab=milestones`, count: p.milestones.length },
     { key: "boq", label: "BOQ", href: `/projects/${id}?tab=boq`, count: p.boqs.length },
     ...(c.can("inventory:view") ? [{ key: "materials", label: "Materials", href: `/projects/${id}?tab=materials` }] : []),
-    ...(c.can("documents:view") && docAccess ? [{ key: "documents", label: "Documents", href: `/projects/${id}?tab=documents` }] : []),
+    ...(docAccess ? [{ key: "downloads", label: "Downloadables", href: `/projects/${id}?tab=downloads` }] : []),
+    ...((c.can("documents:view") || c.can("documents:create")) && docAccess ? [{ key: "documents", label: "Documents", href: `/projects/${id}?tab=documents` }] : []),
     ...(money ? [{ key: "financials", label: "Profit & budget", href: `/projects/${id}?tab=financials` }] : []),
   ];
   const tab = tabs.some((t) => t.key === tabParam) ? tabParam! : "overview";
@@ -135,7 +136,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                 <DetailGrid items={[
                   { label: "Site address", value: p.siteAddress }, { label: "Start date", value: formatDate(p.startDate) }, { label: "Actual completion", value: formatDate(p.actualEndDate) },
                   { label: "Project manager", value: p.projectManagerId ? name.get(p.projectManagerId) : null }, { label: "Designer", value: p.designerId ? name.get(p.designerId) : null },
-                  { label: "Site engineer", value: p.siteEngineerId ? name.get(p.siteEngineerId) : null }, { label: "Supervisor", value: p.supervisorId ? name.get(p.supervisorId) : null },
+                  { label: "Site engineer", value: p.siteEngineerId ? name.get(p.siteEngineerId) : null }, { label: "Coordinator", value: p.supervisorId ? name.get(p.supervisorId) : null },
                 ]} />
               </CardBody>
             </Card>
@@ -261,7 +262,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                 return (
                   <li key={b.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
                     <div className="min-w-0 flex-1"><Link href={`/sales/boq/${b.id}`} className="font-medium text-slate-900 hover:text-brand-700">{b.number}</Link><p className="text-xs text-slate-500">{b.title} · {b.items.length} items</p></div>
-                    <span className="tabular text-sm">{formatINR(rev)}</span>
+                    {money && <span className="tabular text-sm">{formatINR(rev)}</span>}
                     {money && <span className="tabular text-sm text-slate-500">cost {formatINR(cost)}</span>}
                     <StatusBadge status={b.status} />
                   </li>
@@ -274,7 +275,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
 
       {tab === "materials" && (
         <div className="space-y-5">
-        <MaterialNeedsCard companyId={c.companyId} projectId={id} start={p.startDate} tasks={p.tasks.map((t) => ({ id: t.id, name: t.name }))} canEdit={canTask || c.can("purchase_requests:create")} canAsk={c.can("purchase_requests:create")} />
+        <MaterialNeedsCard companyId={c.companyId} projectId={id} start={p.startDate} tasks={p.tasks.map((t) => ({ id: t.id, name: t.name }))} canEdit={canTask} canAsk={c.can("purchase_requests:create")} />
         <Card>
           <CardHeader>
             <CardTitle>Material plan vs actual</CardTitle>
@@ -304,7 +305,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         </div>
       )}
 
-      {tab === "documents" && <DocumentsPanel c={c} entityType="PROJECT" entityId={id} />}
+      {tab === "downloads" && <DocumentsPanel c={c} entityType="PROJECT" entityId={id} view="downloads" title="Downloadables (drawings and files for the site)" />}
+      {tab === "documents" && <DocumentsPanel c={c} entityType="PROJECT" entityId={id} view="private" title="Project documents (directors only)" />}
 
       {tab === "financials" && money && fin && <Financials fin={fin} canSync={canEdit} onSync={syncBudgetFromBoq.bind(null, id)} estimate={{ note: p.estimateNote, at: p.estimateUpdatedAt, canSet: canEdit, save: setEstimateToComplete.bind(null, id) }} />}
     </>
