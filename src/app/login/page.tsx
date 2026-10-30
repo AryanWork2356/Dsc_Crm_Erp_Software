@@ -39,7 +39,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p className="mt-1.5 text-sm text-slate-500">Sign in to continue to your work.</p>
           <div className="mt-6 h-0.5 w-12 rounded bg-accent" />
           <LoginForm next={next} />
-          <p className="mt-6 text-center text-xs text-slate-500"><Link href="/forgot-password" className="font-medium text-brand-700 hover:underline">Forgot your password?</Link> The Owner or Admin will tell you yours.</p>
+          <p className="mt-5 text-center text-sm"><Link href="/install" className="font-medium text-brand-700 hover:underline">Install the app on your phone</Link></p>
+          <p className="mt-3 text-center text-xs text-slate-500"><Link href="/forgot-password" className="font-medium text-brand-700 hover:underline">Forgot your password?</Link> The Owner or Admin will tell you yours.</p>
         </div>
       </section>
     </main>

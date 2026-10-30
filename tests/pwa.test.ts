@@ -38,7 +38,7 @@ describe("installable app (PWA)", () => {
   });
 
   it("the manifest, service worker and offline screen load before sign-in; private pages still need a login", async () => {
-    for (const p of ["/manifest.webmanifest", "/sw.js", "/offline.html"]) {
+    for (const p of ["/manifest.webmanifest", "/sw.js", "/offline.html", "/install"]) {
       const r = await middleware(new NextRequest(`http://localhost${p}`));
       expect(r.status, p).toBe(200); // passes through (NextResponse.next)
       expect(r.headers.get("location"), p).toBeNull();
