@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
-import { PwaRegister } from "@/components/layout/pwa";
+import { InstallBanner, PwaRegister } from "@/components/layout/pwa";
 import { TranslateLoader } from "@/components/layout/language";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -25,6 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ToastProvider>{children}</ToastProvider>
+        <InstallBanner />
         <PwaRegister />
         <TranslateLoader />
       </body>

@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { CheckCircle2, Download, ExternalLink, MoreVertical, Share, X } from "lucide-react";
 
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -162,5 +163,69 @@ export function InstallPanel({ address }: { address: string }) {
         </>
       )}
     </div>
+  );
+}
+
+const HIDE_KEY = "dsc-install-hidden-until"; // "not now": do not ask again for a week
+const DONE_KEY = "dsc-install-done"; // installed on this phone: never ask again
+const readKey = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+const writeKey = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode: just ask again next time */ } };
+
+/**
+ * The "Install the DSC app" card that slides in at the top of a PHONE. It never shows when the app is already installed or is
+ * being opened from the home screen, when it was dismissed, or on a computer. Android: one tap opens Chrome's real install window.
+ * iPhone: Apple has no install window, so the tap opens the three steps.
+ */
+export function InstallBanner() {
+  const s = useInstall();
+  const path = usePathname();
+  const [hidden, setHidden] = React.useState(true);
+  const [steps, setSteps] = React.useState(false);
+
+  React.useEffect(() => { setHidden(readKey(DONE_KEY) === "1" || Number(readKey(HIDE_KEY) ?? 0) > Date.now()); }, []);
+  // running as the installed app (or just installed): remember it, so the card never comes back in the browser either
+  React.useEffect(() => { if (s.installed) writeKey(DONE_KEY, "1"); }, [s.installed]);
+
+  const phone = s.ready && (s.ios || /android|iphone|ipod|mobile/i.test(navigator.userAgent));
+  if (!s.ready || hidden || s.installed || s.inAppBrowser || !phone || path.startsWith("/install")) return null;
+  if (!s.ios && !s.canPrompt) return null; // Chrome offers the install window only when the app is not installed yet
+
+  const later = () => { writeKey(HIDE_KEY, String(Date.now() + 7 * 86400000)); setHidden(true); setSteps(false); };
+  const done = () => { writeKey(DONE_KEY, "1"); setHidden(true); setSteps(false); };
+  async function tap() {
+    if (s.canPrompt) { if ((await s.install()) === "accepted") done(); else later(); }
+    else setSteps(true);
+  }
+
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div role="dialog" aria-label="Install the DSC app" className="anim-fade-up pointer-events-auto mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-gradient-to-r from-[#361210] to-[#5b2619] p-3 pr-2 text-white shadow-2xl shadow-black/40 ring-1 ring-amber-300/30">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icons/icon-192.png" alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl ring-1 ring-amber-200/40" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold leading-tight">Install the DSC app</p>
+            <p className="mt-0.5 text-xs leading-snug text-amber-100/80">Opens full screen in one tap. Free, and it updates itself.</p>
+          </div>
+          <button onClick={() => void tap()} className="shrink-0 rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-[#361210] shadow active:scale-95">Install</button>
+          <button onClick={later} aria-label="Not now" className="shrink-0 rounded-lg p-1.5 text-amber-100/70 hover:bg-white/10"><X className="h-4 w-4" /></button>
+        </div>
+      </div>
+      {steps && (
+        <div role="dialog" aria-label="Install on iPhone" className="fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl ring-1 ring-slate-200">
+          <button onClick={() => setSteps(false)} className="absolute right-4 top-4 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
+          <p className="text-lg font-semibold text-slate-900">Put DSC on your home screen</p>
+          <ol className="mt-3 space-y-3">
+            <Step n={1}>Tap the <Share className="mx-1 inline h-4 w-4" /> <b>Share</b> button at the bottom of Safari.</Step>
+            <Step n={2}>Scroll down and tap <b>Add to Home Screen</b>.</Step>
+            <Step n={3}>Tap <b>Add</b>. The DSC icon appears on your home screen.</Step>
+          </ol>
+          <div className="mt-5 flex gap-2">
+            <button onClick={done} className="flex-1 rounded-xl bg-brand-800 py-3 text-sm font-semibold text-white">I have done it</button>
+            <button onClick={later} className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-600">Later</button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
