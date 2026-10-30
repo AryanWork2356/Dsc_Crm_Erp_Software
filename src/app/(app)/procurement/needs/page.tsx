@@ -40,7 +40,7 @@ export default async function MaterialNeededPage() {
               <td className="whitespace-nowrap px-3 py-2.5">{short(r.neededBy)}<p className="text-xs text-slate-500">{r.days < 0 ? `${-r.days} day${r.days === -1 ? "" : "s"} ago` : r.days === 0 ? "today" : `in ${r.days} day${r.days === 1 ? "" : "s"}`}</p></td>
               <td className="px-3 py-2.5">
                 <Badge tone={NEED_TONE[r.status]}>{NEED_LABEL[r.status]}</Badge>
-                {r.status !== "NOT_ASKED" && <span className="ml-2 text-xs text-slate-500">arrived {qty(r.arrived)} · on order {qty(r.ordered)} · requested {qty(r.asked)}</span>}
+                {r.status !== "NOT_ASKED" && <span className="ml-2 text-xs text-slate-500">received {qty(r.arrived)} · on order {qty(r.ordered)} · requested {qty(r.asked)}</span>}
                 {r.problem && <p className={cn("mt-1 text-xs font-medium", r.problem.severity === "HIGH" ? "text-red-700" : "text-amber-700")}>{r.problem.text}</p>}
               </td>
               <td className="whitespace-nowrap px-3 py-2.5 text-right">{canAsk && (r.status === "NOT_ASKED" || r.status === "PART_ASKED") && <Link href={`/procurement/requests/new?need=${r.id}`}><Button size="sm" variant="secondary">Ask for it</Button></Link>}</td>
@@ -59,7 +59,7 @@ export default async function MaterialNeededPage() {
           <StatCard label="Need attention" value={String(trouble.length)} tone={trouble.length ? "bad" : "good"} />
           <StatCard label="Next 30 days, on track" value={String(coming.length)} />
           <StatCard label="Later" value={String(later)} />
-          <StatCard label="Arrived" value={String(arrived)} tone="good" />
+          <StatCard label="Received" value={String(arrived)} tone="good" />
         </div>
         {rows.length === 0 ? <Card><EmptyState title="No materials listed on any site yet" hint="Each project's schedule can carry a Materials sheet, or materials can be added in the project's Materials tab." /></Card> : (
           <>

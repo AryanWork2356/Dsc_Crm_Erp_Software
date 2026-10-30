@@ -10,6 +10,8 @@ import { nextNumber } from "@/lib/sequence";
 import { notifyUsers } from "@/lib/notify";
 import { projectScope } from "@/lib/scope";
 import { recalcProgress } from "@/lib/project-progress";
+import { removeTaskCrew, syncTaskCrew } from "@/lib/task-crew";
+import { reportDay } from "@/lib/site-reports";
 import { ensureClosure } from "@/lib/closure";
 import { formToObject, zNumPos, zOptDate, zOptStr, zReqStr } from "@/lib/form";
 import { humanize, num } from "@/lib/utils";
@@ -211,6 +213,7 @@ export async function createTask(projectId: string, fd: FormData) {
       const code = await nextNumber(tx, c.companyId, "TSK");
       const { dateChangeReason: _why, ...rest } = d;
       const x = await tx.projectTask.create({ data: { ...rest, releasedAt: d.zoneReleased ? new Date() : null, baselineDue: d.dueDate ?? null, companyId: c.companyId, projectId, code } });
+      await syncTaskCrew(tx, x, c.userId);
       await recalcProgress(tx, projectId);
       await audit(c, { action: "CREATE", entityType: "ProjectTask", entityId: x.id, summary: `Created task ${code} “${d.name}” in ${p.code}` }, tx);
       if (d.assignedToId && d.assignedToId !== c.userId) await notifyUsers([d.assignedToId], { companyId: c.companyId, type: "TASK_DEADLINE", title: `New task: ${d.name}`, body: `${p.name}${d.dueDate ? ` · due ${d.dueDate.toLocaleDateString("en-IN")}` : ""}`, link: `/projects/${projectId}?tab=tasks` }, tx);
@@ -243,6 +246,11 @@ export async function importSchedule(projectId: string, fd: FormData) {
       const shown = errors.slice(0, 8).map((e) => (e.sheet === "materials" ? e.message : e.row ? `row ${e.row}: ${e.message}` : e.message)).join(" · ");
       throw new UserError(`Nothing was added. Please fix this and upload again: ${shown}${errors.length > 8 ? ` · and ${errors.length - 8} more` : ""}`);
     }
+    // "Assigned to": a person with a login, by name or email (workers with a login too)
+    const people = work.tasks.some((t) => t.assignee) ? await db.user.findMany({ where: { companyId: c.companyId, isActive: true, deletedAt: null, role: { notIn: ["CLIENT", "VENDOR"] } }, select: { id: true, name: true, email: true, workerId: true } }) : [];
+    const who = (n: string) => { const k = n.trim().toLowerCase(); const hit = people.filter((u) => u.email.toLowerCase() === k || u.name.trim().toLowerCase() === k); return hit.length === 1 ? hit[0] : null; };
+    const unknown = work.tasks.filter((t) => t.assignee && !who(t.assignee));
+    if (unknown.length) throw new UserError(`Nothing was added. Please fix this and upload again: ${unknown.slice(0, 6).map((t) => `row ${t.row}: nobody called “${t.assignee}” has a login (use the name or email exactly as in the app, or leave it empty)`).join(" · ")}`);
     const catalogue = mats.lines.length ? await db.material.findMany({ where: { companyId: c.companyId, deletedAt: null }, select: { id: true, name: true, unit: true } }) : [];
     await db.$transaction(async (tx) => {
       const ids = new Map<string, string>(); // Sl No and name of each task, to link "Depends on" and "For work"
@@ -251,9 +259,11 @@ export async function importSchedule(projectId: string, fd: FormData) {
         const dep = t.dependsOn ? ids.get(t.dependsOn.toLowerCase()) : undefined;
         const x = await tx.projectTask.create({
           data: { companyId: c.companyId, projectId, code, name: t.name, description: t.details ?? null, priority: t.priority, startDate: t.start ?? null, dueDate: t.due ?? null, baselineDue: t.due ?? null,
-            zone: t.zone ?? null, requiredTrade: t.trade ?? null, requiredHeadcount: t.headcount ?? null, plannedQty: t.qty ?? null, qtyUnit: t.unit ?? null, dependsOnId: dep ?? null },
+            zone: t.zone ?? null, requiredTrade: t.trade ?? null, requiredHeadcount: t.headcount ?? null, plannedQty: t.qty ?? null, qtyUnit: t.unit ?? null, dependsOnId: dep ?? null,
+            ...(t.assignee ? { assignedToId: who(t.assignee)!.id, workerId: who(t.assignee)!.workerId ?? null } : {}) },
         });
         ids.set(t.sl.toLowerCase(), x.id); ids.set(t.name.toLowerCase(), x.id);
+        await syncTaskCrew(tx, x, c.userId); // its trade and people become the crew need on the Manpower page
       }
       for (const m of mats.lines) {
         const cat = catalogue.find((x) => x.name.toLowerCase() === m.description.toLowerCase());
@@ -282,7 +292,9 @@ export async function updateTask(taskId: string, fd: FormData) {
     await db.$transaction(async (tx) => {
       const { dateChangeReason, ...rest } = d;
       const due = await applyDateChange(tx, c, { entityType: "ProjectTask", entityId: taskId, projectId: t.projectId, field: "dueDate", label: `Due date of ${t.code}`, oldDate: t.dueDate, newDate: d.dueDate ?? t.dueDate, baseline: t.baselineDue, reason: dateChangeReason });
-      await tx.projectTask.update({ where: { id: taskId }, data: { ...rest, releasedAt: d.zoneReleased ? (t.releasedAt ?? new Date()) : null, baselineDue: due.baseline, assignedToId: d.assignedToId ?? null, workerId: d.workerId ?? null, dependsOnId: d.dependsOnId ?? null } });
+      const x = await tx.projectTask.update({ where: { id: taskId }, data: { ...rest, releasedAt: d.zoneReleased ? (t.releasedAt ?? new Date()) : null, baselineDue: due.baseline, assignedToId: d.assignedToId ?? null, workerId: d.workerId ?? null, dependsOnId: d.dependsOnId ?? null } });
+      await syncTaskCrew(tx, x, c.userId);
+      await recalcProgress(tx, t.projectId);
       await audit(c, { action: "UPDATE", entityType: "ProjectTask", entityId: taskId, summary: `Updated task ${t.code}` }, tx);
       if (d.assignedToId && d.assignedToId !== t.assignedToId && d.assignedToId !== c.userId) await notifyUsers([d.assignedToId], { companyId: c.companyId, type: "TASK_DEADLINE", title: `Task assigned: ${d.name}`, link: `/projects/${t.projectId}?tab=tasks` }, tx);
     });
@@ -327,6 +339,34 @@ export async function setTaskStatus(taskId: string, status: string, progress?: n
   });
 }
 
+/**
+ * Start work today that the schedule has for a later day (the site is free early, the material came early). Its start moves to today;
+ * the finish date stays, so no reason is asked. The task it depends on must be finished first, as always.
+ */
+export async function startTaskToday(taskId: string) {
+  return run(async () => {
+    const c = await assertPerm("tasks:edit");
+    const t = await db.projectTask.findFirst({ where: { id: taskId, companyId: c.companyId } });
+    if (!t) throw new UserError("Task not found.");
+    await getProject(c, t.projectId);
+    if (t.status === "COMPLETED") throw new UserError("This work is already finished.");
+    if (t.dependsOnId) {
+      const dep = await db.projectTask.findUnique({ where: { id: t.dependsOnId } });
+      if (dep && dep.status !== "COMPLETED") throw new UserError(`Finish “${dep.name}” first – this work depends on it.`);
+    }
+    const today = reportDay();
+    await db.$transaction(async (tx) => {
+      const x = await tx.projectTask.update({ where: { id: taskId }, data: { startDate: today, ...(t.dueDate && t.dueDate < today ? { dueDate: today } : {}), status: "IN_PROGRESS", progress: Math.max(t.progress, 5) } });
+      await syncTaskCrew(tx, x, c.userId);
+      await recalcProgress(tx, t.projectId);
+      await audit(c, { action: "UPDATE", entityType: "ProjectTask", entityId: taskId, summary: `Task ${t.code} started early, today${t.startDate ? ` (planned ${t.startDate.toISOString().slice(0, 10)})` : ""}` }, tx);
+    });
+    revalidatePath("/today");
+    revalidatePath(`/projects/${t.projectId}`);
+    return { message: `${t.name} starts today` };
+  });
+}
+
 export async function addTaskComment(taskId: string, fd: FormData) {
   return run(async () => {
     const c = await assertPerm("tasks:edit");
@@ -350,6 +390,7 @@ export async function deleteTask(taskId: string) {
     await db.$transaction(async (tx) => {
       await tx.projectTask.updateMany({ where: { dependsOnId: taskId }, data: { dependsOnId: null } });
       await tx.projectTask.delete({ where: { id: taskId } });
+      await removeTaskCrew(tx, c.companyId, taskId, c.userId);
       await recalcProgress(tx, t.projectId);
       await audit(c, { action: "DELETE", entityType: "ProjectTask", entityId: taskId, summary: `Deleted task ${t.code} “${t.name}”` }, tx);
     });

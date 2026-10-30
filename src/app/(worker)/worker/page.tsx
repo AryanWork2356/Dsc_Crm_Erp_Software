@@ -9,6 +9,7 @@ import { UNIT_OPTS } from "@/lib/enums";
 import { checkIn } from "@/app/(app)/workforce/actions";
 import { workerReportIssue, workerRequestMaterial, workerTaskStatus } from "./actions";
 import { CheckInButton } from "./check-in-button";
+import { PushToggle } from "@/components/layout/push-toggle";
 
 export const metadata = { title: "My Day" };
 
@@ -26,6 +27,7 @@ export default async function WorkerHome() {
 
   return (
     <div className="space-y-5">
+      <PushToggle />
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Today&apos;s site</p>
         {project ? (

@@ -46,7 +46,7 @@ export async function MaterialNeedsCard({ companyId, projectId, start, tasks, ca
                     <td className="whitespace-nowrap px-3 py-2.5">{short(r.neededBy)}{d !== null && d >= 1 && <span className="text-xs text-slate-500"> · Day {d}</span>}</td>
                     <td className="px-3 py-2.5">
                       <Badge tone={NEED_TONE[r.status]}>{NEED_LABEL[r.status]}</Badge>
-                      {r.status !== "ARRIVED" && r.status !== "NOT_ASKED" && <span className="ml-2 text-xs text-slate-500">arrived {qty(r.arrived)} · on order {qty(r.ordered)} · requested {qty(r.asked)}</span>}
+                      {r.status !== "ARRIVED" && r.status !== "NOT_ASKED" && <span className="ml-2 text-xs text-slate-500">received {qty(r.arrived)} · on order {qty(r.ordered)} · requested {qty(r.asked)}</span>}
                       {r.problem && <p className={cn("mt-1 text-xs font-medium", r.problem.severity === "HIGH" ? "text-red-700" : "text-amber-700")}>{r.problem.text}</p>}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right">

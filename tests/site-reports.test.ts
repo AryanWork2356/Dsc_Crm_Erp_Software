@@ -100,20 +100,24 @@ describe("missing-report reminders escalate up the chain", () => {
 });
 
 describe("sending a site report", () => {
-  it("morning update needs a plan; sending it records people, plan and lateness", async () => {
+  it("morning update needs a plan and a start-of-day photo; sending it records people, plan and lateness", async () => {
     const p = await proj("PRJ-00001");
     await loginAs("supervisor@dsc.demo");
     const base = { projectId: p.id, kind: "MORNING", manpower: 12 };
     expect((await submitSiteReport(fd({ ...base }))).ok).toBe(false);
-    const r = await submitSiteReport(fd({ ...base, planNext: "Tile work in hall" }));
+    const noPhoto = await submitSiteReport(fd({ ...base, planNext: "Tile work in hall" }));
+    expect(noPhoto.ok === false && noPhoto.error).toMatch(/start-of-day photo/);
+    const withPhoto = fd({ ...base, planNext: "Tile work in hall" }); withPhoto.append("photos", jpeg("morning.jpg"));
+    const r = await submitSiteReport(withPhoto);
     expect(r.ok).toBe(true);
     const row = await db.dailyReport.findFirstOrThrow({ where: { projectId: p.id, reportDate: reportDay(), kind: "MORNING" } });
     expect(row.manpower).toBe(12);
     expect(row.planNext).toBe("Tile work in hall");
     expect(typeof row.onTime).toBe("boolean");
+    expect(row.photoIds).toHaveLength(1);
   });
 
-  it("sending again the same day updates the report instead of duplicating it", async () => {
+  it("sending again the same day updates the report instead of duplicating it (the morning photo is already there)", async () => {
     const p = await proj("PRJ-00001");
     await loginAs("supervisor@dsc.demo");
     expect((await submitSiteReport(fd({ projectId: p.id, kind: "MORNING", manpower: 15, planNext: "Tile work + ceiling" }))).ok).toBe(true);

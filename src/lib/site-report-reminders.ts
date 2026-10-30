@@ -28,22 +28,24 @@ export async function runReportReminders(companyId: string, now: Date = new Date
     where: { companyId, deletedAt: null, status: { in: [...LIVE_STATUSES] } },
     select: { id: true, code: true, name: true, outstation: true, supervisorId: true, siteEngineerId: true, projectManagerId: true, dailyReports: { where: { reportDate: day }, select: { kind: true } } },
   });
+  const lateWork = new Map((await db.lateWork.findMany({ where: { companyId, date: day } })).map((l) => [l.projectId, l.until]));
   let sent = 0;
   for (const p of projects) {
     for (const kind of ["MORNING", "EVENING"] as ReportKind[]) {
       if (p.dailyReports.some((r) => r.kind === kind)) continue;
-      const late = minutesLate(kind, p.outstation, now, t);
+      const until = kind === "EVENING" ? lateWork.get(p.id) : null; // working late today: not chased before the new time
+      const late = minutesLate(kind, p.outstation, now, t, until);
       if (late <= 0) continue;
       const what = kind === "MORNING" ? "morning update" : "evening report";
       const link = `/site-reports/new?project=${p.id}&kind=${kind}`;
       const key = (who: string) => `rep:${p.id}:${dateKey}:${kind}:${who}`;
       const field = [p.supervisorId, p.siteEngineerId].filter(Boolean) as string[];
       if (field.length) {
-        await notifyUsers(field, { companyId, type: "REPORT_MISSING", title: `${p.code}: ${what} not sent`, body: `It was due at ${dueLabel(kind, p.outstation, t)}. Please send it now.`, link, dedupeKey: key("field") });
+        await notifyUsers(field, { companyId, type: "REPORT_MISSING", title: `${p.code}: ${what} not sent`, body: `It was due at ${dueLabel(kind, p.outstation, t, until)}. Please send it now.`, link, dedupeKey: key("field") });
         sent += field.length;
       }
       if (late >= PM_ESCALATE_AFTER_MIN && p.projectManagerId) {
-        await notifyUsers([p.projectManagerId], { companyId, type: "REPORT_MISSING", title: `${p.code} – ${p.name}: ${what} missing`, body: `Site team hasn't sent it (due ${dueLabel(kind, p.outstation, t)}).`, link: "/site-reports", dedupeKey: key("pm") });
+        await notifyUsers([p.projectManagerId], { companyId, type: "REPORT_MISSING", title: `${p.code} – ${p.name}: ${what} missing`, body: `Site team hasn't sent it (due ${dueLabel(kind, p.outstation, t, until)}).`, link: "/site-reports", dedupeKey: key("pm") });
         sent += 1;
       }
       if (late >= MGMT_ESCALATE_AFTER_MIN) {

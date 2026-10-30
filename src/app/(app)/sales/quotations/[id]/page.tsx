@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
+import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { convertQuotationToProject, deleteQuotation, markQuotationSent, reviseQuotation, setQuotationStatus, submitQuotation } from "../actions";
 
 export default async function QuotationDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -170,6 +171,7 @@ export default async function QuotationDetail({ params }: { params: Promise<{ id
           </Card>
         </div>
       </div>
+      {c.role !== "CLIENT" && c.can("documents:view") && <div className="mt-5"><DocumentsPanel c={c} entityType="QUOTATION" entityId={id} /></div>}
     </>
   );
 }

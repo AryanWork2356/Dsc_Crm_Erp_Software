@@ -194,6 +194,13 @@ async function checkProject(c: Ctx, projectId?: string) {
   if (!p) throw new UserError("Project not found or you don't have access to it.");
 }
 
+/** "Send for approval" on the form saves AND submits in one press; if it cannot be sent yet, it stays a draft and says why. */
+async function sendNow(fd: FormData, id: string, label: string) {
+  if (fd.get("submitNow") !== "1") return { message: `${label} saved as a draft. Press Submit when it is ready.`, data: { id } };
+  const r = await submitPurchaseRequest(id);
+  return r.ok ? { message: `${label} sent for approval`, data: { id } } : { message: `${label} saved as a draft, NOT sent yet: ${r.error}`, data: { id } };
+}
+
 export async function createPurchaseRequest(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("purchase_requests:create");
@@ -211,7 +218,7 @@ export async function createPurchaseRequest(fd: FormData) {
       return x;
     });
     revalidatePath("/procurement/requests");
-    return { message: `Request ${pr.number} saved`, data: { id: pr.id } };
+    return sendNow(fd, pr.id, `Request ${pr.number}`);
   });
 }
 
@@ -234,7 +241,7 @@ export async function updatePurchaseRequest(id: string, fd: FormData) {
     });
     revalidatePath("/procurement/requests");
     revalidatePath(`/procurement/requests/${id}`);
-    return { message: "Request saved", data: { id } };
+    return sendNow(fd, id, "Request");
   });
 }
 

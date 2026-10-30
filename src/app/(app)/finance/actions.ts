@@ -352,7 +352,7 @@ export async function createVendorBill(fd: FormData) {
     let keptKey: string | null = null;
     const b = await db.$transaction(async (tx) => {
       const x = await tx.vendorBill.create({ data: { companyId: c.companyId, number: d.number, vendorId: d.vendorId, poId: d.poId ?? null, projectId, billDate: d.billDate, dueDate: d.dueDate, amount: d.amount, notes: warnings.length ? `${d.notes ? d.notes + " · " : ""}Checked with reason: ${why} (${warnings.join(" ")})` : d.notes } });
-      if (billFile) keptKey = await keepBill(c, tx, billFile, "VENDOR_BILL", x.id, `Bill {d.number} - ${vendor.name}`);
+      if (billFile) keptKey = await keepBill(c, tx, billFile, "VENDOR_BILL", x.id, `Bill ${d.number} - ${vendor.name}`);
       return x;
     }).catch(async (e) => { if (keptKey) await deleteFile(keptKey); throw e; });
     await audit(c, { action: "CREATE", entityType: "VendorBill", entityId: b.id, summary: `Recorded bill ${d.number} from ${vendor.name} – ₹${d.amount.toLocaleString("en-IN")}${warnings.length ? ` – went ahead despite: ${warnings.join(" ")} Reason: ${why}` : ""}` });

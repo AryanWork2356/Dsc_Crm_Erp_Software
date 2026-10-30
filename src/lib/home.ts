@@ -5,7 +5,7 @@ export function homeFor(role: RoleKey): string {
   switch (role) {
     case "SITE_SUPERVISOR":
     case "SITE_ENGINEER":
-      return "/site-reports"; // their first job each day
+      return "/today"; // the day's work from the schedule, with the morning update one press away
     case "WORKER":
       return "/worker";
     case "CLIENT":

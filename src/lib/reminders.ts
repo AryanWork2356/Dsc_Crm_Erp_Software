@@ -5,6 +5,7 @@ import { runWeeklyDigest } from "./director-reports";
 import { syncResourceShortages } from "./resources";
 import { syncDeliveryRisks } from "./delivery-risk";
 import { syncMaterialNeeds } from "./material-needs";
+import { sendMorningPlans } from "./morning-plan";
 
 const MIN_GAP_MS = 5 * 60 * 1000;
 const lastRun = new Map<string, number>();
@@ -19,6 +20,7 @@ export async function maybeRunReminders(companyId: string, now: Date = new Date(
   if (now.getTime() - last < MIN_GAP_MS) return;
   lastRun.set(companyId, now.getTime());
   try {
+    await sendMorningPlans(companyId, now); // the day's work from the schedule, once a day from 6:30
     await runReportReminders(companyId, now);
     await syncResourceShortages(companyId, now); // a crew shortage becomes one action before the overdue check runs
     await syncDeliveryRisks(companyId, now); // so does a delivery that is late or will arrive too late

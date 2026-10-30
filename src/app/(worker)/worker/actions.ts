@@ -10,6 +10,7 @@ import { nextNumber } from "@/lib/sequence";
 import { notifyUsers } from "@/lib/notify";
 import { requestApproval } from "@/lib/workflow";
 import { recalcProgress } from "@/lib/project-progress";
+import { dueIn, raiseAction } from "@/lib/action-items";
 import { formToObject, zOptStr, zReqStr } from "@/lib/form";
 
 async function workerCtx(): Promise<Ctx & { workerId: string }> {
@@ -76,7 +77,10 @@ export async function workerReportIssue(fd: FormData) {
     const { p } = await myProject(c);
     const people = p ? [p.projectManagerId, p.supervisorId, p.siteEngineerId].filter((u): u is string => !!u) : [];
     if (!people.length) throw new UserError("No supervisor is assigned to your site yet. Please tell someone in person.");
-    await notifyUsers(people, { companyId: c.companyId, type: "GENERAL", title: `⚠ Issue reported on site by ${c.name}`, body: d.issue, link: p ? `/projects/${p.id}` : undefined });
+    // kept as an action with an owner and a date, so it is not lost in the notifications
+    const owner = p?.supervisorId ?? p?.siteEngineerId ?? p?.projectManagerId ?? people[0];
+    await raiseAction(db, { companyId: c.companyId, title: `${p ? `${p.code}: ` : ""}issue reported by ${c.name}`, detail: d.issue, severity: "HIGH", ownerId: owner, createdById: c.userId, projectId: p?.id ?? null, dueDate: dueIn("HIGH") });
+    await notifyUsers(people, { companyId: c.companyId, type: "GENERAL", title: `⚠ Issue reported on site by ${c.name}`, body: d.issue, link: "/actions" });
     await audit(c, { action: "CREATE", entityType: "SiteIssue", entityId: p?.id, summary: `${c.name} reported a site issue${p ? ` at ${p.code}` : ""}: ${d.issue.slice(0, 160)}` });
     return { message: "Your supervisor has been told" };
   });

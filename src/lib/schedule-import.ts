@@ -8,7 +8,7 @@ import type { Priority } from "@prisma/client";
 export type Raw = Record<string, string>;
 export type ScheduleTask = {
   row: number; sl: string; name: string; zone?: string; trade?: string; headcount?: number; start?: Date; due?: Date;
-  qty?: number; unit?: string; dependsOn?: string; priority: Priority; details?: string;
+  qty?: number; unit?: string; dependsOn?: string; priority: Priority; details?: string; assignee?: string;
 };
 export const MAX_SCHEDULE_ROWS = 200;
 
@@ -29,6 +29,7 @@ const ALIASES: Record<string, string[]> = {
   dependsOn: ["dependson", "after", "predecessor", "depends", "dependency", "startsafter"],
   priority: ["priority"],
   details: ["details", "notes", "remarks", "comments", "note"],
+  assignee: ["assignedto", "assigned", "assignee", "incharge", "responsible", "personincharge", "owner"],
 };
 
 /** Which header of the file is which column (the first match wins; "description" is only the task name when nothing better exists). */
@@ -80,6 +81,7 @@ export function parseSchedule(rows: Raw[], projectStart: Date | null): { tasks: 
     const text = (f: keyof ScheduleTask, v: string, max: number) => { if (v) (t[f] as string) = v.slice(0, max); };
     text("zone", get(r, "zone"), 120); text("trade", get(r, "trade"), 60); text("unit", get(r, "unit"), 20); text("details", get(r, "details"), 1000);
     const dep = get(r, "dependsOn"); if (dep) t.dependsOn = dep;
+    const who = get(r, "assignee"); if (who) t.assignee = who.slice(0, 120);
 
     const hc = get(r, "headcount");
     if (hc) { const n = whole(hc); if (n === null || n > 500) err(`People needed “${hc}” must be a whole number from 0 to 500`); else t.headcount = n; }

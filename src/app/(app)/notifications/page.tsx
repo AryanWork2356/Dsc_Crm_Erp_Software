@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "@/components/forms/action-button";
 import { formatDateTime, humanize, cn } from "@/lib/utils";
 import { markAllRead, markRead } from "./actions";
+import { PushToggle } from "@/components/layout/push-toggle";
 
 export const metadata = { title: "Notifications" };
 
@@ -37,6 +38,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
           </>
         }
       />
+      <PushToggle />
       <Card>
         {rows.length === 0 ? (
           <EmptyState title="No notifications" hint="Approvals, follow-ups, deliveries and payment alerts will show up here." />

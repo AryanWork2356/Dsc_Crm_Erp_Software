@@ -1953,12 +1953,14 @@ model ResourceNeed {
   backupVendorId String?
   confirmedNote  String? // who confirmed it and when (contact / evidence)
   note           String?
+  taskId         String? // made from this task of the schedule: follows its dates, trade and people
   createdById    String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([companyId, fromDate])
   @@index([projectId, trade])
+  @@index([taskId])
 }
 
 /// What was planned and what actually turned up, per project, day and trade (recorded by the supervisor).
@@ -2181,4 +2183,40 @@ model MaterialNeed {
 
   @@index([companyId, projectId, neededBy])
   @@index([companyId, neededBy])
+}
+
+/// The site is working late today: the evening report is due later, and nobody is chased before then.
+model LateWork {
+  id          String   @id @default(cuid())
+  companyId   String
+  projectId   String
+  date        DateTime @db.Date
+  until       String // "22:00", IST
+  reason      String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@unique([projectId, date])
+  @@index([companyId, date])
+}
+
+/// A phone or computer that has said yes to alerts from the app (Web Push).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  companyId String
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Keys the app makes for itself once (for example the Web Push key pair). Never shown on any screen.
+model AppSecret {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
 }

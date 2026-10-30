@@ -7,7 +7,9 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskStatusControl } from "../projects/task-controls";
-import { setTaskStatus } from "../projects/actions";
+import { setTaskStatus, startTaskToday } from "../projects/actions";
+import { ActionButton } from "@/components/forms/action-button";
+import { PushToggle } from "@/components/layout/push-toggle";
 
 export const metadata = { title: "Today's Plan" };
 
@@ -32,6 +34,7 @@ function Row({ t, kind, canEdit }: { t: PlanTask; kind: "today" | "late" | "soon
         </div>
         <div className="w-24 shrink-0 text-right text-xs text-slate-500"><span className="tabular text-sm font-semibold text-slate-800">{t.progress}%</span> done</div>
         {kind !== "soon" && <TaskStatusControl status={t.status} progress={t.progress} disabled={!canEdit} action={setTaskStatus.bind(null, t.id)} />}
+        {kind === "soon" && canEdit && <ActionButton size="sm" variant="secondary" action={startTaskToday.bind(null, t.id)} confirm={{ title: `Start “${t.name}” today?`, body: "Its start moves to today. The finish date stays the same.", confirmLabel: "Start today" }}>Start today</ActionButton>}
       </div>
     </li>
   );
@@ -49,8 +52,9 @@ export default async function TodayPage() {
       <PageHeader
         title="Today's Plan"
         subtitle={`${dayName}. What is to be done on your projects today, what is running late, and what starts in the next 3 days. It comes from each project's schedule.`}
-        actions={siteRole && <Link href="/site-reports/new?kind=MORNING"><Button>Send morning update</Button></Link>}
+        actions={siteRole && <><Link href="/site-reports/new?kind=MORNING"><Button>Morning update</Button></Link><Link href="/site-reports/new?kind=EVENING"><Button variant="secondary">Evening report</Button></Link><Link href="/site-reports"><Button variant="ghost">Working late?</Button></Link></>}
       />
+      <PushToggle />
       <div className="mb-5 grid grid-cols-3 gap-3">
         <StatCard label="To do today" value={plan.counts.today} tone="default" />
         <StatCard label="Running late" value={plan.counts.late} tone={plan.counts.late ? "bad" : "good"} />

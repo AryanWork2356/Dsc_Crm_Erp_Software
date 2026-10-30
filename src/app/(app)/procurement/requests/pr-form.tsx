@@ -42,6 +42,8 @@ export function PrForm({
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const sender = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (sender?.name === "submitNow") fd.set("submitNow", "1");
     fd.set("items", JSON.stringify(rows.filter((r) => r.description.trim()).map(({ key: _k, ...r }) => ({ ...r, quantity: r.quantity === "" ? 0 : r.quantity }))));
     setErrors({});
     start(async () => {
@@ -91,7 +93,8 @@ export function PrForm({
       </Card>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={() => router.push(cancelHref)}>Cancel</Button>
-        <Button type="submit" loading={pending}>Save request</Button>
+        <Button type="submit" variant="secondary" disabled={pending}>Save as draft</Button>
+        <Button type="submit" name="submitNow" value="1" loading={pending}>Send for approval</Button>
       </div>
     </form>
   );

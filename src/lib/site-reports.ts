@@ -24,32 +24,37 @@ export function parseHHmm(v: string, fallback: string): number {
   return Math.min(23, Number(m[1])) * 60 + Math.min(59, Number(m[2]));
 }
 
-export function dueMinutes(kind: ReportKind, outstation: boolean, t: ReportTimes = DEFAULT_TIMES): number {
-  if (kind === "EVENING") return parseHHmm(t.reportEveningDue, DEFAULT_TIMES.reportEveningDue);
+/** `lateUntil`: the site said it is working late today until this time ("22:00"); the evening report is then due an hour after. */
+export const LATE_REPORT_GRACE_MIN = 60;
+export function dueMinutes(kind: ReportKind, outstation: boolean, t: ReportTimes = DEFAULT_TIMES, lateUntil?: string | null): number {
+  if (kind === "EVENING") {
+    const normal = parseHHmm(t.reportEveningDue, DEFAULT_TIMES.reportEveningDue);
+    return lateUntil ? Math.min(23 * 60 + 59, Math.max(normal, parseHHmm(lateUntil, t.reportEveningDue) + LATE_REPORT_GRACE_MIN)) : normal;
+  }
   return outstation ? parseHHmm(t.reportMorningDueOutstation, DEFAULT_TIMES.reportMorningDueOutstation) : parseHHmm(t.reportMorningDue, DEFAULT_TIMES.reportMorningDue);
 }
 
-export function dueLabel(kind: ReportKind, outstation: boolean, t: ReportTimes = DEFAULT_TIMES): string {
-  const m = dueMinutes(kind, outstation, t);
+export function dueLabel(kind: ReportKind, outstation: boolean, t: ReportTimes = DEFAULT_TIMES, lateUntil?: string | null): string {
+  const m = dueMinutes(kind, outstation, t, lateUntil);
   const h = Math.floor(m / 60), mm = m % 60;
   return `${h % 12 === 0 ? 12 : h % 12}:${String(mm).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
 /** Was a report for `forDate` submitted at `at` on time? A report filed on a later day is always late. */
-export function isOnTime(kind: ReportKind, outstation: boolean, forDate: Date, at: Date, t: ReportTimes = DEFAULT_TIMES): boolean {
+export function isOnTime(kind: ReportKind, outstation: boolean, forDate: Date, at: Date, t: ReportTimes = DEFAULT_TIMES, lateUntil?: string | null): boolean {
   const p = istParts(at);
   const day = forDate.toISOString().slice(0, 10);
   if (p.date > day) return false;
   if (p.date < day) return true;
-  return p.minutes <= dueMinutes(kind, outstation, t);
+  return p.minutes <= dueMinutes(kind, outstation, t, lateUntil);
 }
 
 export type SlotState = "done" | "waiting" | "due_soon" | "overdue";
 
 /** State of today's slot for the board: green done / grey waiting / amber due within 60 min / red overdue. */
-export function slotState(kind: ReportKind, outstation: boolean, submitted: boolean, now: Date = new Date(), t: ReportTimes = DEFAULT_TIMES): SlotState {
+export function slotState(kind: ReportKind, outstation: boolean, submitted: boolean, now: Date = new Date(), t: ReportTimes = DEFAULT_TIMES, lateUntil?: string | null): SlotState {
   if (submitted) return "done";
-  const due = dueMinutes(kind, outstation, t);
+  const due = dueMinutes(kind, outstation, t, lateUntil);
   const m = istParts(now).minutes;
   if (m > due) return "overdue";
   if (due - m <= 60) return "due_soon";
@@ -57,8 +62,8 @@ export function slotState(kind: ReportKind, outstation: boolean, submitted: bool
 }
 
 /** Minutes past the deadline (0 if not yet late). */
-export function minutesLate(kind: ReportKind, outstation: boolean, now: Date = new Date(), t: ReportTimes = DEFAULT_TIMES): number {
-  return Math.max(0, istParts(now).minutes - dueMinutes(kind, outstation, t));
+export function minutesLate(kind: ReportKind, outstation: boolean, now: Date = new Date(), t: ReportTimes = DEFAULT_TIMES, lateUntil?: string | null): number {
+  return Math.max(0, istParts(now).minutes - dueMinutes(kind, outstation, t, lateUntil));
 }
 
 export const MATERIAL_STATUS_LABEL = { OK: "All material available", SHORT_SOON: "Shortage soon", WORK_STOPPED: "Work stopped – no material" } as const;

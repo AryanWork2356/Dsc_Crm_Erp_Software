@@ -5,13 +5,15 @@ import { db } from "@/lib/db";
 import { flatten, listParams, orderBy } from "@/lib/list";
 import { expireQuotations } from "@/lib/automation";
 import { clientOptions } from "@/lib/lookups";
-import { formatDate, formatINR, humanize } from "@/lib/utils";
+import { formatDate, formatINR, humanize, toDateInput } from "@/lib/utils";
 import { PageHeader, EmptyState, StatCard } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
 import { Table, THead, Th, Tr, Td, SortTh, Pagination } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ListFilters } from "@/components/list/list-filters";
+import { FormDialog } from "@/components/forms/form-dialog";
+import { recordOutsideQuotation } from "./actions";
 
 export const metadata = { title: "Quotations" };
 
@@ -58,7 +60,23 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       <PageHeader
         title="Quotations"
         subtitle="Price proposals sent to clients. Every one goes through approval before it leaves the building."
-        actions={c.can("quotations:create") && <Link href="/sales/quotations/new"><Button>New quotation</Button></Link>}
+        actions={c.can("quotations:create") && (
+          <>
+            <FormDialog title="Quotation made outside the app" description="Already made the quotation in Excel, Word or by hand? Record it here with its amount and file, so you can carry on in the app: mark it accepted, convert it to a project and bill it." trigger={<Button variant="secondary">Made outside the app</Button>}
+              fields={[
+                { name: "clientId", label: "Client", type: "select", options: clients, required: true, full: true },
+                { name: "title", label: "What is it for?", placeholder: "e.g. 3 BHK interiors, Thane", full: true },
+                { name: "number", label: "Quotation number (optional)", placeholder: "Leave empty to get a new number" },
+                { name: "date", label: "Date of the quotation", type: "date", required: true, defaultValue: toDateInput(new Date()) },
+                { name: "amount", label: "Amount before GST (₹)", type: "number", required: true },
+                { name: "taxPercent", label: "GST %", type: "number", defaultValue: 18 },
+                { name: "file", label: "The quotation file (PDF, Excel, Word or photo)", type: "file", full: true, hint: "Kept with the quotation, and copied to the project when it is converted" },
+                { name: "accepted", label: "The client has already accepted it", type: "checkbox", hint: "Tick to go straight to Convert to project" },
+              ]}
+              action={recordOutsideQuotation} submitLabel="Record quotation" />
+            <Link href="/sales/quotations/new"><Button>New quotation</Button></Link>
+          </>
+        )}
       />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Awaiting approval" value={pending} tone={pending ? "warn" : "default"} href="/sales/quotations?status=PENDING_APPROVAL" />

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Donut, HBars, MoneyBars } from "@/components/ui/charts";
 import { checkIn } from "@/app/(app)/workforce/actions";
 import { StaffCheckIn } from "./staff-check-in";
+import { PushToggle } from "@/components/layout/push-toggle";
 
 export const metadata = { title: "Dashboard" };
 type SP = { period?: string; from?: string; to?: string };
@@ -89,6 +90,7 @@ async function Executive({ c, sp }: { c: C; sp: SP }) {
   return (
     <>
       <PageHeader title={`Welcome, ${c.name.split(" ")[0]}`} subtitle={`Company overview – ${p.label.toLowerCase()}`} />
+      <PushToggle />
       <form method="get" className="mb-5 flex flex-wrap items-end gap-2" aria-label="Period">
         {PERIODS.filter((x) => x.key !== "custom").map((x) => <Link key={x.key} href={`/dashboard?period=${x.key}`} className={cn("rounded-lg border px-3 py-1.5 text-sm font-medium", p.key === x.key ? "border-brand-800 bg-brand-800 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50")}>{x.label}</Link>)}
         <span className="mx-1 hidden h-6 w-px bg-slate-300 sm:block" />
@@ -193,6 +195,7 @@ async function WorkDashboard({ c }: { c: C }) {
   return (
     <>
       <PageHeader title={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${c.name.split(" ")[0]}`} subtitle="Here's what needs your attention today." />
+      <PushToggle />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {c.can("tasks:view") && <StatCard label="My open tasks" value={tasks.length} sub={overdueTasks ? `${overdueTasks} overdue` : "none overdue"} tone={overdueTasks ? "bad" : "good"} href="/projects/tasks" />}
         {c.can("approvals:approve") && <StatCard label="Waiting for my approval" value={approvals} tone={approvals ? "warn" : "default"} href="/approvals" />}

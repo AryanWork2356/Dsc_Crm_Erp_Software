@@ -13,6 +13,7 @@ import { computeTotals, boqItemTotals } from "@/lib/money";
 import { formToObject, zDate, zNumPos, zOptDate, zOptStr, zReqStr } from "@/lib/form";
 import { leadScope } from "@/lib/scope";
 import { humanize, num } from "@/lib/utils";
+import { deleteFile, putFile, UploadError, validateUpload, type ValidatedFile } from "@/lib/storage";
 
 const itemSchema = z.object({
   category: z.nativeEnum(BoqCategory).default("OTHER"),
@@ -249,7 +250,7 @@ const convertSchema = z.object({
   plannedEndDate: zOptDate,
 });
 
-/** Accepted quotation → Project + draft BOQ (selling rates carried over; costs to be filled by the PM). */
+/** Accepted quotation → Project. Its priced BOQ (if it was made from one) moves to the project; otherwise a draft BOQ is made from the lines. */
 export async function convertQuotationToProject(id: string, fd: FormData) {
   return run(async () => {
     const c = await assertPerm("projects:create");
@@ -272,16 +273,29 @@ export async function convertQuotationToProject(id: string, fd: FormData) {
           projectManagerId: d.projectManagerId, designerId: d.designerId, contractValue, status: "APPROVED", quotationId: q.id,
         },
       });
-      const boqNumber = await nextNumber(tx, c.companyId, "BOQ");
-      const items = q.items.map((i, idx) => {
-        const tot = boqItemTotals({ quantity: num(i.quantity), materialCost: 0, labourCost: 0, otherCost: 0, sellingRate: num(i.rate) });
-        return { sortOrder: idx, category: i.category, item: i.description.slice(0, 160), description: i.description.length > 160 ? i.description : null, unit: i.unit, quantity: i.quantity, sellingRate: i.rate, estimatedCost: tot.estimatedCost, total: tot.total };
-      });
-      const boq = await tx.boq.create({ data: { companyId: c.companyId, number: boqNumber, projectId: project.id, quotationId: q.id, title: `${project.name} – BOQ`, items: { create: items } } });
+      // The quotation was made from a priced BOQ: that BOQ becomes the project's BOQ, with its costs and material links, and sets the
+      // budget. Only when there is none is a BOQ made from the quotation lines (selling rates only; costs to be filled in).
+      const priced = q.boqId ? await tx.boq.findFirst({ where: { id: q.boqId, companyId: c.companyId, deletedAt: null, projectId: null }, include: { items: { select: { estimatedCost: true } } } }) : null;
+      let boq;
+      if (priced) {
+        boq = await tx.boq.update({ where: { id: priced.id }, data: { projectId: project.id, quotationId: q.id } });
+        const cost = priced.items.reduce((s, i) => s + num(i.estimatedCost), 0);
+        if (cost > 0) await tx.project.update({ where: { id: project.id }, data: { budget: cost } });
+      } else {
+        const boqNumber = await nextNumber(tx, c.companyId, "BOQ");
+        const items = q.items.map((i, idx) => {
+          const tot = boqItemTotals({ quantity: num(i.quantity), materialCost: 0, labourCost: 0, otherCost: 0, sellingRate: num(i.rate) });
+          return { sortOrder: idx, category: i.category, item: i.description.slice(0, 160), description: i.description.length > 160 ? i.description : null, unit: i.unit, quantity: i.quantity, sellingRate: i.rate, estimatedCost: tot.estimatedCost, total: tot.total };
+        });
+        boq = await tx.boq.create({ data: { companyId: c.companyId, number: boqNumber, projectId: project.id, quotationId: q.id, title: `${project.name} – BOQ`, items: { create: items } } });
+      }
       await tx.quotation.update({ where: { id }, data: { projectId: project.id, boqId: boq.id } });
       await tx.projectMember.create({ data: { projectId: project.id, userId: d.projectManagerId, roleLabel: "Project Manager" } });
-      await notifyUsers([d.projectManagerId], { companyId: c.companyId, type: "GENERAL", title: `New project assigned: ${project.name}`, body: "Review the BOQ and fill in the estimated costs.", link: `/projects/${project.id}` }, tx);
-      await audit(c, { action: "CREATE", entityType: "Project", entityId: project.id, summary: `Converted quotation ${q.number} into project ${code} (contract ₹${contractValue.toLocaleString("en-IN")}) with BOQ ${boqNumber}` }, tx);
+      // files kept with the quotation (for example one made outside the app) are copied to the project's documents
+      const files = await tx.document.findMany({ where: { companyId: c.companyId, entityType: "QUOTATION", entityId: q.id, deletedAt: null } });
+      for (const f of files) await tx.document.create({ data: { companyId: c.companyId, name: f.name, type: f.type, folder: f.folder, entityType: "PROJECT", entityId: project.id, storageKey: f.storageKey, mimeType: f.mimeType, size: f.size, uploadedById: f.uploadedById, tags: f.tags } });
+      await notifyUsers([d.projectManagerId], { companyId: c.companyId, type: "GENERAL", title: `New project assigned: ${project.name}`, body: priced ? "The priced BOQ is linked and the budget is set from it." : "Review the BOQ and fill in the estimated costs.", link: `/projects/${project.id}` }, tx);
+      await audit(c, { action: "CREATE", entityType: "Project", entityId: project.id, summary: `Converted quotation ${q.number} into project ${code} (contract ₹${contractValue.toLocaleString("en-IN")}) with BOQ ${boq.number}` }, tx);
       return { project, boq };
     });
     revalidatePath("/sales/quotations");
@@ -322,3 +336,55 @@ export async function createQuotationFromBoq(boqId: string, fd: FormData) {
   });
 }
 
+
+const outsideSchema = z.object({
+  clientId: zReqStr("Select the client"),
+  title: zOptStr,
+  number: zOptStr,
+  date: zDate("Pick the date of the quotation"),
+  amount: z.coerce.number({ message: "Enter the amount" }).positive("Enter the amount before GST").max(1e11),
+  taxPercent: z.coerce.number().min(0).max(28).default(18),
+  accepted: z.coerce.boolean().default(false),
+});
+
+/**
+ * A quotation made outside the app (in Excel, Word, by hand): recorded with its amount and file, so the work carries on in the app:
+ * accepted, converted to a project, billed. It skips the in-app approval because it was already given to the client.
+ */
+export async function recordOutsideQuotation(fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("quotations:create");
+    const d = outsideSchema.parse(formToObject(fd));
+    const client = await db.client.findFirst({ where: { id: d.clientId, companyId: c.companyId, deletedAt: null }, select: { id: true, name: true } });
+    if (!client) throw new UserError("Client not found.");
+    const f = fd.get("file");
+    let file: ValidatedFile | null = null;
+    if (f instanceof File && f.size > 0) {
+      try { file = await validateUpload(f); } catch (e) { if (e instanceof UploadError) throw new UserError(e.message); throw e; }
+    }
+    const number = d.number?.trim().slice(0, 40);
+    if (number && (await db.quotation.findFirst({ where: { companyId: c.companyId, number } }))) throw new UserError(`Quotation number ${number} is already in the app. Leave the number empty to get a new one.`);
+    const t = computeTotals([{ quantity: 1, rate: d.amount, taxPercent: d.taxPercent }]);
+    const key = file ? await putFile(c.companyId, file.bytes, file.ext) : null;
+    try {
+      const q = await db.$transaction(async (tx) => {
+        const x = await tx.quotation.create({
+          data: {
+            companyId: c.companyId, number: number || (await nextDocNumber(tx, c.companyId, "quotation")), clientId: client.id, title: d.title ?? null, date: d.date, preparedById: c.userId,
+            status: d.accepted ? "ACCEPTED" : "SENT", subtotal: t.subtotal, discountAmount: 0, taxAmount: t.tax, total: t.total, notes: "Made outside the app. The full quotation is the attached file.",
+            items: { create: [{ sortOrder: 0, category: "OTHER", description: `As per the attached quotation${d.title ? `: ${d.title}` : ""}`, unit: "lot", quantity: 1, rate: d.amount, taxPercent: d.taxPercent, amount: t.lines[0].amount }] },
+          },
+        });
+        if (file && key) await tx.document.create({ data: { companyId: c.companyId, name: `Quotation ${x.number} (made outside the app).${file.ext}`, type: "OTHER", entityType: "QUOTATION", entityId: x.id, storageKey: key, mimeType: file.mime, size: file.size, uploadedById: c.userId } });
+        await audit(c, { action: "CREATE", entityType: "Quotation", entityId: x.id, summary: `Recorded quotation ${x.number} made outside the app for ${client.name}: ₹${d.amount.toLocaleString("en-IN")} before GST${d.accepted ? ", accepted" : ""}` }, tx);
+        if (d.accepted) await notifyRoles(c.companyId, ["MANAGEMENT", "OWNER", "PROJECT_MANAGER"], { type: "GENERAL", title: `Quotation ${x.number} accepted`, body: "Convert it into a project to start execution.", link: `/sales/quotations/${x.id}`, dedupeKey: `qt-accepted:${x.id}` }, tx);
+        return x;
+      });
+      revalidatePath("/sales/quotations");
+      return { message: `Quotation ${q.number} recorded${d.accepted ? ". Open it and press Convert to project" : ""}`, data: { id: q.id } };
+    } catch (e) {
+      if (key) await deleteFile(key);
+      throw e;
+    }
+  });
+}

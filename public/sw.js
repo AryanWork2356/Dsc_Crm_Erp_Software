@@ -4,7 +4,7 @@
  *  - pages and data are NEVER cached – every page comes fresh from the server (or the offline screen if there is no signal);
  *  - nothing is cached for API routes, downloads, PDFs or uploads.
  */
-const CACHE = "dsc-static-v1";
+const CACHE = "dsc-static-v2";
 const OFFLINE = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -42,4 +42,22 @@ self.addEventListener("fetch", (event) => {
       }),
     );
   }
+});
+
+// phone alerts (Web Push): show the alert, and open the right page when it is tapped
+self.addEventListener("push", (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: event.data ? event.data.text() : "DSC Interior" }; }
+  event.waitUntil(self.registration.showNotification(d.title || "DSC Interior", {
+    body: d.body || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: d.tag || undefined, data: { url: d.url || "/notifications" },
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/notifications";
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+    for (const c of list) if (c.url.startsWith(self.location.origin) && "focus" in c) { c.navigate(url); return c.focus(); }
+    return self.clients.openWindow(url);
+  }));
 });

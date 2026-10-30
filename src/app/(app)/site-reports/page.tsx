@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Camera, Users } from "lucide-react";
+import { Camera, Moon, Users } from "lucide-react";
 import type { ReportKind } from "@prisma/client";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -12,6 +12,9 @@ import { PageHeader, EmptyState } from "@/components/ui/page";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FormDialog } from "@/components/forms/form-dialog";
+import { ActionButton } from "@/components/forms/action-button";
+import { clearLateWork, setLateWork } from "./actions";
 
 export const metadata = { title: "Daily site reports" };
 
@@ -55,6 +58,7 @@ export default async function SiteReportsPage() {
   const people = await db.user.findMany({ where: { id: { in: [...new Set(reports.map((r) => r.submittedById))] } }, select: { id: true, name: true } });
   const who = new Map(people.map((u) => [u.id, u.name]));
   const byId = new Map(projects.map((p) => [p.id, p]));
+  const lateWork = new Map((await db.lateWork.findMany({ where: { companyId: c.companyId, date: today, projectId: { in: ids } } })).map((l) => [l.projectId, l]));
 
   // 7-day (6 working days) compliance per site
   const rows = projects.map((p) => {
@@ -96,7 +100,8 @@ export default async function SiteReportsPage() {
               <div className="divide-y divide-slate-100">
                 {KINDS.map(({ kind, title, verb }) => {
                   const r = todays.get(`${p.id}:${kind}`);
-                  const st = slotState(kind, p.outstation, !!r, now, t);
+                  const late = kind === "EVENING" ? lateWork.get(p.id)?.until : null;
+                  const st = slotState(kind, p.outstation, !!r, now, t, late);
                   const s = SLOT_STYLE[st];
                   const canAct = canSend && (c.can("site_reports:edit") || fieldRole || p.projectManagerId === c.userId || p.supervisorId === c.userId);
                   return (
@@ -104,7 +109,7 @@ export default async function SiteReportsPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-slate-900">{title}</p>
-                          <p className="text-xs text-slate-500">due {dueLabel(kind, p.outstation, t)}</p>
+                          <p className="text-xs text-slate-500">due {dueLabel(kind, p.outstation, t, late)}{late && <span className="font-medium text-indigo-700"> · working late until {late}</span>}</p>
                         </div>
                         <Badge tone={s.tone}>{r && !r.onTime ? "Sent late" : s.label}</Badge>
                       </div>
@@ -124,6 +129,14 @@ export default async function SiteReportsPage() {
                         <Button asChild size="lg" variant={r ? "secondary" : st === "overdue" ? "danger" : "primary"} className="mt-3 h-12 w-full">
                           <Link href={`/site-reports/new?project=${p.id}&kind=${kind}`}>{r ? `Update ${verb}` : `Send ${verb}`}</Link>
                         </Button>
+                      )}
+                      {canAct && kind === "EVENING" && !r && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <FormDialog title="Working late today" description="Work will go on after the normal time (for example till night). The evening report is then due an hour after the time you give, nobody is chased before that, and the project manager is told." trigger={<Button size="sm" variant="ghost" className="text-indigo-700"><Moon className="h-4 w-4" /> {late ? "Change late time" : "Working late today?"}</Button>}
+                            fields={[{ name: "until", label: "Work will finish by", type: "time", required: true, defaultValue: late ?? "22:00" }, { name: "reason", label: "Why? (optional)", type: "textarea", placeholder: "e.g. finishing the kitchen before the client visit tomorrow", defaultValue: lateWork.get(p.id)?.reason ?? null }]}
+                            action={setLateWork.bind(null, p.id)} submitLabel="Save" />
+                          {late && <ActionButton size="sm" variant="ghost" action={clearLateWork.bind(null, p.id)}>Not late after all</ActionButton>}
+                        </div>
                       )}
                     </div>
                   );

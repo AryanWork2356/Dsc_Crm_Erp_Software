@@ -22,7 +22,7 @@ import { reportDay } from "./site-reports";
 const DAY = 86400000;
 
 export type NeedStatus = "NOT_ASKED" | "PART_ASKED" | "REQUESTED" | "ORDERED" | "PART_ARRIVED" | "ARRIVED";
-export const NEED_LABEL: Record<NeedStatus, string> = { NOT_ASKED: "Not asked yet", PART_ASKED: "Only part asked", REQUESTED: "Requested, not ordered", ORDERED: "Ordered", PART_ARRIVED: "Part arrived", ARRIVED: "Arrived" };
+export const NEED_LABEL: Record<NeedStatus, string> = { NOT_ASKED: "Not asked yet", PART_ASKED: "Only part asked", REQUESTED: "Requested, not ordered", ORDERED: "Ordered", PART_ARRIVED: "Part received", ARRIVED: "Received" };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 /** The same material, whether it was picked from the list or typed: same list entry, same name, or one name inside the other (6+ letters). */
@@ -72,11 +72,11 @@ const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: 
 export function problemOf(status: NeedStatus, neededBy: Date, eta: Date | null, today: Date, warnDays: number): Problem | null {
   if (status === "ARRIVED") return null;
   const days = Math.round((neededBy.getTime() - today.getTime()) / DAY);
-  if (days < 0) return { kind: "LATE", severity: "HIGH", text: `Needed on ${fmt(neededBy)}, ${-days} day${days === -1 ? "" : "s"} ago, and not all of it has arrived` };
+  if (days < 0) return { kind: "LATE", severity: "HIGH", text: `Needed on ${fmt(neededBy)}, ${-days} day${days === -1 ? "" : "s"} ago, and not all of it has been received` };
   if (status === "NOT_ASKED" || status === "PART_ASKED") return days <= warnDays ? { kind: "NOT_ASKED", severity: days <= 2 ? "HIGH" : "MEDIUM", text: `${status === "NOT_ASKED" ? "Not asked for yet" : "Only part has been asked for"}: needed ${days === 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`} (${fmt(neededBy)})` } : null;
   if (status === "REQUESTED") return days <= Math.min(warnDays, 3) ? { kind: "NOT_ORDERED", severity: days <= 1 ? "HIGH" : "MEDIUM", text: `Requested but not ordered: needed ${days === 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`} (${fmt(neededBy)})` } : null;
   // ordered, or part arrived
-  if (days <= 1) return { kind: "NOT_ARRIVED", severity: "HIGH", text: `Needed ${days === 0 ? "today" : "tomorrow"} and not all of it has arrived${eta ? ` (supplier promised ${fmt(eta)})` : ""}` };
+  if (days <= 1) return { kind: "NOT_ARRIVED", severity: "HIGH", text: `Needed ${days === 0 ? "today" : "tomorrow"} and not all of it has been received${eta ? ` (supplier promised ${fmt(eta)})` : ""}` };
   if (eta && eta.getTime() > neededBy.getTime() && days <= warnDays) return { kind: "TOO_LATE", severity: "MEDIUM", text: `The supplier promised ${fmt(eta)} but it is needed on ${fmt(neededBy)}` };
   return null;
 }
@@ -131,7 +131,7 @@ export async function syncMaterialNeeds(companyId: string, now: Date = new Date(
     troubled.add(r.id);
     const owner = fallback?.id ?? r.managerId;
     if (!owner) continue;
-    const detail = `${r.problem.text}. ${r.forWork ? `Needed for: ${r.forWork}. ` : ""}Asked ${r.asked + r.ordered + r.arrived} of ${r.quantity}, arrived ${r.arrived}.`;
+    const detail = `${r.problem.text}. ${r.forWork ? `Needed for: ${r.forWork}. ` : ""}Asked ${r.asked + r.ordered + r.arrived} of ${r.quantity}, received ${r.arrived}.`;
     const dueDate = r.problem.kind === "LATE" || r.problem.kind === "NOT_ARRIVED" ? new Date(today.getTime() + DAY - 60000) : new Date(Math.max(today.getTime(), Math.min(r.neededBy.getTime() - DAY, today.getTime() + 2 * DAY)));
     const title = `Material: ${r.quantity} ${r.unit} ${r.description} for ${r.projectCode}`;
     const res = await raiseAction(db, {
@@ -149,6 +149,6 @@ export async function syncMaterialNeeds(companyId: string, now: Date = new Date(
     }
   }
   const open = await db.actionItem.findMany({ where: { companyId, sourceType: "MaterialNeed", status: { in: ["OPEN", "IN_PROGRESS"] } }, select: { sourceId: true, createdById: true } });
-  for (const a of open) if (a.sourceId && !troubled.has(a.sourceId)) { await resolveActionsFor(db, companyId, "MaterialNeed", a.sourceId, a.createdById, "The material arrived, was ordered, or its date was corrected."); closed++; }
+  for (const a of open) if (a.sourceId && !troubled.has(a.sourceId)) { await resolveActionsFor(db, companyId, "MaterialNeed", a.sourceId, a.createdById, "The material was received, ordered, or its date was corrected."); closed++; }
   return { raised, closed };
 }
