@@ -39,7 +39,12 @@ export async function scanBill(fd: FormData) {
     let vendorName = r.vendorName;
     if (kind === "vendor_bill") {
       const vendors = await db.vendor.findMany({ where: { companyId: c.companyId, deletedAt: null }, select: { id: true, name: true, gstin: true } });
-      const hit = (r.vendorGstin && vendors.find((v) => v.gstin?.toUpperCase() === r.vendorGstin)) || (r.vendorName && letters(r.vendorName).length >= 4 ? vendors.find((v) => letters(v.name).includes(letters(r.vendorName!)) || letters(r.vendorName!).includes(letters(v.name))) : undefined);
+      // the vendor: by GSTIN, then by name; with the free reader, also by looking for a known vendor anywhere in the text of the bill
+      const text = r.text ?? "";
+      const flat = letters(text);
+      const hit = (r.vendorGstin && vendors.find((v) => v.gstin?.toUpperCase() === r.vendorGstin))
+        || (r.vendorName && letters(r.vendorName).length >= 4 ? vendors.find((v) => letters(v.name).includes(letters(r.vendorName!)) || letters(r.vendorName!).includes(letters(v.name))) : undefined)
+        || (text ? vendors.find((v) => (v.gstin && text.toUpperCase().includes(v.gstin.toUpperCase())) || (letters(v.name).length >= 5 && flat.includes(letters(v.name)))) : undefined);
       fields = { vendorId: hit?.id ?? "", number: r.billNumber ?? "", billDate: r.billDate ?? "", dueDate: r.dueDate ?? "", amount, notes: r.description ?? "" };
       unsure = r.unsure.map((u) => ({ vendorName: "vendorId", billNumber: "number", totalAmount: "amount", description: "notes" } as Record<string, string>)[u] ?? u);
       if (!hit && r.vendorName) unsure.push("vendorId");

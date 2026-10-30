@@ -8,10 +8,16 @@ import { z } from "zod";
  *
  * Switched on only when ANTHROPIC_API_KEY is set. BILL_MODEL (optional) picks another, cheaper model; the default is the most accurate.
  */
-export const billReadingOn = () => !!process.env.ANTHROPIC_API_KEY;
+export const billReadingOn = () => !!process.env.ANTHROPIC_API_KEY || googleReadingOn();
+/** The free Google text reader is used when its credentials are set; otherwise the AI reader. BILL_ENGINE ("google" or "claude") forces one. */
+export const billEngine = (): "google" | "claude" => (process.env.BILL_ENGINE === "claude" || process.env.BILL_ENGINE === "google" ? process.env.BILL_ENGINE : googleReadingOn() ? "google" : "claude");
 export const billModel = () => process.env.BILL_MODEL || "claude-opus-5-5";
 
-export const CATEGORIES = ["MATERIAL", "LABOUR", "VENDOR", "TRAVEL", "OFFICE", "PETTY_CASH", "MISC"] as const;
+import { BillReadError, CATEGORIES, type RawBill } from "./bill-reader-shared";
+import { googleReadingOn, readTextGoogle } from "./bill-google";
+import { parseBillText } from "./bill-text";
+export { BillReadError, CATEGORIES };
+export type { RawBill };
 const nullable = (t: object) => ({ anyOf: [t, { type: "null" }] });
 
 const SCHEMA = {
@@ -55,7 +61,6 @@ const raw = z.object({
   billDate: z.string().nullable(), dueDate: z.string().nullable(), totalAmount: z.number().nullable(), taxAmount: z.number().nullable(),
   description: z.string().nullable(), category: z.enum(CATEGORIES), unsure: z.array(z.string()), note: z.string().nullable(),
 });
-export type RawBill = z.infer<typeof raw>;
 
 export type CleanBill = {
   isBill: boolean; readable: boolean; handwritten: boolean;
@@ -95,9 +100,10 @@ export function cleanBill(r: RawBill, now = new Date()): CleanBill {
   return out;
 }
 
-export class BillReadError extends Error {}
+/** What a reader returns: the cleaned boxes, plus the plain text it saw (only the free text reader has it; used to find the vendor). Never saved. */
+export type BillResult = CleanBill & { text?: string };
 
-export async function readBill(bytes: Buffer, mime: string): Promise<CleanBill> {
+async function readBillClaude(bytes: Buffer, mime: string): Promise<CleanBill> {
   const client = new Anthropic({ timeout: 90_000, maxRetries: 1 });
   const data = bytes.toString("base64");
   const block = mime === "application/pdf"
@@ -126,4 +132,12 @@ export async function readBill(bytes: Buffer, mime: string): Promise<CleanBill> 
   const ok = raw.safeParse(parsed);
   if (!ok.success) throw new BillReadError("The bill could not be understood. Please type the details.");
   return cleanBill(ok.data);
+}
+
+export async function readBill(bytes: Buffer, mime: string): Promise<BillResult> {
+  if (billEngine() === "google") {
+    const { text, confidence } = await readTextGoogle(bytes, mime);
+    return { ...cleanBill(parseBillText(text, confidence)), text };
+  }
+  return readBillClaude(bytes, mime);
 }
