@@ -94,6 +94,24 @@ describe("self-marked attendance needs the phone to be at the site", () => {
   });
 });
 
+describe("every staff role can mark their own attendance", () => {
+  it("designer, procurement, store and accounts staff are not refused", async () => {
+    await db.companySettings.updateMany({ data: { officeLat: SITE.lat, officeLng: SITE.lng, geoRequired: true, geoRadiusM: 20 } });
+    let tried = 0;
+    for (const email of ["designer@dsc.demo", "procurement@dsc.demo", "store@dsc.demo", "accounts@dsc.demo"]) {
+      const emp = await db.employee.findFirst({ where: { user: { email } } });
+      if (!emp) continue;
+      tried++;
+      await db.attendance.deleteMany({ where: { employeeId: emp.id, date: calendarDay() } });
+      await loginAs(email);
+      const r = await checkIn("office", at(6).lat, at(6).lng, 5, Date.now());
+      expect(r.ok, `${email}: ${r.ok ? "" : r.error}`).toBe(true);
+      expect(await db.attendance.count({ where: { employeeId: emp.id, date: calendarDay() } })).toBe(1);
+    }
+    expect(tried).toBeGreaterThan(0);
+  });
+});
+
 describe("saving locations", () => {
   it("a project site location is validated and needs project edit access", async () => {
     const p = await db.project.findFirstOrThrow({ where: { code: "PRJ-00001" } });

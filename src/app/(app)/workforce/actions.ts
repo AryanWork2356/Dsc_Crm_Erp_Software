@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AttendanceStatus, PaymentMethod, WageType, WorkerTrade, type AttendanceMethod } from "@prisma/client";
 import { db } from "@/lib/db";
-import { assertPerm, hashPassword, type Ctx } from "@/lib/auth";
+import { assertPerm, getCtx, hashPassword, type Ctx } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { run, UserError } from "@/lib/action";
 import { nextNumber } from "@/lib/sequence";
@@ -316,7 +316,10 @@ export async function markEmployeeAttendance(fd: FormData) {
  */
 export async function checkIn(target?: string, lat?: number, lng?: number, accuracyM?: number, fixAt?: number) {
   return run(async () => {
-    const c = await assertPerm("attendance:create");
+    // Anyone with a worker or employee profile marks their OWN attendance (designers, store, procurement and accounts too);
+    // marking other people's attendance is a different action that needs the attendance permission.
+    const c = await getCtx();
+    if (!c) throw new Error("Your session has expired. Please sign in again.");
     const day = calendarDay();
     const user = await db.user.findUniqueOrThrow({ where: { id: c.userId } });
     const settings = await db.companySettings.findUnique({ where: { companyId: c.companyId } });

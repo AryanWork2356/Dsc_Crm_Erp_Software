@@ -23,6 +23,7 @@ import { slippedDays } from "@/lib/baseline";
 import { HEALTH_LABEL, taskHealth } from "@/lib/task-health";
 import { setSiteLocation } from "@/app/(app)/workforce/location-actions";
 import { TaskStatusControl } from "../task-controls";
+import { invoiceFromMilestone } from "@/app/(app)/finance/actions";
 import { addTaskComment, changeProjectStatus, setEstimateToComplete, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
 
 const ACTIVE = ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT", "EXECUTION", "QUALITY_CHECK", "SNAGGING", "HANDOVER"];
@@ -65,6 +66,11 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     money ? oneProjectFinancials(c.companyId, id) : null,
   ]);
   const plan = tab === "materials" ? await projectMaterialPlan(c.companyId, id) : [];
+  // stage invoices already raised for this project's milestones (the invoice line starts with the milestone name)
+  const canBill = c.can("invoices:create") && money;
+  const billed = tab === "milestones" && canBill && p.milestones.length
+    ? await db.invoiceItem.findMany({ where: { invoice: { projectId: id, status: { not: "CANCELLED" }, deletedAt: null }, OR: p.milestones.map((m) => ({ description: { startsWith: `${m.name} –` } })) }, select: { description: true, invoice: { select: { id: true, number: true } } } })
+    : [];
   const name = new Map(staff.map((s) => [s.value, s.label]));
   const today = startOfDay();
   const late = p.plannedEndDate && p.plannedEndDate < today && ACTIVE.includes(p.status);
@@ -214,6 +220,12 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                     <p className={cn("font-medium", m.completedAt ? "text-slate-500 line-through" : "text-slate-900")}>{m.name}</p>
                     <p className="text-xs text-slate-500">Due {formatDate(m.dueDate)}{m.completedAt && ` · done ${formatDate(m.completedAt)}`}{money && num(m.billingPct) > 0 && ` · bill ${num(m.billingPct)}% = ${formatINR((num(p.contractValue) * num(m.billingPct)) / 100)}`}</p>
                   </div>
+                  {canBill && num(m.billingPct) > 0 && (() => {
+                    const inv = billed.find((b) => b.description.startsWith(`${m.name} –`));
+                    return inv
+                      ? <Link href={`/finance/invoices/${inv.invoice.id}`} className="text-sm font-medium text-brand-700 hover:underline">Invoice {inv.invoice.number}</Link>
+                      : <ActionButton size="sm" variant={m.completedAt ? "primary" : "secondary"} action={invoiceFromMilestone.bind(null, m.id)}>Create invoice</ActionButton>;
+                  })()}
                   {canEdit && (
                     <>
                       <ActionButton size="sm" variant={m.completedAt ? "ghost" : "secondary"} action={toggleMilestone.bind(null, m.id)}>{m.completedAt ? "Reopen" : "Mark done"}</ActionButton>

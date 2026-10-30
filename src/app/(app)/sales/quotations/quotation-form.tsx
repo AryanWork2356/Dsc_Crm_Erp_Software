@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { USE_LEADS } from "@/lib/features";
 import { LineItemsEditor, newRow, type LineRow } from "@/components/forms/line-items";
 import type { ActionResult } from "@/lib/action";
 import { BOQ_CATEGORY_OPTS, UNIT_OPTS, type Opt } from "@/lib/enums";
@@ -61,12 +62,14 @@ export function QuotationForm({ action, clients, leads, templates, defaultTax, i
               {clients.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </Select>
           </Field>
-          <Field label="Linked lead" hint="Optional – keeps the lead pipeline in sync">
-            <Select name="leadId" defaultValue={initial.leadId ?? ""}>
-              <option value="">— None —</option>
-              {leads.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </Select>
-          </Field>
+          {USE_LEADS && (
+            <Field label="Linked lead" hint="Optional – keeps the lead pipeline in sync">
+              <Select name="leadId" defaultValue={initial.leadId ?? ""}>
+                <option value="">— None —</option>
+                {leads.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </Select>
+            </Field>
+          )}
           <Field label="Title / scope" error={errors.title}>
             <Input name="title" defaultValue={initial.title} placeholder="e.g. 3BHK full interior – Lodha Splendora" />
           </Field>
