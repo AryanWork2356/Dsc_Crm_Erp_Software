@@ -26,7 +26,7 @@ export async function saveTimeLimits(fd: FormData) {
       times[field] = v.padStart(5, "0");
     }
     const rules: Record<string, number> = {};
-    for (const [field, label, min, max] of [["materialNoticeDays", "Material request notice (days)", 0, 30], ["leaveNoticeDays", "Regular leave notice (days)", 0, 120], ["longLeaveNoticeDays", "Long leave notice (days)", 0, 365], ["leaveYearlyCap", "Yearly leave limit (days)", 1, 365]] as const) {
+    for (const [field, label, min, max] of [["materialNoticeDays", "Material request notice (days)", 0, 30], ["materialWarnDays", "Warn about material not asked for (days)", 1, 60],["leaveNoticeDays", "Regular leave notice (days)", 0, 120], ["longLeaveNoticeDays", "Long leave notice (days)", 0, 365], ["leaveYearlyCap", "Yearly leave limit (days)", 1, 365]] as const) {
       const raw = String(fd.get(field) ?? "").trim();
       if (!raw) continue; // blank keeps the current value
       const n = Number(raw);

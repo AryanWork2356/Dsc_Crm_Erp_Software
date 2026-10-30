@@ -15,6 +15,7 @@ export const NAV: NavGroup[] = [
     label: "My Work",
     icon: "check-square",
     items: [
+      { label: "Today's Plan", href: "/today", perm: "tasks:view" },
       { label: "Actions & Blockers", href: "/actions", perm: "actions:view" },
       { label: "Approvals", href: "/approvals", perm: "approvals:view" },
       { label: "Time Limits", href: "/time-limits", perm: "dashboard:view" },
@@ -74,6 +75,7 @@ export const NAV: NavGroup[] = [
     label: "Procurement",
     icon: "shopping-cart",
     items: [
+      { label: "Material Needed", href: "/procurement/needs", perm: "purchase_requests:view" },
       { label: "Purchase Requests", href: "/procurement/requests", perm: "purchase_requests:view" },
       { label: "Purchase Orders", href: "/procurement/orders", perm: "purchase_orders:view" },
       { label: "Vendors", href: "/procurement/vendors", perm: "vendors:view" },
@@ -183,18 +185,18 @@ export const NAV: NavGroup[] = [
  * leave it out to show everything its permissions allow.
  */
 const STAFF_COMMON = ["/actions", "/hr/leaves", "/hr/payslips", "/hr/announcements", "/notifications"];
-const SITE_CORE = ["/site-reports", "/resources", "/inventory/waste", "/projects", "/projects/tasks", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work", "/finance/expenses", ...STAFF_COMMON];
+const SITE_CORE = ["/today", "/site-reports", "/resources", "/inventory/waste", "/projects", "/projects/tasks", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work", "/finance/expenses", ...STAFF_COMMON];
 export const SIMPLE_MENU: Partial<Record<RoleKey, string[]>> = {
   SITE_SUPERVISOR: SITE_CORE,
   SITE_ENGINEER: [...SITE_CORE, "/crm/site-visits", "/sales/boq", "/inventory/stock", "/inventory/issues", "/support"],
-  PROJECT_MANAGER: ["/dashboard", "/exceptions", "/kpis", "/resources", "/inventory/waste", "/time-limits", "/approvals", "/projects", "/site-reports", "/transfers", "/extra-work", "/bills-to-certify", "/closure", "/scorecards", "/projects/tasks", "/sales/boq", "/sales/rates", "/procurement/requests", "/procurement/orders", "/procurement/deliveries", "/inventory/stock", "/workforce/attendance", "/finance/expenses", "/documents", "/support", "/reports", ...STAFF_COMMON],
+  PROJECT_MANAGER: ["/dashboard", "/today", "/exceptions", "/kpis", "/resources", "/inventory/waste", "/time-limits", "/approvals", "/projects", "/site-reports", "/transfers", "/extra-work", "/bills-to-certify", "/closure", "/scorecards", "/projects/tasks", "/sales/boq", "/sales/rates", "/procurement/needs", "/procurement/requests", "/procurement/orders", "/procurement/deliveries", "/inventory/stock", "/workforce/attendance", "/finance/expenses", "/documents", "/support", "/reports", ...STAFF_COMMON],
   SALES: ["/dashboard", "/time-limits", "/crm/leads", "/crm/follow-ups", "/crm/site-visits", "/crm/clients", "/sales/quotations", "/sales/boq", "/projects", "/whatsapp", "/reports", "/approvals", ...STAFF_COMMON],
-  DESIGNER: ["/dashboard", "/crm/clients", "/crm/site-visits", "/sales/boq", "/sales/quotations", "/projects", "/projects/tasks", "/documents", "/approvals", ...STAFF_COMMON],
-  PROCUREMENT: ["/dashboard", "/inventory/waste", "/time-limits", "/approvals", "/procurement/requests", "/procurement/orders", "/procurement/vendors", "/procurement/deliveries", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/finance/bills", "/finance/payables", "/sales/boq", "/projects", "/site-reports", "/transfers", "/whatsapp", "/documents", "/reports", ...STAFF_COMMON],
+  DESIGNER: ["/dashboard", "/today", "/crm/clients", "/crm/site-visits", "/sales/boq", "/sales/quotations", "/projects", "/projects/tasks", "/documents", "/approvals", ...STAFF_COMMON],
+  PROCUREMENT: ["/dashboard", "/inventory/waste", "/time-limits", "/approvals", "/procurement/needs", "/procurement/requests", "/procurement/orders", "/procurement/vendors", "/procurement/deliveries", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/finance/bills", "/finance/payables", "/sales/boq", "/projects", "/site-reports", "/transfers", "/whatsapp", "/documents", "/reports", ...STAFF_COMMON],
   STORE: ["/dashboard", "/inventory/waste", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/inventory/issues", "/inventory/movements", "/inventory/locations", "/procurement/orders", "/procurement/deliveries", "/transfers", "/site-reports", "/projects", ...STAFF_COMMON],
   ACCOUNTS: ["/dashboard", "/actions", "/exceptions", "/kpis", "/time-limits", "/approvals", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/crm/clients", "/sales/quotations", "/projects", "/extra-work", "/closure", "/procurement/orders", "/procurement/vendors", "/documents", "/reports", ...STAFF_COMMON],
   HR: ["/dashboard", "/actions", "/time-limits", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/workforce/attendance", "/workforce/workers", "/workforce/contractors", "/workforce/labour", "/closure", "/scorecards", "/documents", "/notifications"],
-  MANAGEMENT: ["/dashboard", "/actions", "/exceptions", "/kpis", "/resources", "/time-limits", "/approvals", "/crm/leads", "/crm/clients", "/sales/quotations", "/sales/boq", "/sales/rates", "/projects", "/site-reports", "/transfers", "/extra-work", "/closure", "/scorecards", "/bills-to-certify", "/procurement/orders", "/procurement/vendors", "/inventory/stock", "/workforce/attendance", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/documents", "/reports", "/notifications", "/settings/company", "/settings/time-limits", "/settings/attendance", "/settings/audit"],
+  MANAGEMENT: ["/dashboard", "/actions", "/exceptions", "/kpis", "/resources", "/time-limits", "/approvals", "/crm/leads", "/crm/clients", "/sales/quotations", "/sales/boq", "/sales/rates", "/projects", "/site-reports", "/transfers", "/extra-work", "/closure", "/scorecards", "/bills-to-certify", "/procurement/needs", "/procurement/orders", "/procurement/vendors", "/inventory/stock", "/workforce/attendance", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/documents", "/reports", "/notifications", "/settings/company", "/settings/time-limits", "/settings/attendance", "/settings/audit"],
   ADMIN: ["/dashboard", "/actions", "/exceptions", "/kpis", "/resources", "/approvals", "/projects", "/closure", "/hr/employees", "/hr/leaves", "/hr/announcements", "/hr/payslips", "/documents", "/support", "/reports", "/notifications", "/settings/team", "/settings/company", "/settings/roles", "/settings/import", "/settings/terms", "/settings/time-limits", "/settings/attendance", "/settings/automation", "/settings/audit"],
   // OWNER: no list on purpose – the owner sees everything
 };

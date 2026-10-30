@@ -356,6 +356,7 @@ model CompanySettings {
   defaultPaymentTerms        String   @default("50% advance payment; 40% before project handover; 10% within 15 days of final bill. Final billing as per actual quantities.")
   // material must be requested at least this many days before it is needed (SOP: 2-3 days)
   materialNoticeDays         Int      @default(2)
+  materialWarnDays           Int      @default(7) // warn Procurement this many days before a needed material, if it has not been asked for
   // leave policy: notice needed for regular leave, for long leave, and the yearly cap (days)
   leaveNoticeDays            Int      @default(15)
   longLeaveNoticeDays        Int      @default(90)
@@ -977,6 +978,7 @@ model Project {
   resourceNeeds    ResourceNeed[]
   manpowerLogs     ManpowerLog[]
   feasibility      Feasibility?
+  materialNeeds    MaterialNeed[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -2156,4 +2158,27 @@ model CompanyCharge {
 
   @@unique([companyId, year, month, kind])
   @@index([companyId, year])
+}
+
+/// Material the project's schedule needs, and on which day: the list Procurement is warned from. Where it stands (asked, ordered, arrived)
+/// is worked out from the purchase requests, orders and receipts already entered, never typed here.
+model MaterialNeed {
+  id          String   @id @default(cuid())
+  companyId   String
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  materialId  String? // the material list entry, when it matches one
+  description String
+  unit        String   @default("nos")
+  quantity    Decimal  @db.Decimal(12, 3)
+  neededBy    DateTime @db.Date
+  taskId      String? // the scheduled work it is for
+  forWork     String? // the name of that work, kept as text
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId, projectId, neededBy])
+  @@index([companyId, neededBy])
 }

@@ -24,6 +24,8 @@ import { HEALTH_LABEL, taskHealth } from "@/lib/task-health";
 import { setSiteLocation } from "@/app/(app)/workforce/location-actions";
 import { TaskStatusControl } from "../task-controls";
 import { invoiceFromMilestone } from "@/app/(app)/finance/actions";
+import { ScheduleTab } from "./schedule-tab";
+import { MaterialNeedsCard } from "./material-needs-card";
 import { addTaskComment, changeProjectStatus, setEstimateToComplete, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
 
 const ACTIVE = ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT", "EXECUTION", "QUALITY_CHECK", "SNAGGING", "HANDOVER"];
@@ -47,6 +49,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
   const docAccess = !!(await db.project.findFirst({ where: { id, ...projectDocScope(c) }, select: { id: true } }));
   const tabs = [
     { key: "overview", label: "Overview", href: `/projects/${id}` },
+    { key: "schedule", label: "Schedule", href: `/projects/${id}?tab=schedule` },
     { key: "tasks", label: "Tasks", href: `/projects/${id}?tab=tasks`, count: p.tasks.length },
     { key: "timeline", label: "Timeline", href: `/projects/${id}?tab=timeline` },
     { key: "milestones", label: "Milestones", href: `/projects/${id}?tab=milestones`, count: p.milestones.length },
@@ -66,6 +69,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     money ? oneProjectFinancials(c.companyId, id) : null,
   ]);
   const plan = tab === "materials" ? await projectMaterialPlan(c.companyId, id) : [];
+  const needCount = tab === "schedule" ? await db.materialNeed.count({ where: { projectId: id } }) : 0;
   // stage invoices already raised for this project's milestones (the invoice line starts with the milestone name)
   const canBill = c.can("invoices:create") && money;
   const billed = tab === "milestones" && canBill && p.milestones.length
@@ -166,9 +170,13 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         <Card>
           <CardHeader>
             <CardTitle>Tasks</CardTitle>
-            {canTask && <FormDialog title="New task" wide trigger={<Button size="sm">Add task</Button>} fields={taskFields()} action={async (fd) => { "use server"; return createTask(id, fd); }} />}
+            {canTask && (
+              <div className="flex flex-wrap items-center gap-2">
+                <FormDialog title="New task" wide trigger={<Button size="sm">Add task</Button>} fields={taskFields()} action={async (fd) => { "use server"; return createTask(id, fd); }} />
+              </div>
+            )}
           </CardHeader>
-          {p.tasks.length === 0 ? <EmptyState title="No tasks yet" hint="Break the job into tasks and assign them to your team." /> : (
+          {p.tasks.length === 0 ? <EmptyState title="No tasks yet" hint="Upload the whole day-by-day plan in the Schedule tab, or add tasks one by one." /> : (
             <ul className="divide-y divide-slate-100">
               {p.tasks.map((t) => {
                 const over = t.dueDate && t.dueDate < today && t.status !== "COMPLETED";
@@ -202,6 +210,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
           )}
         </Card>
       )}
+
+      {tab === "schedule" && <ScheduleTab companyId={c.companyId} projectId={id} hasStart={!!p.startDate} canUpload={canTask} existing={{ tasks: p.tasks.length, needs: needCount }} />}
 
       {tab === "timeline" && <Timeline p={p} today={today} />}
 
@@ -263,6 +273,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
       )}
 
       {tab === "materials" && (
+        <div className="space-y-5">
+        <MaterialNeedsCard companyId={c.companyId} projectId={id} start={p.startDate} tasks={p.tasks.map((t) => ({ id: t.id, name: t.name }))} canEdit={canTask || c.can("purchase_requests:create")} canAsk={c.can("purchase_requests:create")} />
         <Card>
           <CardHeader>
             <CardTitle>Material plan vs actual</CardTitle>
@@ -289,6 +301,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             </div>
           )}
         </Card>
+        </div>
       )}
 
       {tab === "documents" && <DocumentsPanel c={c} entityType="PROJECT" entityId={id} />}

@@ -20,6 +20,7 @@ export default async function TimeLimitSettingsPage() {
     { name: "reportMorningDueOutstation", label: "Morning update – outstation sites (by)", type: "time", defaultValue: t.reportMorningDueOutstation, required: true },
     { name: "reportEveningDue", label: "Evening report (by)", type: "time", defaultValue: t.reportEveningDue, required: true },
     { name: "materialNoticeDays", label: "Material must be requested this many days ahead", type: "number", defaultValue: s?.materialNoticeDays ?? 2, hint: "SOP: 2–3 days" },
+    { name: "materialWarnDays", label: "Warn Procurement this many days before a scheduled material is needed, if nobody has asked for it", type: "number", defaultValue: s?.materialWarnDays ?? 7, hint: "From the materials list of each project schedule" },
     { name: "leaveNoticeDays", label: "Regular leave notice (days)", type: "number", defaultValue: s?.leaveNoticeDays ?? 15 },
     { name: "longLeaveNoticeDays", label: "Long leave notice (days)", type: "number", defaultValue: s?.longLeaveNoticeDays ?? 90 },
     { name: "leaveYearlyCap", label: "Yearly leave limit (days)", type: "number", defaultValue: s?.leaveYearlyCap ?? 30, hint: "More needs the Managing Director's written approval" },

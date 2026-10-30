@@ -21,7 +21,8 @@ describe("lean menus per role", () => {
   it("a site supervisor sees only the jobs of a supervisor", () => {
     const m = visible("SITE_SUPERVISOR");
     expect(m).toEqual(expect.arrayContaining(["/actions", "/site-reports", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work"]));
-    expect(m.length).toBeLessThanOrEqual(16); // 13 jobs + Actions & Blockers + Manpower + Waste
+    expect(m).toContain("/today"); // the day's work from the schedule
+    expect(m.length).toBeLessThanOrEqual(17); // 13 jobs + Today's Plan + Actions & Blockers + Manpower + Waste
     for (const hidden of ["/dashboard", "/finance/invoices", "/finance/bills", "/hr/payroll", "/crm/leads", "/inventory/movements", "/settings/team", "/scorecards", "/time-limits"]) expect(m).not.toContain(hidden);
   });
 

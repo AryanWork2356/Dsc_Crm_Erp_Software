@@ -15,6 +15,8 @@ import { formToObject, zNumPos, zOptDate, zOptStr, zReqStr } from "@/lib/form";
 import { humanize, num } from "@/lib/utils";
 import { applyDateChange } from "@/lib/baseline";
 import { dueIn, raiseAction, resolveActionsFor } from "@/lib/action-items";
+import { readScheduleFile } from "@/lib/schedule-file";
+import { parseMaterialNeeds, parseSchedule } from "@/lib/schedule-import";
 
 async function getProject(c: Ctx, id: string, tx: Tx | typeof db = db) {
   const p = await tx.project.findFirst({ where: { id, ...projectScope(c) } });
@@ -217,6 +219,54 @@ export async function createTask(projectId: string, fd: FormData) {
     revalidatePath(`/projects/${projectId}`);
     revalidatePath("/projects/tasks");
     return { message: `Task ${t.code} added` };
+  });
+}
+
+/**
+ * Adds a whole schedule from an Excel (or CSV) file: one task per row, with its area, trade, people, dates (or day numbers from the project
+ * start), quantity and what it depends on. Everything is checked first; one wrong row means NOTHING is added, and the message names the row.
+ */
+export async function importSchedule(projectId: string, fd: FormData) {
+  return run(async () => {
+    const c = await assertPerm("tasks:create");
+    const p = await getProject(c, projectId);
+    const file = fd.get("file");
+    if (!(file instanceof File) || file.size === 0) throw new UserError("Choose the schedule file (Excel or CSV).");
+    const [existing, existingNeeds] = await Promise.all([db.projectTask.count({ where: { projectId } }), db.materialNeed.count({ where: { projectId } })]);
+    if (existing + existingNeeds > 0 && fd.get("addToExisting") !== "on") throw new UserError(`This project already has ${existing} task${existing === 1 ? "" : "s"} and ${existingNeeds} material line${existingNeeds === 1 ? "" : "s"}. Tick “Add these to what is already there” if you want the file added as well.`);
+    const sheets = await readScheduleFile(file);
+    if (!sheets.work.length && !sheets.materials.length) throw new UserError("The file has no rows. Use the template: the first sheet is the work, and a sheet called Materials is the material it needs.");
+    const work = sheets.work.length ? parseSchedule(sheets.work, p.startDate) : { tasks: [], errors: [] };
+    const mats = parseMaterialNeeds(sheets.materials, p.startDate, work.tasks);
+    const errors = [...work.errors.map((e) => ({ ...e, sheet: "work" })), ...mats.errors.map((e) => ({ ...e, sheet: "materials" }))];
+    if (errors.length) {
+      const shown = errors.slice(0, 8).map((e) => (e.sheet === "materials" ? e.message : e.row ? `row ${e.row}: ${e.message}` : e.message)).join(" · ");
+      throw new UserError(`Nothing was added. Please fix this and upload again: ${shown}${errors.length > 8 ? ` · and ${errors.length - 8} more` : ""}`);
+    }
+    const catalogue = mats.lines.length ? await db.material.findMany({ where: { companyId: c.companyId, deletedAt: null }, select: { id: true, name: true, unit: true } }) : [];
+    await db.$transaction(async (tx) => {
+      const ids = new Map<string, string>(); // Sl No and name of each task, to link "Depends on" and "For work"
+      for (const t of work.tasks) {
+        const code = await nextNumber(tx, c.companyId, "TSK");
+        const dep = t.dependsOn ? ids.get(t.dependsOn.toLowerCase()) : undefined;
+        const x = await tx.projectTask.create({
+          data: { companyId: c.companyId, projectId, code, name: t.name, description: t.details ?? null, priority: t.priority, startDate: t.start ?? null, dueDate: t.due ?? null, baselineDue: t.due ?? null,
+            zone: t.zone ?? null, requiredTrade: t.trade ?? null, requiredHeadcount: t.headcount ?? null, plannedQty: t.qty ?? null, qtyUnit: t.unit ?? null, dependsOnId: dep ?? null },
+        });
+        ids.set(t.sl.toLowerCase(), x.id); ids.set(t.name.toLowerCase(), x.id);
+      }
+      for (const m of mats.lines) {
+        const cat = catalogue.find((x) => x.name.toLowerCase() === m.description.toLowerCase());
+        const taskId = m.forWork ? (ids.get(m.forWork.toLowerCase()) ?? null) : null;
+        await tx.materialNeed.create({ data: { companyId: c.companyId, projectId, materialId: cat?.id ?? null, description: cat?.name ?? m.description, unit: m.unit ?? cat?.unit ?? "nos", quantity: m.qty, neededBy: m.neededBy, taskId, forWork: m.forWork ?? null, note: m.note ?? null, createdById: c.userId } });
+      }
+      if (work.tasks.length) await recalcProgress(tx, projectId);
+      await audit(c, { action: "CREATE", entityType: "ProjectTask", entityId: projectId, summary: `Uploaded a schedule of ${work.tasks.length} tasks and ${mats.lines.length} material lines to ${p.code}` }, tx);
+    }, { timeout: 60_000, maxWait: 10_000 });
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/projects/tasks");
+    revalidatePath("/procurement/needs");
+    return { message: `${work.tasks.length} tasks and ${mats.lines.length} material lines added to the schedule` };
   });
 }
 

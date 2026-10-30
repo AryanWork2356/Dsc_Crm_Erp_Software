@@ -6,6 +6,7 @@ import { runReportReminders } from "@/lib/site-report-reminders";
 import { runTimeLimitReminders } from "@/lib/time-limits";
 import { syncResourceShortages } from "@/lib/resources";
 import { syncDeliveryRisks } from "@/lib/delivery-risk";
+import { syncMaterialNeeds } from "@/lib/material-needs";
 import { runWeeklyDigest } from "@/lib/director-reports";
 
 /**
@@ -20,7 +21,7 @@ async function handle(req: NextRequest) {
   if (!ok) return new Response("Unauthorized", { status: 401 });
   const companies = await db.company.findMany({ select: { id: true } });
   const results: Record<string, unknown> = {};
-  for (const c of companies) results[c.id] = { ...(await runDailyAutomations(c.id)), siteReportReminders: (await runReportReminders(c.id)).sent, crewShortages: (await syncResourceShortages(c.id)).raised, lateDeliveries: (await syncDeliveryRisks(c.id)).raised, overdueItems: (await runTimeLimitReminders(c.id)).overdue, weeklyDigestSent: (await runWeeklyDigest(c.id)).sent };
+  for (const c of companies) results[c.id] = { ...(await runDailyAutomations(c.id)), siteReportReminders: (await runReportReminders(c.id)).sent, crewShortages: (await syncResourceShortages(c.id)).raised, lateDeliveries: (await syncDeliveryRisks(c.id)).raised, materialNeeds: (await syncMaterialNeeds(c.id)).raised, overdueItems: (await runTimeLimitReminders(c.id)).overdue, weeklyDigestSent: (await runWeeklyDigest(c.id)).sent };
   return Response.json({ ok: true, results });
 }
 
