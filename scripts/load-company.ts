@@ -32,7 +32,7 @@ import { issuedPassword, loginIdFor } from "../src/lib/issued-password";
 
 const DATA = path.resolve(process.cwd(), "..", "Dsc_app", "real-data");
 const DOMAIN = "dscinterior.com";
-const SIGN_IN = "https://dsccrmsoftw.vercel.app";
+const SIGN_IN = "https://app.dscinterior.co.in";
 
 const ROLE_LABEL: Partial<Record<RoleKey, string>> = {
   OWNER: "Owner", MANAGEMENT: "Management", ADMIN: "Admin", SALES: "Sales", PROJECT_MANAGER: "Project Manager", DESIGNER: "Designer",
