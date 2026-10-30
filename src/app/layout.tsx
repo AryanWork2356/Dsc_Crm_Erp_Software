@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   applicationName: "DSC Interior",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
-  appleWebApp: { capable: true, title: "DSC", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "DSC", statusBarStyle: "default" },
   formatDetection: { telephone: false },
 };
 

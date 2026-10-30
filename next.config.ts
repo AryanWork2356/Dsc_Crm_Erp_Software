@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "12mb" },
   },
   poweredByHeader: false,
+  // Next.js streams the page metadata (title, manifest link, icons) into the BODY for normal browsers. Chrome then ignores the
+  // manifest link and never offers to install the app, and iPhone ignores the home-screen icon. Send it in the HEAD for everyone.
+  htmlLimitedBots: /.*/,
   async headers() {
     return [
       {

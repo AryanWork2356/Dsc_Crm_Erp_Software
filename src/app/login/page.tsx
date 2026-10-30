@@ -5,6 +5,7 @@ import { getCtx } from "@/lib/auth";
 import { homeFor } from "@/lib/home";
 import { LoginForm } from "./login-form";
 import { LanguageSwitcher } from "@/components/layout/language";
+import { InstallCta } from "@/components/layout/pwa";
 
 export const metadata = { title: "Sign in" };
 
@@ -18,7 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="relative min-h-screen bg-slate-50 lg:grid lg:grid-cols-[1.1fr_1fr]">
       {/* language: always top right */}
-      <div className="absolute right-4 top-4 z-20">
+      <div className="absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] z-20">
         <LanguageSwitcher tone="auto" />
       </div>
 
@@ -39,6 +40,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p className="mt-1.5 text-sm text-slate-500">Sign in to continue to your work.</p>
           <div className="mt-6 h-0.5 w-12 rounded bg-accent" />
           <LoginForm next={next} />
+          <InstallCta />
           <p className="mt-6 text-center text-xs text-slate-500"><Link href="/forgot-password" className="font-medium text-brand-700 hover:underline">Forgot your password?</Link> The Owner or Admin will tell you yours.</p>
         </div>
       </section>

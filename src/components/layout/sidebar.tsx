@@ -46,7 +46,7 @@ export function Sidebar({ groups, companyName }: { groups: SidebarGroup[]; compa
     <>
       <button
         onClick={() => setOpen(true)}
-        className="no-print fixed left-3 top-3 z-30 rounded-lg border border-slate-200 bg-white p-2 shadow-sm lg:hidden"
+        className="no-print fixed left-3 top-[calc(0.75rem+env(safe-area-inset-top))] z-30 rounded-lg border border-slate-200 bg-white p-2 shadow-sm lg:hidden"
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
@@ -62,7 +62,7 @@ export function Sidebar({ groups, companyName }: { groups: SidebarGroup[]; compa
       {open && (
         <div className="no-print fixed inset-0 z-40 lg:hidden">
           <div className="anim-fade-in absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
-          <aside className="anim-drawer absolute inset-y-0 left-0 flex w-72 flex-col bg-brand-950 text-slate-300 shadow-xl">
+          <aside className="anim-drawer absolute inset-y-0 left-0 flex w-72 flex-col bg-brand-950 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-slate-300 shadow-xl">
             <div className="flex items-center justify-between pr-3">
               <Brand name={companyName} />
               <button onClick={() => setOpen(false)} aria-label="Close menu" className="rounded p-1 text-slate-400 hover:text-white">

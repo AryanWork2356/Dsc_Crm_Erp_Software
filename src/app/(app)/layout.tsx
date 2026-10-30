@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar groups={groups} companyName={company?.legalName ?? company?.company.name ?? "DSC Interior"} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar name={c.name} roleLabel={ROLE_LABELS[c.role]} unread={unread} logout={logout} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto w-full max-w-[1400px] p-4 sm:p-6">{children}</div>
         </main>
       </div>

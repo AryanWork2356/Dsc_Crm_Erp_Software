@@ -19,7 +19,7 @@ export default async function PortalLayout({ children }: { children: React.React
     : [["Orders", "/vendor-portal"], ["Payments", "/vendor-portal/payments"]];
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b border-slate-200 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <Link href={base} className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-white"><Building2 className="h-5 w-5" /></span>

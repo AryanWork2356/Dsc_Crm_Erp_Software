@@ -24,7 +24,7 @@ export function Topbar({
   const [q, setQ] = React.useState("");
 
   return (
-    <header className="no-print flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white pl-14 pr-4 lg:px-6">
+    <header className="no-print flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-slate-200 bg-white pl-14 pr-4 pt-[env(safe-area-inset-top)] lg:px-6">
       <form
         className="relative max-w-md flex-1"
         onSubmit={(e) => {
