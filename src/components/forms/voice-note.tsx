@@ -31,7 +31,7 @@ export function VoiceNote({ value, onChange }: { value: File | null; onChange: (
       setSecs(0);
       setRec(r);
     } catch {
-      setErr("The microphone could not be opened. Allow the microphone for this app in the phone settings.");
+      setErr("Microphone is blocked. Tap the lock icon next to the web address at the top → Microphone → Allow.");
     }
   }
 

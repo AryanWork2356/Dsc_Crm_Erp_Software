@@ -21,6 +21,8 @@ export const SPEAK_LANGS = [
   { code: "gu-IN", short: "ગુ", label: "Gujarati" },
 ] as const;
 const KEY = "dsc-speak-lang";
+/** Shown only when the microphone was refused before: the phone then no longer asks by itself. */
+const BLOCKED = "Microphone is blocked. Tap the lock icon next to the web address at the top → Microphone → Allow.";
 const FROM_APP: Record<string, string> = { hi: "hi-IN", bho: "hi-IN", mr: "mr-IN", gu: "gu-IN", en: "en-IN" };
 
 export function speakLang(): string {
@@ -60,12 +62,20 @@ export function SpeakButton({ className }: { className?: string }) {
 
   const target = () => box.current?.parentElement?.querySelector("textarea, input:not([type=hidden])") as HTMLTextAreaElement | HTMLInputElement | null;
 
-  function start() {
+  async function start() {
     const w = window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor };
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
     const el = target();
     if (!Ctor || !el) return;
     setErr(null);
+    // ask for the microphone first: this is what makes the phone show its "Allow" pop-up right here
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach((t) => t.stop());
+    } catch {
+      setErr(BLOCKED);
+      return;
+    }
     const r = new Ctor();
     r.lang = lang;
     r.continuous = false; // one sentence per press: reliable on Android phones
@@ -75,7 +85,7 @@ export function SpeakButton({ className }: { className?: string }) {
       for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) said += e.results[i][0].transcript;
       if (said.trim()) appendText(el, said.trim());
     };
-    r.onerror = (e) => setErr(e.error === "not-allowed" || e.error === "service-not-allowed" ? "Allow the microphone for this app in the phone settings." : e.error === "no-speech" ? "Nothing was heard. Press the mic and speak." : e.error === "network" ? "Speech-to-text needs internet." : null);
+    r.onerror = (e) => setErr(e.error === "not-allowed" || e.error === "service-not-allowed" ? BLOCKED : e.error === "no-speech" ? "Nothing was heard. Press the mic and speak." : e.error === "network" ? "Speech-to-text needs internet." : null);
     r.onend = () => { setOn(false); rec.current = null; };
     rec.current = r;
     try { r.start(); setOn(true); } catch { setOn(false); }
@@ -93,7 +103,7 @@ export function SpeakButton({ className }: { className?: string }) {
     <span ref={box} className={cn("notranslate absolute bottom-1.5 right-1.5 flex items-center gap-1", className)} translate="no">
       {err && <span className="max-w-[12rem] rounded bg-white/95 px-1.5 py-0.5 text-[11px] leading-tight text-red-600 shadow-sm">{err}</span>}
       <button type="button" onClick={nextLang} title={`Writes in ${cur.label}. Tap to change.`} aria-label={`Speech language: ${cur.label}. Tap to change.`} className="h-7 min-w-7 rounded-md border border-slate-200 bg-white px-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{cur.short}</button>
-      <button type="button" onClick={() => (on ? rec.current?.stop() : start())} title={on ? "Stop" : "Speak instead of typing"} aria-label={on ? "Stop listening" : "Speak instead of typing"}
+      <button type="button" onClick={() => (on ? rec.current?.stop() : void start())} title={on ? "Stop" : "Speak instead of typing"} aria-label={on ? "Stop listening" : "Speak instead of typing"}
         className={cn("flex h-7 w-7 items-center justify-center rounded-md text-white", on ? "animate-pulse bg-red-600" : "bg-brand-700 hover:bg-brand-800")}>
         {on ? <Square className="h-3.5 w-3.5" /> : <Mic className="h-4 w-4" />}
       </button>
