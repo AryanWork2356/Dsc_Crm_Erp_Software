@@ -72,8 +72,8 @@ export default async function TimeLimitsPage({ searchParams }: { searchParams: P
                 <ul className="divide-y divide-slate-100">
                   {rows.map((i) => (
                     <li key={`${i.ruleKey}:${i.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-900">{i.title}</p>
+                      <div className="min-w-0 flex-1 basis-full sm:basis-0">
+                        <p className="text-sm font-medium text-slate-900 sm:truncate">{i.title}</p>
                         <p className="text-xs text-slate-500">{i.detail ? `${i.detail} · ` : ""}waiting since {formatDateTime(i.startedAt)} · with {owner(i)}</p>
                       </div>
                       {i.state === "overdue"

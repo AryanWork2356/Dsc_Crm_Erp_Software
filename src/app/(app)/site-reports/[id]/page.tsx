@@ -84,7 +84,7 @@ export default async function SiteReportPage({ params }: { params: Promise<{ id:
         <Card className="mt-6">
           <CardHeader><CardTitle>Site attendance ({labour.length})</CardTitle></CardHeader>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rt">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2">Name</th><th className="px-3 py-2">Work</th><th className="px-3 py-2">Came</th><th className="px-3 py-2">Left</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {labour.map((l) => <tr key={l.id}><td className="px-4 py-2 font-medium text-slate-900">{l.name}</td><td className="px-3 py-2 text-slate-600">{l.work ?? "—"}</td><td className="tabular px-3 py-2">{l.inTime ?? "—"}</td><td className="tabular px-3 py-2">{l.outTime ?? "—"}</td></tr>)}

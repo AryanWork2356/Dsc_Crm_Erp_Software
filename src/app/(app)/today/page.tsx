@@ -32,9 +32,10 @@ function Row({ t, kind, canEdit }: { t: PlanTask; kind: "today" | "late" | "soon
           {t.status === "BLOCKED" && t.blockedReason && <p className="mt-1 text-xs font-medium text-red-700">Why: {t.blockedReason}</p>}
           {t.waitingFor && <p className="mt-1 text-xs font-medium text-amber-700">Waiting for: {t.waitingFor}</p>}
         </div>
-        <div className="w-24 shrink-0 text-right text-xs text-slate-500"><span className="tabular text-sm font-semibold text-slate-800">{t.progress}%</span> done</div>
-        {kind !== "soon" && <TaskStatusControl status={t.status} progress={t.progress} disabled={!canEdit} action={setTaskStatus.bind(null, t.id)} />}
-        {kind === "soon" && canEdit && <ActionButton size="sm" variant="secondary" action={startTaskToday.bind(null, t.id)} confirm={{ title: `Start “${t.name}” today?`, body: "Its start moves to today. The finish date stays the same.", confirmLabel: "Start today" }}>Start today</ActionButton>}
+        <div className="w-20 shrink-0 text-right text-xs text-slate-500"><span className="tabular text-sm font-semibold text-slate-800">{t.progress}%</span> done</div>
+        {/* on a phone the controls go on their own line under the job, so the name keeps the full width */}
+        {kind !== "soon" && <div className="w-full sm:w-auto"><TaskStatusControl status={t.status} progress={t.progress} disabled={!canEdit} action={setTaskStatus.bind(null, t.id)} /></div>}
+        {kind === "soon" && canEdit && <div className="w-full sm:w-auto"><ActionButton size="sm" variant="secondary" action={startTaskToday.bind(null, t.id)} confirm={{ title: `Start “${t.name}” today?`, body: "Its start moves to today. The finish date stays the same.", confirmLabel: "Start today" }}>Start today</ActionButton></div>}
       </div>
     </li>
   );

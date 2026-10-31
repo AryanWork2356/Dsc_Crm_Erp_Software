@@ -60,7 +60,7 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
           <Card>
             <CardHeader><CardTitle>Items</CardTitle></CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rt">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">#</th><th className="px-4 py-2 text-left">Description</th><th className="px-4 py-2 text-right">Qty</th><th className="px-4 py-2 text-right">Rate</th><th className="px-4 py-2 text-right">GST</th><th className="px-4 py-2 text-right">Amount</th></tr></thead>
                 <tbody>{inv.items.map((i, n) => <tr key={i.id} className="border-t border-slate-100"><td className="px-4 py-2.5 text-slate-400">{n + 1}</td><td className="px-4 py-2.5 text-slate-900">{i.description}</td><td className="tabular px-4 py-2.5 text-right">{num(i.quantity)} {i.unit}</td><td className="tabular px-4 py-2.5 text-right">{formatINR(i.rate, true)}</td><td className="tabular px-4 py-2.5 text-right">{num(i.taxPercent)}%</td><td className="tabular px-4 py-2.5 text-right font-medium">{formatINR(i.amount, true)}</td></tr>)}</tbody>
               </table>

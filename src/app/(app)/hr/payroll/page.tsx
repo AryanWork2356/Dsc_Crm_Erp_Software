@@ -62,7 +62,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <CardHeader><CardTitle>Payslips</CardTitle></CardHeader>
         {slips.length === 0 ? <EmptyState title="Nothing generated" hint="Set up salary structures on employee profiles first." /> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rt">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Employee</th><th className="px-3 py-2 text-right">Earnings</th><th className="px-3 py-2 text-right">Overtime</th><th className="px-3 py-2 text-right">Incentive + bonus</th><th className="px-3 py-2 text-right">Deductions</th><th className="px-3 py-2 text-right">Leave cut</th><th className="px-3 py-2 text-right">Net</th><th /></tr></thead>
               <tbody>
                 {slips.map((p) => (

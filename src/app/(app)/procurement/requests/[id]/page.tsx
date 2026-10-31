@@ -52,7 +52,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Items ({pr.items.length})</CardTitle></CardHeader>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rt">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">#</th><th className="px-4 py-2 text-left">Item</th><th className="px-4 py-2 text-left">Unit</th><th className="px-4 py-2 text-right">Quantity</th></tr></thead>
             <tbody>{pr.items.map((i, n) => <tr key={i.id} className="border-t border-slate-100"><td className="px-4 py-2.5 text-slate-400">{n + 1}</td><td className="px-4 py-2.5 text-slate-900">{i.description}</td><td className="px-4 py-2.5">{i.unit}</td><td className="tabular px-4 py-2.5 text-right">{num(i.quantity)}</td></tr>)}</tbody>
           </table>

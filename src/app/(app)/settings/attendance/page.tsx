@@ -35,7 +35,7 @@ export default async function AttendanceLocationPage() {
       </Card>
       <Card className="mt-5">
         <CardBody className="space-y-2 text-sm text-slate-600">
-          <p><b className="text-slate-900">Each site has its own location.</b> Open the project, then <b>Overview → Site location</b>, stand at the site and press <b>Use my current location</b>. A site can also have its own allowed distance.</p>
+          <p><b className="text-slate-900">Each site has its own location.</b> Open the project, then <b>Overview → Site location</b>, stand at the site and press <b>Use my current location</b>. A site can also have its own allowed distance. Only directors and admins can set or change a site&apos;s location.</p>
           <p><b className="text-slate-900">20 metres is strict.</b> A phone&apos;s GPS can be 10 to 30 metres out, especially inside a building or between tall buildings. If good workers get turned away, raise the distance to 30 or 50 metres. The app also refuses a position that is not clear (more than 50 metres of doubt).</p>
           <p>A coordinator or HR can still mark someone by hand when needed (for example a phone with no signal). Those entries are recorded as <b>Manual</b>.</p>
         </CardBody>

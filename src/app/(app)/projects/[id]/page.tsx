@@ -139,7 +139,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                 <DetailGrid items={[
                   { label: "Site address", value: p.siteAddress }, { label: "Start date", value: formatDate(p.startDate) }, { label: "Actual completion", value: formatDate(p.actualEndDate) },
                   { label: "Project manager", value: p.projectManagerId ? name.get(p.projectManagerId) : null }, { label: "Designer", value: p.designerId ? name.get(p.designerId) : null },
-                  { label: "Site engineer", value: p.siteEngineerId ? name.get(p.siteEngineerId) : null }, { label: "Coordinator", value: p.supervisorId ? name.get(p.supervisorId) : null },
+                  ...(p.siteEngineerId ? [{ label: "Site engineer", value: name.get(p.siteEngineerId) }] : []), { label: "Project coordinator", value: p.supervisorId ? name.get(p.supervisorId) : null },
                 ]} />
               </CardBody>
             </Card>
@@ -290,7 +290,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
           </CardHeader>
           {plan.length === 0 ? <EmptyState title="No material activity yet" hint="Link BOQ items to catalogue materials, then raise purchase requests and issue stock to this site." /> : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rt">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Material</th><th className="px-3 py-2 text-right">BOQ plan</th><th className="px-3 py-2 text-right">Purchased</th><th className="px-3 py-2 text-right">Received</th><th className="px-3 py-2 text-right">Issued</th><th className="px-3 py-2 text-right">Consumed</th><th className="px-3 py-2 text-right">On site</th><th className="px-3 py-2 text-right">Still to buy</th></tr></thead>
                 <tbody>
                   {plan.map((r) => (

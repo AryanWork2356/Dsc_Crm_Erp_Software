@@ -2,14 +2,12 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TableLabels } from "./table-labels";
 
 /** A list table. On a phone each row turns into a card with the column names beside the values (`cards={false}` keeps a wide table to scroll sideways). */
 export function Table({ children, className, cards = true }: { children: React.ReactNode; className?: string; cards?: boolean }) {
   return (
     <div className={cn("overflow-x-auto", className)}>
       <table className={cn("w-full text-left text-sm", cards && "rt")}>{children}</table>
-      {cards && <TableLabels />}
     </div>
   );
 }

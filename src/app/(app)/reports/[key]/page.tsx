@@ -58,7 +58,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       <Card>
         {res.rows.length === 0 ? <EmptyState title="No data for these filters" /> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rt">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{res.columns.map((col) => <th key={col.key} className={`whitespace-nowrap px-4 py-2.5 font-medium ${["money", "number", "pct"].includes(col.type ?? "") ? "text-right" : "text-left"}`}>{col.label}</th>)}</tr></thead>
               <tbody>{res.rows.slice(0, 500).map((r, i) => <tr key={i} className="border-t border-slate-100">{res.columns.map((col) => <td key={col.key} className={`px-4 py-2 ${["money", "number", "pct"].includes(col.type ?? "") ? "tabular text-right" : ""}`}>{cell(col, r[col.key])}</td>)}</tr>)}</tbody>
               {res.totals && <tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">{res.columns.map((col) => <td key={col.key} className={`px-4 py-2.5 ${["money", "number", "pct"].includes(col.type ?? "") ? "tabular text-right" : ""}`}>{res.totals![col.key] !== undefined ? cell(col, res.totals![col.key]) : ""}</td>)}</tr></tfoot>}

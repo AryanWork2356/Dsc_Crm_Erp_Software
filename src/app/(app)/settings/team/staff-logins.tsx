@@ -50,7 +50,7 @@ export function StaffLogins() {
         {plan && (
           <>
             <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs rt">
                 <thead className="bg-slate-50 text-left uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Role now</th><th className="px-3 py-2">New role</th><th className="px-3 py-2">Login now</th><th className="px-3 py-2">New login ID</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {plan.map((p) => (
@@ -68,7 +68,7 @@ export function StaffLogins() {
             <p className="font-semibold text-red-700">Download or print this list now. The passwords are shown only this once.</p>
             <div className="flex gap-2"><Button size="sm" onClick={download}><Download className="h-4 w-4" /> Download list</Button><Button size="sm" variant="secondary" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print</Button></div>
             <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rt">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">Role</th><th className="px-3 py-2">Login ID</th><th className="px-3 py-2">Password</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">{issued.map((x) => <tr key={x.loginId}><td className="px-3 py-1.5">{x.name}</td><td className="px-3 py-1.5">{x.role}</td><td className="px-3 py-1.5 font-semibold">{x.loginId}</td><td className="tabular px-3 py-1.5 font-mono text-base font-semibold">{x.password}</td></tr>)}</tbody>
               </table>

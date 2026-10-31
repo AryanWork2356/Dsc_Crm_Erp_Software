@@ -60,7 +60,7 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
           <Card>
             <CardHeader><CardTitle>Items</CardTitle><div className="flex items-center gap-2 text-xs text-slate-500"><Progress value={ordered ? (got / ordered) * 100 : 0} className="w-24" />{got} / {ordered} received</div></CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rt">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">#</th><th className="px-4 py-2 text-left">Item</th><th className="px-4 py-2 text-right">Ordered</th><th className="px-4 py-2 text-right">Received</th><th className="px-4 py-2 text-right">Pending</th>{money && <><th className="px-4 py-2 text-right">Rate</th><th className="px-4 py-2 text-right">Amount</th></>}</tr></thead>
                 <tbody>
                   {po.items.map((i, n) => (

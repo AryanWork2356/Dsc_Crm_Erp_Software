@@ -4,6 +4,7 @@ import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { InstallBanner, PwaRegister } from "@/components/layout/pwa";
 import { TranslateLoader } from "@/components/layout/language";
+import { TableLabels } from "@/components/ui/table-labels";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <InstallBanner />
         <PwaRegister />
         <TranslateLoader />
+        <TableLabels />
       </body>
     </html>
   );

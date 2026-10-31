@@ -82,7 +82,7 @@ export default async function SiteReportsPage() {
         namedOnAny ? (
           <EmptyState title="None of your projects is live yet" hint="Reports appear here once a project reaches the Execution stage. Ask your project manager to move it forward." />
         ) : (
-          <EmptyState title="You are not named on any project yet" hint="Ask the Owner, Management or Admin to open the project and choose you as Project coordinator or Site engineer (Projects → the project → Edit). It then appears here by itself." />
+          <EmptyState title="You are not named on any project yet" hint="Ask the Owner, Management or Admin to open the project and choose you as Project coordinator (Projects → the project → Edit). It then appears here by itself." />
         )
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -157,7 +157,7 @@ export default async function SiteReportsPage() {
             </div>
           </CardHeader>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rt">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr><th className="px-5 py-2.5">Site</th><th className="px-3 py-2.5">Sent</th><th className="px-3 py-2.5">On time</th><th className="px-3 py-2.5">Missing</th><th className="px-3 py-2.5">Compliance</th></tr>
               </thead>

@@ -32,6 +32,7 @@ export function PwaRegister() {
 export type InstallState = {
   ready: boolean; // the page has worked out what this device is
   installed: boolean; // already installed, or running as the installed app
+  standalone: boolean; // this page is open INSIDE the installed app
   ios: boolean;
   phone: boolean;
   inAppBrowser: boolean; // WhatsApp, Instagram, Facebook … cannot install apps: the link must be opened in Chrome or Safari
@@ -75,7 +76,7 @@ export function useInstall(): InstallState {
     return r.outcome === "accepted" ? ("accepted" as const) : ("dismissed" as const);
   }, [markDone]);
 
-  return { ready: env.ready, installed: env.standalone || installedNow || env.related || env.done, ios: env.ios, phone: env.phone, inAppBrowser: env.inApp, canPrompt: !!deferred, install, markDone };
+  return { ready: env.ready, installed: env.standalone || installedNow || env.related || env.done, standalone: env.standalone, ios: env.ios, phone: env.phone, inAppBrowser: env.inApp, canPrompt: !!deferred, install, markDone };
 }
 
 const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
@@ -127,8 +128,9 @@ export function useInstallFlow() {
 
 /** Small "Install app" button for the top bar. */
 export function InstallApp() {
-  const { show, tap, sheet } = useInstallFlow();
-  if (!show) return null;
+  const { s, tap, sheet } = useInstallFlow();
+  // the small top-bar button stays on every phone browser tab (it never nags); only inside the installed app is it gone
+  if (!s.ready || !s.phone || s.standalone || s.inAppBrowser) return null;
   return (
     <>
       <button onClick={() => void tap()} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-800 hover:bg-brand-100" title="Install the DSC app on this phone" aria-label="Install the DSC app">
@@ -145,7 +147,19 @@ export function InstallCta() {
   if (s.ready && s.phone && !s.installed && s.inAppBrowser) {
     return <p className="mt-5 rounded-xl bg-amber-50 p-3 text-center text-sm text-amber-900 ring-1 ring-amber-200">To install the app, open this page in <b>{s.ios ? "Safari" : "Chrome"}</b> (tap the menu at the top, then <b>Open in browser</b>).</p>;
   }
-  if (!show) return null;
+  if (!show) {
+    // the phone remembers the app as installed (it may have been removed since): still offer it, smaller, unless we are inside the app
+    if (!s.ready || !s.phone || s.standalone || s.inAppBrowser) return null;
+    return (
+      <>
+        <p className="mt-5 text-center text-sm text-slate-500">
+          <Download className="mr-1 inline h-4 w-4" />The app should be on your home screen. Not there?{" "}
+          <button type="button" onClick={() => void tap()} className="font-semibold text-brand-700 underline">Install the DSC app</button>
+        </p>
+        {sheet}
+      </>
+    );
+  }
   return (
     <>
       <button type="button" onClick={() => void tap()} className="mt-5 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-[#361210] to-[#5b2619] p-4 text-left text-white shadow-lg ring-1 ring-amber-300/30 transition active:scale-[0.99]">

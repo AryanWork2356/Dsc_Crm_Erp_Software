@@ -46,7 +46,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
           <>
             <ul className="divide-y divide-slate-100">
               {rows.map((n) => (
-                <li key={n.id} className={cn("flex items-start gap-3 px-5 py-4", !n.readAt && "bg-brand-50/50")}>
+                <li key={n.id} className={cn("flex flex-wrap items-start gap-3 px-5 py-4 sm:flex-nowrap", !n.readAt && "bg-brand-50/50")}>
                   <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.readAt ? "bg-transparent" : "bg-brand-600")} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -56,7 +56,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                     {n.body && <p className="mt-0.5 text-sm text-slate-600">{n.body}</p>}
                     <p className="mt-1 text-xs text-slate-400">{formatDateTime(n.createdAt)}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex w-full shrink-0 items-center gap-3 pl-5 sm:w-auto sm:pl-0">{/* on a phone: under the message */}
                     {n.link && (
                       <Link href={n.link} className="text-sm font-medium text-brand-700 hover:underline">Open</Link>
                     )}

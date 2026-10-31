@@ -29,7 +29,7 @@ export default async function MaterialNeededPage() {
 
   const table = (list: NeedRow[]) => (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm rt">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Site</th><th className="px-3 py-2 text-left">Material</th><th className="px-3 py-2 text-right">Needed</th><th className="px-3 py-2 text-left">On site by</th><th className="px-3 py-2 text-left">Where it stands</th><th className="px-3 py-2" /></tr></thead>
         <tbody>
           {list.map((r) => (

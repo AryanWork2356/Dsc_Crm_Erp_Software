@@ -114,7 +114,7 @@ export default async function QuotationDetail({ params }: { params: Promise<{ id
           <Card>
             <CardHeader><CardTitle>Items</CardTitle></CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm rt">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr><th className="px-4 py-2 text-left">#</th><th className="px-4 py-2 text-left">Description</th><th className="px-4 py-2 text-left">Unit</th><th className="px-4 py-2 text-right">Qty</th><th className="px-4 py-2 text-right">Rate</th><th className="px-4 py-2 text-right">GST</th><th className="px-4 py-2 text-right">Amount</th></tr>
                 </thead>

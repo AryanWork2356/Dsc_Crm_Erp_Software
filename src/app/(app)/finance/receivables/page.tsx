@@ -28,7 +28,7 @@ export default async function ReceivablesPage() {
       <Card className="mb-5">
         <CardHeader><CardTitle>By client</CardTitle><span className="tabular text-sm font-semibold">{formatINR(r.total)}</span></CardHeader>
         {r.aging.length === 0 ? <EmptyState title="Nothing outstanding 🎉" /> : (
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Client</th>{BUCKETS.map((b) => <th key={b} className="px-3 py-2 text-right">{b}</th>)}<th className="px-4 py-2 text-right">Total</th></tr></thead>
+          <div className="overflow-x-auto"><table className="w-full text-sm rt"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Client</th>{BUCKETS.map((b) => <th key={b} className="px-3 py-2 text-right">{b}</th>)}<th className="px-4 py-2 text-right">Total</th></tr></thead>
             <tbody>{r.aging.map((a) => <tr key={a.id} className="border-t border-slate-100"><td className="px-4 py-2.5"><Link href={`/crm/clients/${a.id}`} className="font-medium text-slate-900 hover:text-brand-700">{a.name}</Link><p className="text-xs text-slate-500">{a.count} invoice(s)</p></td>{BUCKETS.map((b) => <td key={b} className={cn("tabular px-3 py-2.5 text-right", a.buckets[b] > 0 && b !== BUCKETS[0] && "font-medium text-red-600")}>{a.buckets[b] ? formatINR(a.buckets[b]) : "—"}</td>)}<td className="tabular px-4 py-2.5 text-right font-semibold">{formatINR(a.total)}</td></tr>)}</tbody></table></div>
         )}
       </Card>

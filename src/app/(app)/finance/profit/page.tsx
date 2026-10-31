@@ -86,7 +86,7 @@ export default async function CompanyProfitPage({ searchParams }: { searchParams
       <Card className="mb-5">
         <CardHeader><CardTitle>Month by month, {fyLabel(fy)}</CardTitle></CardHeader>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[560px] text-sm">{/* a month grid: swiped sideways on a phone, not cards */}
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr><th className="sticky left-0 bg-slate-50 px-4 py-2 text-left">&nbsp;</th>{months.map((m) => <th key={m.key} className="px-3 py-2 text-right">{m.label}</th>)}<th className="px-4 py-2 text-right">Year</th></tr>
             </thead>
@@ -107,7 +107,7 @@ export default async function CompanyProfitPage({ searchParams }: { searchParams
         <CardHeader><CardTitle>Year by year</CardTitle></CardHeader>
         {yearRows.length === 0 ? <EmptyState title="Nothing to show yet" hint="Figures appear once a project is marked completed." /> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rt">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Year</th><th className="px-3 py-2 text-right">Projects</th><th className="px-3 py-2 text-right">Revenue</th><th className="px-3 py-2 text-right">Gross profit</th><th className="px-3 py-2 text-right">Gross %</th><th className="px-3 py-2 text-right">EBITDA</th><th className="px-3 py-2 text-right">EBITDA %</th><th className="px-4 py-2 text-right">Net profit</th></tr></thead>
               <tbody>{yearRows.map(({ y, t }) => (
                 <tr key={y} className="border-t border-slate-100"><td className="px-4 py-2.5"><Link className="font-medium text-brand-700 hover:underline" href={`/finance/profit?fy=${y}`}>{fyLabel(y)}</Link></td><td className="tabular px-3 py-2.5 text-right">{t.projects}</td><td className="tabular px-3 py-2.5 text-right">{formatINR(t.revenue)}</td><td className={cn("tabular px-3 py-2.5 text-right", t.grossProfit < 0 && "text-red-600")}>{formatINR(t.grossProfit)}</td><td className="tabular px-3 py-2.5 text-right">{pct(t.grossProfit, t.revenue)}</td><td className={cn("tabular px-3 py-2.5 text-right", t.ebitda < 0 && "text-red-600")}>{formatINR(t.ebitda)}</td><td className="tabular px-3 py-2.5 text-right">{pct(t.ebitda, t.revenue)}</td><td className={cn("tabular px-4 py-2.5 text-right font-semibold", t.netProfit < 0 && "text-red-600")}>{formatINR(t.netProfit)}</td></tr>
@@ -127,7 +127,7 @@ export default async function CompanyProfitPage({ searchParams }: { searchParams
         </div>
         {o.byClient.length === 0 ? <EmptyState title="No client orders or completed projects yet" /> : (
           <div className="overflow-x-auto">
-            <table className="mt-3 w-full text-sm">
+            <table className="mt-3 w-full text-sm rt">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Client</th><th className="px-3 py-2 text-right">PO value</th><th className="px-3 py-2 text-right">Projects done</th><th className="px-3 py-2 text-right">Revenue</th><th className="px-3 py-2 text-right">Cost</th><th className="px-3 py-2 text-right">Profit</th><th className="px-4 py-2 text-right">Margin</th></tr></thead>
               <tbody>{o.byClient.map((r) => (
                 <tr key={r.clientId} className="border-t border-slate-100"><td className="px-4 py-2.5"><Link className="font-medium text-slate-900 hover:text-brand-700" href={`/crm/clients/${r.clientId}`}>{r.name}</Link><p className="text-xs text-slate-500">{r.poCount} purchase order{r.poCount === 1 ? "" : "s"}</p></td><td className="tabular px-3 py-2.5 text-right">{formatINR(r.poValue)}</td><td className="tabular px-3 py-2.5 text-right">{r.projects}</td><td className="tabular px-3 py-2.5 text-right">{formatINR(r.revenue)}</td><td className="tabular px-3 py-2.5 text-right">{formatINR(r.cost)}</td><td className={cn("tabular px-3 py-2.5 text-right font-semibold", r.profit < 0 && "text-red-600")}>{formatINR(r.profit)}</td><td className="tabular px-4 py-2.5 text-right">{pct(r.profit, r.revenue)}</td></tr>
@@ -142,7 +142,7 @@ export default async function CompanyProfitPage({ searchParams }: { searchParams
         <CardHeader><CardTitle>Completed projects in {fyLabel(fy)}</CardTitle></CardHeader>
         {myProjects.length === 0 ? <EmptyState title="No project was completed in this year" /> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm rt">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Project</th><th className="px-3 py-2 text-left">Completed</th><th className="px-3 py-2 text-right">Revenue</th><th className="px-3 py-2 text-right">Cost</th><th className="px-3 py-2 text-right">Profit</th><th className="px-4 py-2 text-right">Margin</th></tr></thead>
               <tbody>{myProjects.map((p) => (
                 <tr key={p.id} className="border-t border-slate-100"><td className="px-4 py-2.5"><Link className="font-medium text-slate-900 hover:text-brand-700" href={`/projects/${p.id}`}>{p.name}</Link><p className="text-xs text-slate-500">{p.code} · {p.clientName}</p></td><td className="px-3 py-2.5">{formatDate(p.completedOn)}</td><td className="tabular px-3 py-2.5 text-right">{formatINR(p.revenue)}</td><td className="tabular px-3 py-2.5 text-right">{formatINR(p.cost)}</td><td className={cn("tabular px-3 py-2.5 text-right font-semibold", p.profit < 0 && "text-red-600")}>{formatINR(p.profit)}</td><td className="tabular px-4 py-2.5 text-right">{pct(p.profit, p.revenue)}</td></tr>
