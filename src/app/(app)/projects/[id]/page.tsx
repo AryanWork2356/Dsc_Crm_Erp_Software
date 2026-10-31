@@ -187,7 +187,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                 return (
                   <li key={t.id} className="px-5 py-4">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="min-w-0 flex-1">
+                      {/* phone: the job takes the full width; priority, status and Edit go on the line below */}
+                      <div className="min-w-0 flex-1 basis-full sm:basis-0">
                         <p className="font-medium text-slate-900">{t.name} <span className="text-xs font-normal text-slate-400">{t.code}</span> {(() => { const h = taskHealth({ status: t.status, dueDate: t.dueDate, startDate: t.startDate, progress: t.progress, dependsOn: t.dependsOnId ? p.tasks.find((x) => x.id === t.dependsOnId) ?? null : null }, today); return <Badge tone={h === "COMPLETE" ? "green" : h === "ON_TRACK" ? "blue" : h === "AT_RISK" ? "amber" : "red"}>{HEALTH_LABEL[h]}</Badge>; })()}</p>
                         <p className="mt-0.5 text-xs text-slate-500">
                           {t.assignedToId ? name.get(t.assignedToId) ?? "—" : "Unassigned"} · due <span className={cn(over && "font-medium text-red-600")}>{formatDate(t.dueDate)}</span>{over && " (overdue)"}

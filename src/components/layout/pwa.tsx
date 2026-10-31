@@ -33,6 +33,7 @@ export type InstallState = {
   ready: boolean; // the page has worked out what this device is
   installed: boolean; // already installed, or running as the installed app
   standalone: boolean; // this page is open INSIDE the installed app
+  detected: boolean; // the phone itself says the app is installed (not just our memory of an earlier install)
   ios: boolean;
   phone: boolean;
   inAppBrowser: boolean; // WhatsApp, Instagram, Facebook … cannot install apps: the link must be opened in Chrome or Safari
@@ -76,7 +77,7 @@ export function useInstall(): InstallState {
     return r.outcome === "accepted" ? ("accepted" as const) : ("dismissed" as const);
   }, [markDone]);
 
-  return { ready: env.ready, installed: env.standalone || installedNow || env.related || env.done, standalone: env.standalone, ios: env.ios, phone: env.phone, inAppBrowser: env.inApp, canPrompt: !!deferred, install, markDone };
+  return { ready: env.ready, installed: env.standalone || installedNow || env.related || env.done, standalone: env.standalone, detected: env.standalone || installedNow || env.related, ios: env.ios, phone: env.phone, inAppBrowser: env.inApp, canPrompt: !!deferred, install, markDone };
 }
 
 const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
@@ -107,12 +108,27 @@ function StepsList({ ios }: { ios: boolean }) {
 export function useInstallFlow() {
   const s = useInstall();
   const [steps, setSteps] = React.useState(false);
+  const [already, setAlready] = React.useState(false);
   const show = s.ready && s.phone && !s.installed && !s.inAppBrowser;
+  // The install button itself is always offered on a phone browser (never inside the installed app). Pressing it:
+  // the phone says the app is installed → "already installed"; otherwise install (again) as usual.
+  const offer = s.ready && s.phone && !s.standalone && !s.inAppBrowser;
   async function tap(onAccepted?: () => void) {
     if (s.canPrompt) { if ((await s.install()) === "accepted") onAccepted?.(); }
+    else if (s.detected) setAlready(true);
     else setSteps(true);
   }
-  const sheet = steps ? (
+  const sheet = already ? (
+    <div role="dialog" aria-label="The DSC app is already installed" className="fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl ring-1 ring-slate-200">
+      <button onClick={() => setAlready(false)} className="absolute right-4 top-4 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
+      <p className="flex items-center gap-2 text-lg font-semibold text-slate-900"><CheckCircle2 className="h-6 w-6 text-emerald-600" /> Already installed</p>
+      <p className="mt-2 text-sm text-slate-700">The DSC app is already on this phone. Open it from your home screen or app list.</p>
+      <div className="mt-5 flex gap-2">
+        <button onClick={() => setAlready(false)} className="flex-1 rounded-xl bg-brand-800 py-3 text-sm font-semibold text-white">OK</button>
+        <button onClick={() => { setAlready(false); setSteps(true); }} className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-600">Install again</button>
+      </div>
+    </div>
+  ) : steps ? (
     <div role="dialog" aria-label="Install the DSC app" className="fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl ring-1 ring-slate-200">
       <button onClick={() => setSteps(false)} className="absolute right-4 top-4 rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="h-5 w-5" /></button>
       <p className="text-lg font-semibold text-slate-900">Put DSC on your home screen</p>
@@ -123,14 +139,13 @@ export function useInstallFlow() {
       </div>
     </div>
   ) : null;
-  return { s, show, tap, sheet };
+  return { s, show, offer, tap, sheet };
 }
 
 /** Small "Install app" button for the top bar. */
 export function InstallApp() {
-  const { s, tap, sheet } = useInstallFlow();
-  // the small top-bar button stays on every phone browser tab (it never nags); only inside the installed app is it gone
-  if (!s.ready || !s.phone || s.standalone || s.inAppBrowser) return null;
+  const { offer, tap, sheet } = useInstallFlow();
+  if (!offer) return null; // on every phone browser tab; gone only inside the installed app
   return (
     <>
       <button onClick={() => void tap()} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-800 hover:bg-brand-100" title="Install the DSC app on this phone" aria-label="Install the DSC app">
@@ -143,23 +158,11 @@ export function InstallApp() {
 
 /** The BIG install button on the sign-in page, under the Sign in button. Only on phones, and only until the app is installed. */
 export function InstallCta() {
-  const { s, show, tap, sheet } = useInstallFlow();
-  if (s.ready && s.phone && !s.installed && s.inAppBrowser) {
+  const { s, offer, tap, sheet } = useInstallFlow();
+  if (s.ready && s.phone && !s.standalone && s.inAppBrowser) {
     return <p className="mt-5 rounded-xl bg-amber-50 p-3 text-center text-sm text-amber-900 ring-1 ring-amber-200">To install the app, open this page in <b>{s.ios ? "Safari" : "Chrome"}</b> (tap the menu at the top, then <b>Open in browser</b>).</p>;
   }
-  if (!show) {
-    // the phone remembers the app as installed (it may have been removed since): still offer it, smaller, unless we are inside the app
-    if (!s.ready || !s.phone || s.standalone || s.inAppBrowser) return null;
-    return (
-      <>
-        <p className="mt-5 text-center text-sm text-slate-500">
-          <Download className="mr-1 inline h-4 w-4" />The app should be on your home screen. Not there?{" "}
-          <button type="button" onClick={() => void tap()} className="font-semibold text-brand-700 underline">Install the DSC app</button>
-        </p>
-        {sheet}
-      </>
-    );
-  }
+  if (!offer) return null; // always offered on a phone browser; pressing it says "already installed" when the phone can tell
   return (
     <>
       <button type="button" onClick={() => void tap()} className="mt-5 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-[#361210] to-[#5b2619] p-4 text-left text-white shadow-lg ring-1 ring-amber-300/30 transition active:scale-[0.99]">

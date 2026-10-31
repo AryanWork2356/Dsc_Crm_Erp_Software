@@ -59,7 +59,7 @@ body {
 /* a row that may wrap (text + badges + buttons): on a phone the text keeps at least 11rem; the buttons go to the next line
    instead of crushing the text into a thin column */
 @media (max-width: 639px) {
-  .flex-wrap > .min-w-0.flex-1 { min-width: min(100%, 11rem); }
+  .flex-wrap > .min-w-0.flex-1 { min-width: min(100%, 14rem); }
 }
 
 /* ── list tables on a phone: each row is a card; the first cell is its title, the others "column name … value" lines ── */
