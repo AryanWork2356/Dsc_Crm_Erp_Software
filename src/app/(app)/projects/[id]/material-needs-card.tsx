@@ -34,7 +34,7 @@ export async function MaterialNeedsCard({ companyId, projectId, start, tasks, ca
       </CardHeader>
       {rows.length === 0 ? <EmptyState title="No materials listed yet" hint="Upload the schedule with its Materials sheet (Schedule tab), or add each material and the day it is needed. You then get warned before anything is late." /> : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm rt">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-left">Material</th><th className="px-3 py-2 text-right">Needed</th><th className="px-3 py-2 text-left">On site by</th><th className="px-3 py-2 text-left">Where it stands</th><th className="px-3 py-2" /></tr></thead>
             <tbody>
               {rows.map((r) => {

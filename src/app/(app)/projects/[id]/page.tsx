@@ -283,7 +283,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         <Card>
           <CardHeader>
             <CardTitle>Material plan vs actual</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {c.can("purchase_requests:create") && p.boqs[0] && <Link href={`/procurement/requests/new?boq=${(p.boqs.find((b) => b.status === "APPROVED") ?? p.boqs[0]).id}`}><Button size="sm" variant="secondary">Request material from BOQ</Button></Link>}
               {PR_ALL.includes(c.role) && <a href={`/procurement/requests/project-pdf?project=${id}`} target="_blank" rel="noopener"><Button size="sm" variant="secondary">Full history PDF</Button></a>}
               {USE_SITE_MATERIAL && c.can("inventory:create") && <Link href={`/inventory/issues/new?projectId=${id}`}><Button size="sm">Issue to site</Button></Link>}
@@ -344,7 +344,7 @@ function Timeline({ p, today }: { p: { startDate: Date | null; plannedEndDate: D
               const width = Math.max(pos(e) - left, 1.2);
               return (
                 <div key={t.id} className="flex items-center">
-                  <div className="w-44 shrink-0 truncate pr-3 text-xs text-slate-700">{t.name}</div>
+                  <div className="sticky left-0 z-10 w-44 shrink-0 truncate bg-white pr-3 text-xs text-slate-700">{t.name}</div>
                   <div className="relative h-5 flex-1 rounded bg-slate-50">
                     <div className={cn("absolute h-5 rounded", color[t.status] ?? "bg-slate-300")} style={{ left: `${left}%`, width: `${width}%` }} title={`${t.name}: ${t.progress}%`}>
                       <div className="h-full rounded bg-black/15" style={{ width: `${t.progress}%` }} />
@@ -355,7 +355,7 @@ function Timeline({ p, today }: { p: { startDate: Date | null; plannedEndDate: D
             })}
             {p.milestones.filter((m) => m.dueDate).map((m) => (
               <div key={m.id} className="flex items-center">
-                <div className="w-44 shrink-0 truncate pr-3 text-xs font-medium text-slate-800">◆ {m.name}</div>
+                <div className="sticky left-0 z-10 w-44 shrink-0 truncate bg-white pr-3 text-xs font-medium text-slate-800">◆ {m.name}</div>
                 <div className="relative h-5 flex-1 rounded bg-slate-50"><div className={cn("absolute top-0.5 h-4 w-4 rotate-45 rounded-sm", m.completedAt ? "bg-emerald-500" : "bg-amber-500")} style={{ left: `calc(${pos(m.dueDate!)}% - 8px)` }} title={`${m.name} – ${formatDate(m.dueDate)}`} /></div>
               </div>
             ))}
