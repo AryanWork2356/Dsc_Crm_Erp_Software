@@ -23,6 +23,7 @@ export type PdfDocSpec = {
   sections?: { heading: string; body: string }[];
   signatory?: string;
   note?: string; // small italic line under the table
+  tables?: { heading: string; columns: PdfColumn[]; rows: PdfRow[]; note?: string }[]; // more tables after the first one
 };
 
 export type CompanyInfo = {
@@ -90,48 +91,61 @@ export function renderPdf(company: CompanyInfo, spec: PdfDocSpec): Promise<Buffe
       y = maxY + 14;
     }
 
-    // ── table
-    const totalW = spec.columns.reduce((s, c) => s + c.width, 0);
-    const scale = width / totalW;
-    const cols = spec.columns.map((c) => ({ ...c, w: c.width * scale }));
+    // ── tables
     const pad = 5;
-
-    const drawHeader = (yy: number) => {
-      doc.rect(left, yy, width, 20).fill(NAVY);
-      let x = left;
-      doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#ffffff");
-      cols.forEach((c) => {
-        doc.text(c.header, x + pad, yy + 6, { width: c.w - pad * 2, align: c.align ?? "left", lineBreak: false });
-        x += c.w;
-      });
-      return yy + 20;
+    const drawTable = (columns: PdfColumn[], rows: PdfRow[]) => {
+      const totalW = columns.reduce((s, c) => s + c.width, 0);
+      const cols = columns.map((c) => ({ ...c, w: (c.width * width) / totalW }));
+      const drawHeader = (yy: number) => {
+        doc.font("Helvetica-Bold").fontSize(8.5);
+        const hh = Math.max(20, ...cols.map((c) => doc.heightOfString(c.header, { width: c.w - pad * 2 }) + 10));
+        doc.rect(left, yy, width, hh).fill(NAVY);
+        let x = left;
+        doc.fillColor("#ffffff");
+        cols.forEach((c) => {
+          doc.text(c.header, x + pad, yy + 6, { width: c.w - pad * 2, align: c.align ?? "left" });
+          x += c.w;
+        });
+        return yy + hh;
+      };
+      if (y + 50 > bottomLimit()) { doc.addPage(); y = 40; }
+      y = drawHeader(y);
+      for (const row of rows) {
+        doc.font(row.kind === "group" || row.kind === "subtotal" ? "Helvetica-Bold" : "Helvetica").fontSize(8.5);
+        const heights = row.kind === "group"
+          ? [14]
+          : row.cells.map((t, i) => doc.heightOfString(t, { width: cols[i].w - pad * 2 }));
+        const h = Math.max(...heights) + 10;
+        if (y + h > bottomLimit()) {
+          doc.addPage();
+          y = drawHeader(40);
+        }
+        if (row.kind === "group") {
+          doc.rect(left, y, width, h).fill("#eef3fb");
+          doc.fillColor(NAVY).text(row.cells[0], left + pad, y + 5, { width: width - pad * 2 });
+        } else {
+          if (row.kind === "subtotal") doc.rect(left, y, width, h).fill("#f8fafc");
+          let x = left;
+          doc.fillColor("#0f172a");
+          row.cells.forEach((t, i) => {
+            doc.text(t, x + pad, y + 5, { width: cols[i].w - pad * 2, align: cols[i].align ?? "left" });
+            x += cols[i].w;
+          });
+        }
+        doc.moveTo(left, y + h).lineTo(right, y + h).strokeColor(LINE).lineWidth(0.5).stroke();
+        y += h;
+      }
     };
 
-    y = drawHeader(y);
-    for (const row of spec.rows) {
-      doc.font(row.kind === "group" || row.kind === "subtotal" ? "Helvetica-Bold" : "Helvetica").fontSize(8.5);
-      const heights = row.kind === "group"
-        ? [14]
-        : row.cells.map((t, i) => doc.heightOfString(t, { width: cols[i].w - pad * 2 }));
-      const h = Math.max(...heights) + 10;
-      if (y + h > bottomLimit()) {
-        doc.addPage();
-        y = drawHeader(40);
-      }
-      if (row.kind === "group") {
-        doc.rect(left, y, width, h).fill("#eef3fb");
-        doc.fillColor(NAVY).text(row.cells[0], left + pad, y + 5, { width: width - pad * 2 });
-      } else {
-        if (row.kind === "subtotal") doc.rect(left, y, width, h).fill("#f8fafc");
-        let x = left;
-        doc.fillColor("#0f172a");
-        row.cells.forEach((t, i) => {
-          doc.text(t, x + pad, y + 5, { width: cols[i].w - pad * 2, align: cols[i].align ?? "left" });
-          x += cols[i].w;
-        });
-      }
-      doc.moveTo(left, y + h).lineTo(right, y + h).strokeColor(LINE).lineWidth(0.5).stroke();
-      y += h;
+    drawTable(spec.columns, spec.rows);
+    // further tables, each under its own heading (a project history: requests, orders, bills, …)
+    for (const t of spec.tables ?? []) {
+      if (y + 70 > bottomLimit()) { doc.addPage(); y = 40; }
+      doc.font("Helvetica-Bold").fontSize(11).fillColor(NAVY).text(t.heading, left, y + 16, { width });
+      y = doc.y + 6;
+      if (t.rows.length) drawTable(t.columns, t.rows);
+      else { doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(GREY).text("None.", left, y, { width }); y = doc.y + 4; }
+      if (t.note) { doc.font("Helvetica-Oblique").fontSize(8).fillColor(GREY).text(t.note, left, y + 4, { width }); y = doc.y + 2; }
     }
 
     // ── summary by category (above the totals)
@@ -210,6 +224,7 @@ export function renderPdf(company: CompanyInfo, spec: PdfDocSpec): Promise<Buffe
     const range = doc.bufferedPageRange();
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
+      doc.page.margins.bottom = 0; // the footer sits in the bottom margin; without this the writer starts a blank page for it
       doc.font("Helvetica").fontSize(7.5).fillColor(GREY);
       doc.text(`${company.name}  ·  ${spec.title} ${spec.number}  ·  Page ${i + 1} of ${range.count}`, left, doc.page.height - 32, { width, align: "center", lineBreak: false });
     }

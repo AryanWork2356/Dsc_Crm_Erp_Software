@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/forms/action-button";
+import { PR_ALL } from "@/lib/doc-access";
 import { deletePurchaseRequest, submitPurchaseRequest } from "../../actions";
 
 export default async function RequestDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -16,14 +17,15 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
   const c = await requirePerm("purchase_requests:view");
   const pr = await db.purchaseRequest.findFirst({ where: { id, companyId: c.companyId }, include: { items: true, project: { select: { id: true, code: true, name: true } } } });
   if (!pr) notFound();
-  if (!["OWNER", "MANAGEMENT", "ADMIN", "PROCUREMENT", "ACCOUNTS"].includes(c.role) && pr.requestedById !== c.userId) {
+  if (!PR_ALL.includes(c.role) && pr.requestedById !== c.userId) {
     const mine = pr.projectId ? await db.project.findFirst({ where: { id: pr.projectId, ...projectScope(c) }, select: { id: true } }) : null;
     if (!mine) redirect("/forbidden");
   }
-  const [requester, pending, pos] = await Promise.all([
+  const [requester, pending, pos, voices] = await Promise.all([
     db.user.findUnique({ where: { id: pr.requestedById }, select: { name: true } }),
     pr.status === "PENDING_APPROVAL" ? db.approval.findFirst({ where: { companyId: c.companyId, entityType: "PurchaseRequest", entityId: id, status: "PENDING" } }) : null,
     db.purchaseOrder.findMany({ where: { requestId: id }, select: { id: true, number: true, status: true } }),
+    db.document.findMany({ where: { companyId: c.companyId, entityType: "PURCHASE_REQUEST", entityId: id, deletedAt: null }, select: { id: true, createdAt: true }, orderBy: { createdAt: "asc" } }),
   ]);
   const own = pr.requestedById === c.userId;
   const editable = ["DRAFT", "REJECTED"].includes(pr.status) && (own || c.can("purchase_requests:approve"));
@@ -37,6 +39,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
         actions={
           <>
             <StatusBadge status={pr.status} />
+            <a href={`/procurement/requests/${id}/pdf`} target="_blank" rel="noopener"><Button variant="secondary" size="sm">Download PDF</Button></a>
             {editable && <Link href={`/procurement/requests/${id}/edit`}><Button variant="secondary" size="sm">Edit</Button></Link>}
             {editable && <ActionButton size="sm" action={submitPurchaseRequest.bind(null, id)}>Submit for approval</ActionButton>}
             {editable && <ActionButton size="sm" variant="ghost" className="text-red-600 hover:bg-red-50" action={async () => { "use server"; const r = await deletePurchaseRequest(id); if (r.ok) redirect("/procurement/requests"); return r; }} confirm={{ title: "Delete this request?", confirmLabel: "Delete" }}>Delete</ActionButton>}
@@ -62,6 +65,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
               { label: "Reason", value: pr.reason },
             ]} />
           </CardBody></Card>
+          {voices.length > 0 && <Card><CardHeader><CardTitle>Voice note{voices.length > 1 ? "s" : ""}</CardTitle></CardHeader><CardBody className="space-y-2">{voices.map((v) => <audio key={v.id} controls preload="none" src={`/documents/${v.id}/download?inline=1`} className="w-full" />)}</CardBody></Card>}
           {pos.length > 0 && <Card><CardHeader><CardTitle>Purchase orders</CardTitle></CardHeader><CardBody className="space-y-2 py-3">{pos.map((p) => <div key={p.id} className="flex items-center justify-between text-sm"><Link className="font-medium text-brand-700 hover:underline" href={`/procurement/orders/${p.id}`}>{p.number}</Link><StatusBadge status={p.status} /></div>)}</CardBody></Card>}
         </div>
       </div>

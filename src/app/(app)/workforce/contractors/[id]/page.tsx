@@ -12,6 +12,7 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { createWorkOrder, deleteContractor, recordContractorPayment, setWorkOrderStatus, updateContractor } from "../../actions";
 import { contractorFields } from "../contractor-fields";
+import { projectScope } from "@/lib/scope";
 
 export default async function ContractorDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,7 +23,7 @@ export default async function ContractorDetail({ params }: { params: Promise<{ i
   });
   if (!x) notFound();
   const money = c.can("payments:view");
-  const projects = await projectOptions(c.companyId);
+  const projects = await projectOptions(c.companyId, projectScope(c));
   const pn = new Map(projects.map((p) => [p.value, p.label]));
   const value = x.workOrders.filter((w) => w.status !== "CANCELLED").reduce((s, w) => s + num(w.amount), 0);
   const paidAll = (await db.contractorPayment.aggregate({ where: { contractorId: id }, _sum: { amount: true } }))._sum.amount;

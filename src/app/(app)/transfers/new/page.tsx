@@ -4,10 +4,13 @@ import { projectScope } from "@/lib/scope";
 import { num } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page";
 import { TransferForm } from "../transfer-form";
+import { USE_SITE_MATERIAL } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 export const metadata = { title: "New transfer" };
 
 export default async function NewTransferPage() {
+  if (!USE_SITE_MATERIAL) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("transfers:create");
   const open = { notIn: ["COMPLETED", "CANCELLED"] as ("COMPLETED" | "CANCELLED")[] };
   const [mine, all, materials, stock, workers] = await Promise.all([

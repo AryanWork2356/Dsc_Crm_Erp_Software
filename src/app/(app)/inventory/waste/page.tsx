@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { recordWaste } from "./actions";
+import { USE_SITE_MATERIAL } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 export const metadata = { title: "Waste and reconciliation" };
 
@@ -24,6 +26,7 @@ const KINDS = [
 ];
 
 export default async function WastePage({ searchParams }: { searchParams: Promise<{ project?: string }> }) {
+  if (!USE_SITE_MATERIAL) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("inventory:view");
   const { project: pid } = await searchParams;
   const projects = await db.project.findMany({ where: projectScope(c), select: { id: true, code: true, name: true }, orderBy: { code: "asc" }, take: 300 });

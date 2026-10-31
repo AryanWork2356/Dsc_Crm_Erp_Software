@@ -11,10 +11,13 @@ import { Table, THead, Th, Tr, Td, Pagination } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ListFilters } from "@/components/list/list-filters";
+import { USE_SITE_MATERIAL } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 export const metadata = { title: "Issues & Returns" };
 
 export default async function IssuesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  if (!USE_SITE_MATERIAL) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("inventory:view");
   const sp = flatten(await searchParams);
   const lp = listParams(sp, "date", "desc", 20);
@@ -24,7 +27,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const [rows, total, projects, mats] = await Promise.all([
     db.materialIssue.findMany({ where, include: { project: { select: { code: true, name: true } }, items: true }, orderBy: { date: "desc" }, skip: lp.skip, take: lp.take }),
     db.materialIssue.count({ where }),
-    projectOptions(c.companyId),
+    projectOptions(c.companyId, projectScope(c)),
     db.material.findMany({ where: { companyId: c.companyId }, select: { id: true, name: true, unit: true } }),
   ]);
   const mn = new Map(mats.map((m) => [m.id, m]));

@@ -40,7 +40,7 @@ export default async function BoqListPage({ searchParams }: { searchParams: Prom
   const [rows, total, projects, clients] = await Promise.all([
     db.boq.findMany({ where, include: { project: { select: { code: true, name: true } }, items: { select: { estimatedCost: true, total: true } } }, orderBy: { updatedAt: lp.dir }, skip: lp.skip, take: lp.take }),
     db.boq.count({ where }),
-    projectOptions(c.companyId),
+    projectOptions(c.companyId, projectScope(c)),
     clientOptions(c.companyId),
   ]);
 

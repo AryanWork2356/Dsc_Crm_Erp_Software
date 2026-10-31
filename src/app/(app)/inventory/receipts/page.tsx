@@ -9,10 +9,13 @@ import { Table, THead, Th, Tr, Td, Pagination } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ListFilters } from "@/components/list/list-filters";
+import { USE_SITE_MATERIAL } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 export const metadata = { title: "Material Receipts" };
 
 export default async function ReceiptsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  if (!USE_SITE_MATERIAL) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("inventory:view");
   const sp = flatten(await searchParams);
   const lp = listParams(sp, "deliveryDate", "desc", 20);

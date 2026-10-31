@@ -1,7 +1,8 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { BoqCategory, Priority } from "@prisma/client";
+import { BoqCategory, Priority, type Prisma } from "@prisma/client";
+import { putFile, deleteFile, validateUpload, UploadError } from "@/lib/storage";
 import { db } from "@/lib/db";
 import { assertPerm, type Ctx } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -201,6 +202,21 @@ async function sendNow(fd: FormData, id: string, label: string) {
   return r.ok ? { message: `${label} sent for approval`, data: { id } } : { message: `${label} saved as a draft, NOT sent yet: ${r.error}`, data: { id } };
 }
 
+const AUDIO_EXT = ["webm", "ogg", "m4a", "mp4"];
+
+/** The voice note recorded on a request: checked and stored first, attached to the request in the same save. */
+async function storeVoice(c: Ctx, fd: FormData) {
+  const f = fd.get("voice");
+  if (!(f instanceof File) || f.size === 0) return null;
+  if (!AUDIO_EXT.includes(f.name.split(".").pop()?.toLowerCase() ?? "")) throw new UserError("The voice note could not be read. Record it again.");
+  let v;
+  try { v = await validateUpload(f); } catch (e) { if (e instanceof UploadError) throw new UserError(e.message); throw e; }
+  return { key: await putFile(c.companyId, v.bytes, v.ext), ...v };
+}
+type StoredVoice = Awaited<ReturnType<typeof storeVoice>>;
+const attachVoice = (tx: Prisma.TransactionClient, c: Ctx, v: StoredVoice, prId: string, number: string) =>
+  v ? tx.document.create({ data: { companyId: c.companyId, name: `${number} voice note.${v.ext}`, type: "OTHER", entityType: "PURCHASE_REQUEST", entityId: prId, storageKey: v.key, mimeType: v.mime, size: v.size, uploadedById: c.userId } }) : null;
+
 export async function createPurchaseRequest(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("purchase_requests:create");
@@ -209,16 +225,23 @@ export async function createPurchaseRequest(fd: FormData) {
     const items = parseJson(raw.items, z.array(prItem).min(1, "Add at least one item"), "Add at least one item");
     await checkProject(c, d.projectId);
     const shortNotice = isShortNotice(d.requiredDate, await minNotice(c.companyId));
-    const pr = await db.$transaction(async (tx) => {
-      const number = await nextNumber(tx, c.companyId, "PR");
-      const x = await tx.purchaseRequest.create({
-        data: { companyId: c.companyId, number, projectId: d.projectId ?? null, requestedById: c.userId, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, shortNotice, items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } },
+    const voice = await storeVoice(c, fd);
+    try {
+      const pr = await db.$transaction(async (tx) => {
+        const number = await nextNumber(tx, c.companyId, "PR");
+        const x = await tx.purchaseRequest.create({
+          data: { companyId: c.companyId, number, projectId: d.projectId ?? null, requestedById: c.userId, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, shortNotice, items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } },
+        });
+        await attachVoice(tx, c, voice, x.id, number);
+        await audit(c, { action: "CREATE", entityType: "PurchaseRequest", entityId: x.id, summary: `Created purchase request ${number} (${items.length} items)` }, tx);
+        return x;
       });
-      await audit(c, { action: "CREATE", entityType: "PurchaseRequest", entityId: x.id, summary: `Created purchase request ${number} (${items.length} items)` }, tx);
-      return x;
-    });
-    revalidatePath("/procurement/requests");
-    return sendNow(fd, pr.id, `Request ${pr.number}`);
+      revalidatePath("/procurement/requests");
+      return sendNow(fd, pr.id, `Request ${pr.number}`);
+    } catch (e) {
+      if (voice) await deleteFile(voice.key); // no orphan file if saving failed
+      throw e;
+    }
   });
 }
 
@@ -234,11 +257,18 @@ export async function updatePurchaseRequest(id: string, fd: FormData) {
     if (pr.requestedById !== c.userId && !c.can("purchase_requests:approve")) throw new UserError("You can only edit your own requests.");
     await checkProject(c, d.projectId);
     const shortNotice = isShortNotice(d.requiredDate, await minNotice(c.companyId));
-    await db.$transaction(async (tx) => {
-      await tx.purchaseRequestItem.deleteMany({ where: { requestId: id } });
-      await tx.purchaseRequest.update({ where: { id }, data: { projectId: d.projectId ?? null, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, shortNotice, status: "DRAFT", items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } } });
-      await audit(c, { action: "UPDATE", entityType: "PurchaseRequest", entityId: id, summary: `Updated purchase request ${pr.number}` }, tx);
-    });
+    const voice = await storeVoice(c, fd);
+    try {
+      await db.$transaction(async (tx) => {
+        await tx.purchaseRequestItem.deleteMany({ where: { requestId: id } });
+        await tx.purchaseRequest.update({ where: { id }, data: { projectId: d.projectId ?? null, requiredDate: d.requiredDate, reason: d.reason, priority: d.priority, shortNotice, status: "DRAFT", items: { create: items.map((i) => ({ materialId: i.materialId || null, description: i.description, unit: i.unit, quantity: i.quantity, boqItemId: i.boqItemId || null })) } } });
+        await attachVoice(tx, c, voice, id, pr.number);
+        await audit(c, { action: "UPDATE", entityType: "PurchaseRequest", entityId: id, summary: `Updated purchase request ${pr.number}` }, tx);
+      });
+    } catch (e) {
+      if (voice) await deleteFile(voice.key);
+      throw e;
+    }
     revalidatePath("/procurement/requests");
     revalidatePath(`/procurement/requests/${id}`);
     return sendNow(fd, id, "Request");

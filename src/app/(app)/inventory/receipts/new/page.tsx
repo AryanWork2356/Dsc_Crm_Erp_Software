@@ -19,7 +19,7 @@ export default async function NewReceipt({ searchParams }: { searchParams: Promi
     const open = await db.purchaseOrder.findMany({ where: { companyId: c.companyId, status: { in: ["APPROVED", "SENT_TO_VENDOR", "PARTIALLY_RECEIVED"] } }, include: { vendor: { select: { name: true } } }, orderBy: { deliveryDate: "asc" } });
     return (
       <>
-        <PageHeader back={{ href: "/inventory/receipts", label: "Receipts" }} title="Receive material" subtitle="Choose the purchase order the delivery belongs to." />
+        <PageHeader back={{ href: "/procurement/orders", label: "Purchase orders" }} title="Receive material" subtitle="Choose the purchase order the delivery belongs to." />
         <Card>
           {open.length === 0 ? <EmptyState title="No open purchase orders" hint="Orders must be approved before material can be received." /> : (
             <ul className="divide-y divide-slate-100">

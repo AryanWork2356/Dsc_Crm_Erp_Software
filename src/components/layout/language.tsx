@@ -37,23 +37,78 @@ export function TranslateLoader() {
       };
     }
 
+    restoreTyping(); // what was typed before a reload for the language (see LanguageSwitcher)
     if (code === "en") return; // the Google translator is loaded only when a language is chosen
-
-    window.googleTranslateElementInit = () => {
-      if (window.google) new window.google.translate.TranslateElement({ pageLanguage: "en", includedLanguages: LANGS.filter((l) => l.code !== "en").map((l) => l.code).join(","), autoDisplay: false }, "google_translate_element");
-    };
-    if (!document.getElementById("google-translate-script")) {
-      const s = document.createElement("script");
-      s.id = "google-translate-script";
-      s.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-      s.async = true;
-      document.body.appendChild(s);
-    }
+    loadTranslator();
   }, []);
   return <div id="google_translate_element" className="hidden" aria-hidden />;
 }
 
-/** Globe button with the four languages. Choosing one saves it on this device and reloads the page. */
+function loadTranslator() {
+  window.googleTranslateElementInit = () => {
+    if (window.google) new window.google.translate.TranslateElement({ pageLanguage: "en", includedLanguages: LANGS.map((l) => l.code).join(","), autoDisplay: false }, "google_translate_element");
+  };
+  if (!document.getElementById("google-translate-script")) {
+    const s = document.createElement("script");
+    s.id = "google-translate-script";
+    s.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+    s.async = true;
+    document.body.appendChild(s);
+  }
+}
+
+/** The page is being translated (Google marks the page while it shows another language). */
+const translated = () => /translated-(ltr|rtl)/.test(document.documentElement.className);
+
+/** Switches the language on the page itself, without reloading it, so nothing typed is lost. False when that is not possible. */
+function switchInPlace(next: LangCode): boolean {
+  const combo = document.querySelector<HTMLSelectElement>("select.goog-te-combo");
+  if (!combo) {
+    if (next === "en") return !translated();
+    loadTranslator(); // first language this visit: the translator reads the choice from the cookie when it starts
+    return true;
+  }
+  combo.value = next;
+  combo.dispatchEvent(new Event("change"));
+  return true;
+}
+
+type Box = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+const fields = () => [...document.querySelectorAll<Box>("input, textarea, select")].filter((e) => !(e instanceof HTMLInputElement && ["hidden", "file", "submit", "button", "password"].includes(e.type)) && !e.classList.contains("goog-te-combo") && e.getAttribute("aria-label") !== "Language");
+const changed = (e: Box) =>
+  e instanceof HTMLSelectElement ? [...e.options].some((o) => o.selected !== o.defaultSelected)
+  : e instanceof HTMLInputElement && (e.type === "checkbox" || e.type === "radio") ? e.checked !== e.defaultChecked
+  : e.value !== e.defaultValue;
+const TYPED = "dsc-typed";
+
+/** Keeps what was typed on this page across a reload (only used when the language can't change in place). */
+function keepTyping() {
+  const all = fields();
+  const list = all.map((e, i) => ({ i, name: e.getAttribute("name"), value: e instanceof HTMLInputElement && (e.type === "checkbox" || e.type === "radio") ? String(e.checked) : e.value, changed: changed(e) })).filter((x) => x.changed);
+  if (!list.length) return;
+  try { sessionStorage.setItem(TYPED, JSON.stringify({ path: location.pathname + location.search, count: all.length, list })); } catch { /* private window */ }
+}
+
+function restoreTyping() {
+  let saved: { path: string; count: number; list: { i: number; name: string | null; value: string }[] } | null = null;
+  try { saved = JSON.parse(sessionStorage.getItem(TYPED) ?? "null"); sessionStorage.removeItem(TYPED); } catch { return; }
+  if (!saved || saved.path !== location.pathname + location.search) return;
+  const put = () => {
+    const all = fields();
+    const sameBoxes = all.length === saved!.count; // boxes without a name are matched by position only when the page is laid out the same
+    for (const x of saved!.list) {
+      const el = x.name ? all.find((e) => e.getAttribute("name") === x.name) : sameBoxes ? all[x.i] : undefined;
+      if (!el) continue;
+      if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) { if (el.checked !== (x.value === "true")) el.click(); continue; }
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
+      setter ? setter.call(el, x.value) : (el.value = x.value);
+      el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+    }
+  };
+  setTimeout(put, 300); // after the page's forms are on screen
+}
+
+/** Globe button with the languages. Choosing one switches the page in place, so what is typed in a form stays. */
 const TONES = {
   light: { box: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:border-brand-500 focus:ring-brand-200", icon: "text-slate-500" },
   dark: { box: "border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 focus:border-accent focus:ring-accent/30", icon: "text-slate-400" },
@@ -68,6 +123,14 @@ export function LanguageSwitcher({ className = "", tone = "light", fullWidth = f
   function choose(next: LangCode) {
     if (next === code) return;
     document.cookie = cookieFor(next);
+    if (next === "en") for (const d of [location.hostname, `.${location.hostname}`, `.${location.hostname.split(".").slice(-3).join(".")}`]) document.cookie = `googtrans=; path=/; domain=${d}; max-age=0`;
+    setCode(next);
+    if (switchInPlace(next)) {
+      // going back to English: if the page still shows the other language a moment later, reload, keeping what was typed
+      if (next === "en") setTimeout(() => { if (translated()) { keepTyping(); window.location.reload(); } }, 900);
+      return;
+    }
+    keepTyping();
     window.location.reload();
   }
 

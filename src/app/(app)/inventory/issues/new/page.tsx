@@ -5,10 +5,13 @@ import { num } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page";
 import { IssueForm } from "../issue-form";
 import { createIssue, createReturn } from "../../actions";
+import { USE_SITE_MATERIAL } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 export const metadata = { title: "Issue Material" };
 
 export default async function NewIssue({ searchParams }: { searchParams: Promise<{ mode?: string; projectId?: string }> }) {
+  if (!USE_SITE_MATERIAL) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("inventory:create");
   const sp = await searchParams;
   const mode = sp.mode === "return" ? "return" : "issue";

@@ -2,7 +2,7 @@ import "server-only";
 import type { Document } from "@prisma/client";
 import { db } from "./db";
 import type { Ctx } from "./auth";
-import { projectDocScope, clientScope, leadScope } from "./scope";
+import { projectDocScope, projectScope, clientScope, leadScope } from "./scope";
 
 /**
  * Who may open a document. A document inherits the visibility of the record it is attached to:
@@ -10,10 +10,12 @@ import { projectDocScope, clientScope, leadScope } from "./scope";
  *   VENDOR/PO → procurement, INVOICE → finance. Portal users only get files explicitly shared with them.
  */
 
-export const ENTITY_TYPES = ["CLIENT", "LEAD", "PROJECT", "EMPLOYEE", "VENDOR", "QUOTATION", "PO", "INVOICE", "BOQ", "SITE_VISIT", "TICKET", "EXPENSE", "VENDOR_BILL", "GENERAL"] as const;
+export const ENTITY_TYPES = ["CLIENT", "LEAD", "PROJECT", "EMPLOYEE", "VENDOR", "QUOTATION", "PO", "INVOICE", "BOQ", "SITE_VISIT", "TICKET", "EXPENSE", "VENDOR_BILL", "PURCHASE_REQUEST", "GENERAL"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 const STAFF_ALL = ["OWNER", "MANAGEMENT", "ADMIN"];
+/** Roles that see every purchase request (others: their own, and their projects'). */
+export const PR_ALL = ["OWNER", "MANAGEMENT", "ADMIN", "PROCUREMENT", "ACCOUNTS"];
 
 export async function canViewEntity(c: Ctx, type: string | null, id: string | null): Promise<boolean> {
   if (!c.can("documents:view") && c.role !== "CLIENT" && c.role !== "VENDOR") return false;
@@ -52,6 +54,13 @@ export async function canViewEntity(c: Ctx, type: string | null, id: string | nu
       if (!e) return false;
       if (c.can("finance:view") || STAFF_ALL.includes(c.role) || e.createdById === c.userId) return true;
       return !!e.projectId && !!(await db.project.findFirst({ where: { id: e.projectId, ...projectDocScope(c) }, select: { id: true } }));
+    }
+    case "PURCHASE_REQUEST": {
+      // the voice note on a request: whoever can open the request
+      const pr = await db.purchaseRequest.findFirst({ where: { id, companyId: c.companyId }, select: { requestedById: true, projectId: true } });
+      if (!pr || !c.can("purchase_requests:view")) return false;
+      if (PR_ALL.includes(c.role) || pr.requestedById === c.userId) return true;
+      return !!pr.projectId && !!(await db.project.findFirst({ where: { id: pr.projectId, ...projectScope(c) }, select: { id: true } }));
     }
     case "VENDOR_BILL":
       return c.can("vendor_bills:view") && !!(await db.vendorBill.findFirst({ where: { id, companyId: c.companyId }, select: { id: true } }));

@@ -34,7 +34,7 @@ export default async function LabourPage({ searchParams }: { searchParams: Promi
   }
   const list = [...byWorker.values()].sort((a, b) => b.cost - a.cost);
   const total = list.reduce((s, x) => s + x.cost, 0);
-  const projects = await projectOptions(c.companyId);
+  const projects = await projectOptions(c.companyId, projectScope(c));
 
   return (
     <>

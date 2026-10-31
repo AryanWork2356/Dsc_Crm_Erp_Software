@@ -29,7 +29,7 @@ export function Composer({ send }: { send: (fd: FormData) => Promise<ActionResul
   return (
     <form ref={ref} onSubmit={submit} className={`border-t p-3 ${note ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
       <div className="flex items-end gap-2">
-        <Textarea name="body" rows={2} required placeholder={note ? "Internal note – only your team sees this" : "Type a message"} className="min-h-[44px] flex-1 resize-none" aria-label="Message" onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ref.current?.requestSubmit(); }} />
+        <Textarea name="body" rows={2} noMic required placeholder={note ? "Internal note – only your team sees this" : "Type a message"} className="min-h-[44px] flex-1 resize-none" aria-label="Message" onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ref.current?.requestSubmit(); }} />
         <Button type="submit" loading={pending} aria-label="Send"><Send className="h-4 w-4" /></Button>
       </div>
       <label className="mt-2 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={note} onChange={(e) => setNote(e.target.checked)} className="accent-[#213f72]" /> Internal note (not sent to the customer) · Ctrl+Enter to send</label>

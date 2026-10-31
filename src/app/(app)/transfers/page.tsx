@@ -14,11 +14,14 @@ import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/forms/action-button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { decideTransfer } from "./actions";
+import { USE_SITE_MATERIAL } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 export const metadata = { title: "Transfers between projects" };
 const WIDE = ["OWNER", "MANAGEMENT", "ADMIN"];
 
 export default async function TransfersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  if (!USE_SITE_MATERIAL) notFound(); // switched off at DSC (lib/features.ts)
   const c = await requirePerm("transfers:view");
   const sp = flatten(await searchParams);
   const tab = sp.tab === "all" ? "all" : "pending";

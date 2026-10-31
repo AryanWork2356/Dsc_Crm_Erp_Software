@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Check, Circle } from "lucide-react";
 import { requirePerm } from "@/lib/auth";
+import { USE_SITE_MATERIAL } from "@/lib/features";
+import { PR_ALL } from "@/lib/doc-access";
 import { db } from "@/lib/db";
 import { projectDocScope, projectScope } from "@/lib/scope";
 import { DESIGNER_ROLES, PM_ROLES, SITE_ROLES, clientOptions, userOptions } from "@/lib/lookups";
@@ -281,7 +283,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             <CardTitle>Material plan vs actual</CardTitle>
             <div className="flex gap-2">
               {c.can("purchase_requests:create") && p.boqs[0] && <Link href={`/procurement/requests/new?boq=${(p.boqs.find((b) => b.status === "APPROVED") ?? p.boqs[0]).id}`}><Button size="sm" variant="secondary">Request material from BOQ</Button></Link>}
-              {c.can("inventory:create") && <Link href={`/inventory/issues/new?projectId=${id}`}><Button size="sm">Issue to site</Button></Link>}
+              {PR_ALL.includes(c.role) && <a href={`/procurement/requests/project-pdf?project=${id}`} target="_blank" rel="noopener"><Button size="sm" variant="secondary">Full history PDF</Button></a>}
+              {USE_SITE_MATERIAL && c.can("inventory:create") && <Link href={`/inventory/issues/new?projectId=${id}`}><Button size="sm">Issue to site</Button></Link>}
             </div>
           </CardHeader>
           {plan.length === 0 ? <EmptyState title="No material activity yet" hint="Link BOQ items to catalogue materials, then raise purchase requests and issue stock to this site." /> : (

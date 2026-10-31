@@ -11,6 +11,7 @@ import { Table, THead, Th, Tr, Td, SortTh, Pagination } from "@/components/ui/ta
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ListFilters } from "@/components/list/list-filters";
+import { projectScope } from "@/lib/scope";
 
 export const metadata = { title: "Invoices" };
 const STATUSES: InvoiceStatus[] = ["DRAFT", "PENDING_APPROVAL", "SENT", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"];
@@ -34,7 +35,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const [rows, total, clients, projects, outstanding, overdue, collected] = await Promise.all([
     db.invoice.findMany({ where, include: { client: { select: { name: true } }, project: { select: { code: true } } }, orderBy: orderBy(lp.sort, lp.dir, ["createdAt", "number", "total", "dueDate", "issueDate"] as const, "createdAt"), skip: lp.skip, take: lp.take }),
     db.invoice.count({ where }),
-    clientOptions(c.companyId), projectOptions(c.companyId),
+    clientOptions(c.companyId), projectOptions(c.companyId, projectScope(c)),
     db.invoice.findMany({ where: { ...base, status: { in: LIVE } }, select: { total: true, paid: true } }),
     db.invoice.findMany({ where: { ...base, status: { in: LIVE }, dueDate: { lt: today } }, select: { total: true, paid: true } }),
     db.payment.aggregate({ where: { companyId: c.companyId, date: { gte: new Date(today.getFullYear(), today.getMonth(), 1) } }, _sum: { amount: true } }),

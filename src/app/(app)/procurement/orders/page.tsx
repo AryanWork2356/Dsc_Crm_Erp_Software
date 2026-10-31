@@ -39,7 +39,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const [rows, total, vendors, projects, pendingApproval, openCount, lateCount] = await Promise.all([
     db.purchaseOrder.findMany({ where, include: { vendor: { select: { name: true } }, project: { select: { code: true } } }, orderBy: orderBy(lp.sort, lp.dir, ["createdAt", "number", "total", "deliveryDate"] as const, "createdAt"), skip: lp.skip, take: lp.take }),
     db.purchaseOrder.count({ where }),
-    vendorOptions(c.companyId), projectOptions(c.companyId),
+    vendorOptions(c.companyId), projectOptions(c.companyId, projectScope(c)),
     db.purchaseOrder.count({ where: { AND: [base, { status: "PENDING_APPROVAL" }] } }),
     db.purchaseOrder.count({ where: { AND: [base, { status: { in: OPEN } }] } }),
     db.purchaseOrder.count({ where: { AND: [base, { status: { in: OPEN }, deliveryDate: { lt: today } }] } }),

@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, Th, Tr, Td, Pagination } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ListFilters } from "@/components/list/list-filters";
+import { projectScope } from "@/lib/scope";
 
 export const metadata = { title: "Stock Ledger" };
 const TYPES: InventoryTxnType[] = ["INWARD", "OUTWARD", "TRANSFER", "RETURN", "ADJUSTMENT", "DAMAGED", "CONSUMED"];
@@ -29,7 +30,7 @@ export default async function MovementsPage({ searchParams }: { searchParams: Pr
   const [rows, total, projects, locs] = await Promise.all([
     db.inventoryTransaction.findMany({ where, include: { material: { select: { name: true, unit: true } } }, orderBy: { createdAt: "desc" }, skip: lp.skip, take: lp.take }),
     db.inventoryTransaction.count({ where }),
-    projectOptions(c.companyId),
+    projectOptions(c.companyId, projectScope(c)),
     db.warehouse.findMany({ where: { companyId: c.companyId }, select: { id: true, name: true } }),
   ]);
   const ln = new Map(locs.map((l) => [l.id, l.name]));

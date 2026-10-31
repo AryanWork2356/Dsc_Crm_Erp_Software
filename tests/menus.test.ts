@@ -20,7 +20,7 @@ describe("lean menus per role", () => {
 
   it("a site supervisor sees only the jobs of a supervisor", () => {
     const m = visible("SITE_SUPERVISOR");
-    expect(m).toEqual(expect.arrayContaining(["/site-reports", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work"]));
+    expect(m).toEqual(expect.arrayContaining(["/site-reports", "/procurement/requests", "/workforce/attendance", "/extra-work"]));
     expect(m).toContain("/today"); // the day's work from the schedule
     expect(m.length).toBeLessThanOrEqual(17); // the jobs of a coordinator; Actions & Blockers, Site visits and Support are switched off for everyone
     for (const hidden of ["/actions", "/support", "/crm/site-visits", "/dashboard", "/finance/invoices", "/finance/bills", "/hr/payroll", "/crm/leads", "/inventory/movements", "/settings/team", "/scorecards", "/time-limits"]) expect(m).not.toContain(hidden);
@@ -38,9 +38,9 @@ describe("lean menus per role", () => {
     }
   });
 
-  it("switched-off features (Actions & Blockers, Site visits, Customer support) are in nobody's menu", () => {
-    for (const role of ["OWNER", "MANAGEMENT", "ADMIN", "PROJECT_MANAGER", "SITE_SUPERVISOR", "HR", "ACCOUNTS", "DESIGNER"] as RoleKey[]) {
-      for (const h of visible(role)) expect(h.startsWith("/actions") || h.startsWith("/support") || h.startsWith("/crm/site-visits"), `${role}: ${h}`).toBe(false);
+  it("switched-off features (Actions & Blockers, Site visits, Customer support, Site Material) are in nobody's menu", () => {
+    for (const role of ["OWNER", "MANAGEMENT", "ADMIN", "PROJECT_MANAGER", "SITE_SUPERVISOR", "HR", "ACCOUNTS", "DESIGNER", "PROCUREMENT", "STORE"] as RoleKey[]) {
+      for (const h of visible(role)) expect(h.startsWith("/actions") || h.startsWith("/support") || h.startsWith("/crm/site-visits") || ["/inventory/receipts", "/inventory/issues", "/inventory/waste", "/transfers"].includes(h), `${role}: ${h}`).toBe(false);
     }
   });
 

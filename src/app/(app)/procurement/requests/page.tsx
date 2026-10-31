@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { projectScope } from "@/lib/scope";
 import { flatten, listParams } from "@/lib/list";
 import { projectOptions } from "@/lib/lookups";
+import { PR_ALL } from "@/lib/doc-access";
 import { formatDate, humanize } from "@/lib/utils";
 import { PageHeader, EmptyState, StatCard } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
@@ -20,7 +21,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const c = await requirePerm("purchase_requests:view");
   const sp = flatten(await searchParams);
   const lp = listParams(sp, "createdAt", "desc", 20);
-  const seeAll = ["OWNER", "MANAGEMENT", "ADMIN", "PROCUREMENT", "ACCOUNTS"].includes(c.role);
+  const seeAll = PR_ALL.includes(c.role);
   const myProjects = seeAll ? null : (await db.project.findMany({ where: projectScope(c), select: { id: true } })).map((p) => p.id);
 
   const base: Prisma.PurchaseRequestWhereInput = {
@@ -37,7 +38,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const [rows, total, projects, pending, approved] = await Promise.all([
     db.purchaseRequest.findMany({ where, include: { project: { select: { code: true, name: true } }, items: { select: { id: true } } }, orderBy: { createdAt: lp.dir }, skip: lp.skip, take: lp.take }),
     db.purchaseRequest.count({ where }),
-    projectOptions(c.companyId),
+    projectOptions(c.companyId, projectScope(c)),
     db.purchaseRequest.count({ where: { AND: [base, { status: "PENDING_APPROVAL" }] } }),
     db.purchaseRequest.count({ where: { AND: [base, { status: "APPROVED" }] } }),
   ]);
@@ -49,8 +50,12 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Purchase Requests"
         subtitle="What the site needs. Approved requests become purchase orders."
-        actions={c.can("purchase_requests:create") && <Link href="/procurement/requests/new"><Button>New request</Button></Link>}
+        actions={<>
+          {seeAll && sp.project && <a href={`/procurement/requests/project-pdf?project=${encodeURIComponent(sp.project)}`} target="_blank" rel="noopener"><Button variant="secondary">Project history PDF</Button></a>}
+          {c.can("purchase_requests:create") && <Link href="/procurement/requests/new"><Button>New request</Button></Link>}
+        </>}
       />
+      {seeAll && !sp.project && <p className="-mt-2 mb-4 text-sm text-slate-500">To download a project&apos;s full history (every request, order, bill, payment, and each material&apos;s totals) as a PDF, choose the project in the filter below.</p>}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Awaiting approval" value={pending} tone={pending ? "warn" : "default"} href="/procurement/requests?status=PENDING_APPROVAL" />
         <StatCard label="Approved – not yet ordered" value={approved} tone={approved ? "warn" : "default"} href="/procurement/requests?status=APPROVED" sub="Procurement should raise POs" />

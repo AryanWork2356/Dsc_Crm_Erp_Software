@@ -18,6 +18,7 @@ import { cancelVendorBill, certifyVendorBill, createVendorBill, payVendorBill } 
 
 import { billReadingOn } from "@/lib/bill-reader";
 import { Paperclip } from "lucide-react";
+import { projectScope } from "@/lib/scope";
 
 export const metadata = { title: "Vendor Bills" };
 // reading a bill photo can take up to a minute
@@ -37,7 +38,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
   const [rows, total, vendors, projects, pos, unpaid] = await Promise.all([
     db.vendorBill.findMany({ where, include: { vendor: { select: { name: true } }, po: { select: { number: true } } }, orderBy: { billDate: "desc" }, skip: lp.skip, take: lp.take }),
     db.vendorBill.count({ where }),
-    vendorOptions(c.companyId), projectOptions(c.companyId),
+    vendorOptions(c.companyId), projectOptions(c.companyId, projectScope(c)),
     db.purchaseOrder.findMany({ where: { companyId: c.companyId, status: { notIn: ["DRAFT", "CANCELLED"] } }, select: { id: true, number: true, vendor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 200 }),
     db.vendorBill.findMany({ where: { companyId: c.companyId, status: { in: ["UNPAID", "PARTIALLY_PAID"] } }, select: { amount: true, paid: true, dueDate: true } }),
   ]);

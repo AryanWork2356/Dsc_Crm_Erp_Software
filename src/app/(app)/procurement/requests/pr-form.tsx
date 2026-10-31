@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { VoiceNote } from "@/components/forms/voice-note";
+import { SpeakButton } from "@/components/forms/speak-button";
 import type { ActionResult } from "@/lib/action";
 import { daysNotice } from "@/lib/material-notice";
 import { PRIORITY_OPTS, UNIT_OPTS, type Opt } from "@/lib/enums";
@@ -30,6 +32,8 @@ export function PrForm({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [rows, setRows] = React.useState<Row[]>(initial.items.length ? initial.items.map((i) => mk(i)) : [mk()]);
   const listId = React.useId();
+  const unitList = React.useId();
+  const [voice, setVoice] = React.useState<File | null>(null);
   const [req, setReq] = React.useState(initial.requiredDate ?? "");
   const left = req ? daysNotice(req) : null;
   const set = (key: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -44,6 +48,7 @@ export function PrForm({
     const fd = new FormData(e.currentTarget);
     const sender = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
     if (sender?.name === "submitNow") fd.set("submitNow", "1");
+    if (voice) fd.set("voice", voice);
     fd.set("items", JSON.stringify(rows.filter((r) => r.description.trim()).map(({ key: _k, ...r }) => ({ ...r, quantity: r.quantity === "" ? 0 : r.quantity }))));
     setErrors({});
     start(async () => {
@@ -76,12 +81,14 @@ export function PrForm({
       <Card>
         <CardHeader><CardTitle>Items needed</CardTitle></CardHeader>
         <CardBody>
+          <p className="mb-3 text-sm text-slate-500">Type any material in your own words, pick one from the list, or press the mic and say it.</p>
           <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+          <datalist id={unitList}>{UNIT_OPTS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}</datalist>
           <div className="space-y-2">
             {rows.map((r, i) => (
               <div key={r.key} className="grid grid-cols-12 items-center gap-2">
-                <div className="col-span-12 sm:col-span-6"><Input value={r.description} list={listId} onChange={(e) => onDesc(r, e.target.value)} placeholder="Material / item" aria-label={`Item ${i + 1}`} /></div>
-                <div className="col-span-5 sm:col-span-2"><Select value={r.unit} onChange={(e) => set(r.key, { unit: e.target.value })}>{UNIT_OPTS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}</Select></div>
+                <div className="relative col-span-12 sm:col-span-6"><Input value={r.description} list={listId} onChange={(e) => onDesc(r, e.target.value)} placeholder="Type the material, e.g. 18mm plywood" aria-label={`Item ${i + 1}`} className="pr-20" /><SpeakButton className="bottom-1.5" /></div>
+                <div className="col-span-5 sm:col-span-2"><Input value={r.unit} list={unitList} onChange={(e) => set(r.key, { unit: e.target.value })} placeholder="Unit" aria-label={`Unit ${i + 1}`} /></div>
                 <div className="col-span-5 sm:col-span-3"><Input type="number" min="0" step="any" value={r.quantity} onChange={(e) => set(r.key, { quantity: e.target.value === "" ? "" : Number(e.target.value) })} className="text-right" aria-label={`Quantity ${i + 1}`} /></div>
                 <button type="button" className="col-span-2 justify-self-end rounded p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 sm:col-span-1" onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((x) => x.key !== r.key) : rs))} aria-label={`Remove item ${i + 1}`}><Trash2 className="h-4 w-4" /></button>
               </div>
@@ -89,6 +96,13 @@ export function PrForm({
           </div>
           {(errors._ || errors.items) && <p className="mt-2 text-sm font-medium text-red-600">{errors._ ?? errors.items}</p>}
           <Button type="button" size="sm" variant="secondary" className="mt-3" onClick={() => setRows((rs) => [...rs, mk()])}><Plus className="h-4 w-4" /> Add item</Button>
+        </CardBody>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Voice note</CardTitle></CardHeader>
+        <CardBody>
+          <p className="mb-3 text-sm text-slate-500">Easier to say it? Record what you need; procurement can listen to it with the request.</p>
+          <VoiceNote value={voice} onChange={setVoice} />
         </CardBody>
       </Card>
       <div className="flex justify-end gap-2">

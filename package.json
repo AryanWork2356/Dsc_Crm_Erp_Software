@@ -27,7 +27,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "docs": "tsx scripts/gen-docs.ts",
-    "perf": "vitest run --config vitest.perf.config.mts"
+    "perf": "vitest run --config vitest.perf.config.mts",
+    "try:bills": "tsx --conditions=react-server scripts/try-bills.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

@@ -16,6 +16,7 @@ import { FormDialog, type FieldDef } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { USE_CONTRACTORS } from "@/lib/features";
 import { createWorker, createWorkerLogin, deleteWorker, setWorkerActive, updateWorker } from "../actions";
+import { projectScope } from "@/lib/scope";
 
 export const metadata = { title: "Workers" };
 
@@ -36,7 +37,7 @@ export default async function WorkersPage({ searchParams }: { searchParams: Prom
     db.worker.findMany({ where, include: { contractor: { select: { name: true } } }, orderBy: orderBy(lp.sort, lp.dir, ["name", "code", "trade", "joiningDate"] as const, "name"), skip: lp.skip, take: lp.take }),
     db.worker.count({ where }),
     db.contractor.findMany({ where: { companyId: c.companyId, deletedAt: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    projectOptions(c.companyId),
+    projectOptions(c.companyId, projectScope(c)),
     db.worker.count({ where: { companyId: c.companyId, deletedAt: null, isActive: true } }),
     db.attendance.count({ where: { companyId: c.companyId, workerId: { not: null }, date: calendarDay(), status: { in: ["PRESENT", "OVERTIME", "HALF_DAY"] } } }),
     db.user.findMany({ where: { companyId: c.companyId, workerId: { not: null } }, select: { workerId: true, email: true } }),

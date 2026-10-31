@@ -23,8 +23,14 @@ export const USE_SITE_VISITS = false;
 /** Customer support tickets. Off at DSC. */
 export const USE_SUPPORT = false;
 
+/** The Site Material section: material receipts list, issues & returns, waste & reconciliation, transfers. Off at DSC.
+ *  Receiving a delivery against a purchase order (from the order's page) still works for procurement. */
+export const USE_SITE_MATERIAL = false;
+const SITE_MATERIAL = ["/inventory/receipts", "/inventory/issues", "/inventory/waste", "/transfers"];
+
 /** Menu entries that belong to a feature that is switched off. */
 export function featureOff(href: string): boolean {
   return (!USE_CONTRACTORS && href.startsWith("/workforce/contractors")) || (!USE_LEADS && ["/crm/leads", "/crm/follow-ups"].includes(href))
-    || (!USE_ACTIONS && href.startsWith("/actions")) || (!USE_SITE_VISITS && href.startsWith("/crm/site-visits")) || (!USE_SUPPORT && href.startsWith("/support"));
+    || (!USE_ACTIONS && href.startsWith("/actions")) || (!USE_SITE_VISITS && href.startsWith("/crm/site-visits")) || (!USE_SUPPORT && href.startsWith("/support"))
+    || (!USE_SITE_MATERIAL && SITE_MATERIAL.some((p) => href === p || href.startsWith(`${p}/`) || href.startsWith(`${p}?`)));
 }
