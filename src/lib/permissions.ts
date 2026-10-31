@@ -164,6 +164,8 @@ export const SEES_ALL_PROJECTS: RoleKey[] = ["OWNER", "MANAGEMENT", "ADMIN", "AC
 
 /** The roles DSC gives to people (the others stay in the app for old logins, portals and tests, but are not offered). */
 export const OFFERED_ROLES: RoleKey[] = ["SITE_SUPERVISOR", "PROJECT_MANAGER", "DESIGNER", "ADMIN", "MANAGEMENT", "HR", "ACCOUNTS"];
+/** Who sets a project's site location (where attendance may be marked): directors and admins. */
+export const SITE_LOCATION_ROLES: RoleKey[] = ["OWNER", "MANAGEMENT", "ADMIN"];
 /** Directors: they plan (schedule, materials), see every project document, prices and profit. */
 export const DIRECTOR_ROLES: RoleKey[] = ["OWNER", "MANAGEMENT"];
 

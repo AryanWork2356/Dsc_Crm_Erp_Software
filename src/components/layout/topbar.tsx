@@ -24,9 +24,9 @@ export function Topbar({
   const [q, setQ] = React.useState("");
 
   return (
-    <header className="no-print flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-slate-200 bg-white pl-14 pr-4 pt-[env(safe-area-inset-top)] lg:px-6">
+    <header className="no-print flex h-[calc(4rem+env(safe-area-inset-top))] shrink-0 items-center gap-1.5 border-b border-slate-200 bg-white pl-14 pr-2 pt-[env(safe-area-inset-top)] sm:gap-3 sm:pr-4 lg:px-6">
       <form
-        className="relative max-w-md flex-1"
+        className="relative min-w-0 max-w-md flex-1"
         onSubmit={(e) => {
           e.preventDefault();
           if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`);
@@ -42,9 +42,9 @@ export function Topbar({
           aria-label="Global search"
         />
       </form>
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-3">
         <HelpButton />
-        <LanguageSwitcher />
+        <LanguageSwitcher className="hidden sm:inline-flex" />{/* on a phone the language is in the menu (☰), so the bar fits */}
         <InstallApp />
         <Link href="/notifications" className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-100" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
           <Bell className="h-5 w-5" />
@@ -58,7 +58,7 @@ export function Topbar({
           <p className="text-sm font-medium text-slate-900">{name}</p>
           <p className="text-xs text-slate-500">{roleLabel}</p>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">{initials(name)}</div>
+        <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800 sm:flex">{initials(name)}</div>
         {USE_SELF_PASSWORD && (
         <Link href="/change-password" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Change my password" title="Change my password">
             <KeyRound className="h-5 w-5" />

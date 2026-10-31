@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Check, Circle } from "lucide-react";
 import { requirePerm } from "@/lib/auth";
 import { USE_SITE_MATERIAL } from "@/lib/features";
+import { SITE_LOCATION_ROLES } from "@/lib/permissions";
 import { PR_ALL } from "@/lib/doc-access";
 import { db } from "@/lib/db";
 import { projectDocScope, projectScope } from "@/lib/scope";
@@ -155,11 +156,11 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
               </CardBody>
             </Card>
           </div>
-          {c.can("projects:view") && (
+          {SITE_LOCATION_ROLES.includes(c.role) && (
             <Card>
               <CardHeader><CardTitle>Site location (for attendance)</CardTitle></CardHeader>
               <CardBody>
-                <LocationForm action={setSiteLocation.bind(null, id)} lat={p.siteLat} lng={p.siteLng} radius={p.geoRadiusM} radiusHint="Company default" canEdit={c.can("projects:edit") || SITE_ROLES.includes(c.role)} />
+                <LocationForm action={setSiteLocation.bind(null, id)} lat={p.siteLat} lng={p.siteLng} radius={p.geoRadiusM} radiusHint="Company default" />
               </CardBody>
             </Card>
           )}

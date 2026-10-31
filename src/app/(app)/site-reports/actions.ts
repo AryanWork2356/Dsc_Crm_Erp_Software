@@ -64,7 +64,8 @@ export async function submitSiteReport(fd: FormData) {
 
     const files = fd.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
     const selfie = fd.get("selfie") instanceof File && (fd.get("selfie") as File).size > 0 ? (fd.get("selfie") as File) : null;
-    const voice = fd.get("voice") instanceof File && (fd.get("voice") as File).size > 0 ? (fd.get("voice") as File) : null;
+    const voices = fd.getAll("voice").filter((f): f is File => f instanceof File && f.size > 0);
+    if (voices.length > 5) throw new UserError("Add at most 5 voice notes per report.");
     if (files.length + (selfie ? 1 : 0) > MAX_PHOTOS) throw new UserError(`Add at most ${MAX_PHOTOS} photos per report.`);
 
     const day = reportDay();
@@ -94,7 +95,7 @@ export async function submitSiteReport(fd: FormData) {
       };
       if (selfie) await keep(selfie, "selfie");
       for (const f of files) await keep(f, `#${n++}`);
-      if (voice) await keep(voice, "voice note", true);
+      for (const [i, v] of voices.entries()) await keep(v, voices.length > 1 ? `voice note ${i + 1}` : "voice note", true);
 
       const now = new Date();
       const t = await reportTimes(c.companyId);

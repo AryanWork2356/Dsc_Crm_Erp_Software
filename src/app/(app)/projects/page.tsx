@@ -3,6 +3,7 @@ import type { Prisma, ProjectStatus, SegmentType } from "@prisma/client";
 import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { projectScope } from "@/lib/scope";
+import { SEES_ALL_PROJECTS } from "@/lib/permissions";
 import { flatten, listParams } from "@/lib/list";
 import { PROJECT_STATUS_OPTS, SEGMENT_OPTS } from "@/lib/enums";
 import { DESIGNER_ROLES, PM_ROLES, SITE_ROLES, clientOptions, userOptions } from "@/lib/lookups";
@@ -29,6 +30,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   const today = startOfDay();
   const scope = projectScope(c);
   const showMoney = c.can("margins:view");
+  const seesAll = SEES_ALL_PROJECTS.includes(c.role);
 
   const where: Prisma.ProjectWhereInput = {
     AND: [
@@ -76,9 +78,12 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
           placeholder="Search project, client, address…"
           filters={[
             { key: "status", label: "Status", options: [{ value: "active", label: "All active" }, ...PROJECT_STATUS_OPTS] },
-            { key: "segment", label: "Segment", options: SEGMENT_OPTS },
-            { key: "pm", label: "Manager", options: pms },
-            { key: "client", label: "Client", options: clients },
+            // people who see only their own projects get no lists of every client and manager
+            ...(seesAll ? [
+              { key: "segment", label: "Segment", options: SEGMENT_OPTS },
+              { key: "pm", label: "Manager", options: pms },
+              { key: "client", label: "Client", options: clients },
+            ] : []),
           ]}
         />
         {rows.length === 0 ? (

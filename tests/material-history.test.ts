@@ -28,12 +28,14 @@ describe("purchase requests: typed material, voice note, and what is still to be
     const p = await siteProject();
     await loginAs("supervisor@dsc.demo");
     const form = fd({ projectId: p.id, requiredDate: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10), items: JSON.stringify([{ description: "Hettich soft-close hinge (typed)", unit: "pair", quantity: 40 }, { description: "18mm BWP plywood", unit: "sheet", quantity: 10 }]) });
-    form.set("voice", voice());
+    form.append("voice", voice());
+    form.append("voice", voice()); // more than one voice note
     const r = await createPurchaseRequest(form);
     expect(r.ok).toBe(true);
     const id = (r as { data: { id: string } }).data.id;
     const items = await db.purchaseRequestItem.findMany({ where: { requestId: id } });
     expect(items.map((i) => i.unit).sort()).toEqual(["pair", "sheet"]);
+    expect(await db.document.count({ where: { entityType: "PURCHASE_REQUEST", entityId: id } })).toBe(2);
     const note = await db.document.findFirstOrThrow({ where: { entityType: "PURCHASE_REQUEST", entityId: id } });
     expect(note.mimeType).toMatch(/^audio\//);
     expect(await canOpenDocument((await getCtx())!, note)).toBe(true);

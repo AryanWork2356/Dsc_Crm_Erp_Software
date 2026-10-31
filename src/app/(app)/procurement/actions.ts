@@ -16,7 +16,7 @@ import { num } from "@/lib/utils";
 import { daysNotice, isShortNotice } from "@/lib/material-notice";
 import { notifyRoles, notifyUsers } from "@/lib/notify";
 
-// ───────────────────────── VENDORS ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ VENDORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const vendorSchema = z.object({
   name: zReqStr("Vendor name is required"),
   contactPerson: zOptStr,
@@ -45,7 +45,7 @@ export async function createVendor(fd: FormData) {
     const v = await db.$transaction(async (tx) => {
       const code = await nextNumber(tx, c.companyId, "V");
       const x = await tx.vendor.create({ data: { ...d, companyId: c.companyId, code } });
-      await audit(c, { action: "CREATE", entityType: "Vendor", entityId: x.id, summary: `Created vendor ${code} – ${d.name}` }, tx);
+      await audit(c, { action: "CREATE", entityType: "Vendor", entityId: x.id, summary: `Created vendor ${code} â€“ ${d.name}` }, tx);
       return x;
     });
     revalidatePath("/procurement/vendors");
@@ -65,7 +65,7 @@ export async function updateVendor(id: string, fd: FormData) {
     }
     const data = { ...d, ...(c.can("vendor_bills:view") ? {} : { bankDetails: old.bankDetails ?? undefined }) };
     await db.vendor.update({ where: { id }, data });
-    await audit(c, { action: "UPDATE", entityType: "Vendor", entityId: id, summary: `Updated vendor ${old.code} – ${old.name}`, oldValue: { name: old.name, gstin: old.gstin, phone: old.phone } , newValue: { name: d.name, gstin: d.gstin, phone: d.phone } });
+    await audit(c, { action: "UPDATE", entityType: "Vendor", entityId: id, summary: `Updated vendor ${old.code} â€“ ${old.name}`, oldValue: { name: old.name, gstin: old.gstin, phone: old.phone } , newValue: { name: d.name, gstin: d.gstin, phone: d.phone } });
     revalidatePath("/procurement/vendors");
     revalidatePath(`/procurement/vendors/${id}`);
     return { message: "Vendor updated" };
@@ -78,15 +78,15 @@ export async function deleteVendor(id: string) {
     const v = await db.vendor.findFirst({ where: { id, companyId: c.companyId, deletedAt: null } });
     if (!v) throw new UserError("Vendor not found.");
     const used = (await db.purchaseOrder.count({ where: { vendorId: id } })) + (await db.vendorBill.count({ where: { vendorId: id } }));
-    if (used) throw new UserError("This vendor has purchase orders or bills. Their history is kept – it can't be deleted.");
+    if (used) throw new UserError("This vendor has purchase orders or bills. Their history is kept â€“ it can't be deleted.");
     await db.vendor.update({ where: { id }, data: { deletedAt: new Date() } });
-    await audit(c, { action: "DELETE", entityType: "Vendor", entityId: id, summary: `Deleted vendor ${v.code} – ${v.name}` });
+    await audit(c, { action: "DELETE", entityType: "Vendor", entityId: id, summary: `Deleted vendor ${v.code} â€“ ${v.name}` });
     revalidatePath("/procurement/vendors");
     return { message: "Vendor deleted" };
   });
 }
 
-// ───────────────────────── MATERIALS ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ MATERIALS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const materialSchema = z.object({
   name: zReqStr("Material name is required"),
   sku: zOptStr,
@@ -108,7 +108,7 @@ export async function createMaterial(fd: FormData) {
       const dup = await tx.material.findFirst({ where: { companyId: c.companyId, sku, deletedAt: null } });
       if (dup) throw new UserError(`SKU ${sku} is already used by ${dup.name}.`);
       const x = await tx.material.create({ data: { ...d, sku, companyId: c.companyId, vendorId: d.vendorId ?? null } });
-      await audit(c, { action: "CREATE", entityType: "Material", entityId: x.id, summary: `Added material ${sku} – ${d.name}` }, tx);
+      await audit(c, { action: "CREATE", entityType: "Material", entityId: x.id, summary: `Added material ${sku} â€“ ${d.name}` }, tx);
       return x;
     });
     revalidatePath("/inventory/materials");
@@ -128,7 +128,7 @@ export async function updateMaterial(id: string, fd: FormData) {
       if (dup) throw new UserError(`SKU ${sku} is already used by ${dup.name}.`);
     }
     await db.material.update({ where: { id }, data: { ...d, sku, vendorId: d.vendorId ?? null } });
-    await audit(c, { action: "UPDATE", entityType: "Material", entityId: id, summary: `Updated material ${sku} – ${d.name}`, oldValue: { purchaseCost: num(old.purchaseCost) }, newValue: { purchaseCost: d.purchaseCost } });
+    await audit(c, { action: "UPDATE", entityType: "Material", entityId: id, summary: `Updated material ${sku} â€“ ${d.name}`, oldValue: { purchaseCost: num(old.purchaseCost) }, newValue: { purchaseCost: d.purchaseCost } });
     revalidatePath("/inventory/materials");
     return { message: "Material updated" };
   });
@@ -142,17 +142,17 @@ export async function deleteMaterial(id: string) {
     const used = (await db.inventoryTransaction.count({ where: { materialId: id } })) + (await db.purchaseOrderItem.count({ where: { materialId: id } })) + (await db.boqItem.count({ where: { materialId: id } }));
     if (used) throw new UserError("This material is used in stock movements, orders or BOQs, so it can't be deleted.");
     await db.material.update({ where: { id }, data: { deletedAt: new Date() } });
-    await audit(c, { action: "DELETE", entityType: "Material", entityId: id, summary: `Deleted material ${m.sku} – ${m.name}` });
+    await audit(c, { action: "DELETE", entityType: "Material", entityId: id, summary: `Deleted material ${m.sku} â€“ ${m.name}` });
     revalidatePath("/inventory/materials");
     return { message: "Material deleted" };
   });
 }
 
-// ───────────────────────── PURCHASE REQUESTS ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PURCHASE REQUESTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const prItem = z.object({
   materialId: z.string().optional().nullable(),
   description: zReqStr("Describe each item"),
-  unit: z.string().trim().min(1).default("nos"),
+  unit: z.string().trim().min(1, "Write the unit for each item").max(30).default("nos"),
   quantity: z.coerce.number({ message: "Enter a quantity" }).positive("Quantity must be above 0"),
   boqItemId: z.string().optional().nullable(),
 });
@@ -176,7 +176,7 @@ function parseJson<T>(raw: unknown, schema: z.ZodType<T>, empty: string): T {
   return p.data;
 }
 
-/** Estimated value of a request = qty × the material's last purchase cost (used to pick the approver). */
+/** Estimated value of a request = qty Ã— the material's last purchase cost (used to pick the approver). */
 async function prValue(items: z.infer<typeof prItem>[]) {
   const ids = items.map((i) => i.materialId).filter(Boolean) as string[];
   const mats = ids.length ? await db.material.findMany({ where: { id: { in: ids } }, select: { id: true, purchaseCost: true } }) : [];
@@ -204,18 +204,26 @@ async function sendNow(fd: FormData, id: string, label: string) {
 
 const AUDIO_EXT = ["webm", "ogg", "m4a", "mp4"];
 
-/** The voice note recorded on a request: checked and stored first, attached to the request in the same save. */
+/** The voice notes recorded on a request (up to 5): checked and stored first, attached to the request in the same save. */
 async function storeVoice(c: Ctx, fd: FormData) {
-  const f = fd.get("voice");
-  if (!(f instanceof File) || f.size === 0) return null;
-  if (!AUDIO_EXT.includes(f.name.split(".").pop()?.toLowerCase() ?? "")) throw new UserError("The voice note could not be read. Record it again.");
-  let v;
-  try { v = await validateUpload(f); } catch (e) { if (e instanceof UploadError) throw new UserError(e.message); throw e; }
-  return { key: await putFile(c.companyId, v.bytes, v.ext), ...v };
+  const files = fd.getAll("voice").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length > 5) throw new UserError("Add at most 5 voice notes.");
+  const checked = [];
+  for (const f of files) {
+    if (!AUDIO_EXT.includes(f.name.split(".").pop()?.toLowerCase() ?? "")) throw new UserError("A voice note could not be read. Record it again.");
+    try { checked.push(await validateUpload(f)); } catch (e) { if (e instanceof UploadError) throw new UserError(e.message); throw e; }
+  }
+  const stored = [];
+  for (const v of checked) stored.push({ key: await putFile(c.companyId, v.bytes, v.ext), ...v });
+  return stored;
 }
 type StoredVoice = Awaited<ReturnType<typeof storeVoice>>;
-const attachVoice = (tx: Prisma.TransactionClient, c: Ctx, v: StoredVoice, prId: string, number: string) =>
-  v ? tx.document.create({ data: { companyId: c.companyId, name: `${number} voice note.${v.ext}`, type: "OTHER", entityType: "PURCHASE_REQUEST", entityId: prId, storageKey: v.key, mimeType: v.mime, size: v.size, uploadedById: c.userId } }) : null;
+const attachVoice = async (tx: Prisma.TransactionClient, c: Ctx, voices: StoredVoice, prId: string, number: string) => {
+  const before = await tx.document.count({ where: { entityType: "PURCHASE_REQUEST", entityId: prId } });
+  for (const [i, v] of voices.entries()) {
+    await tx.document.create({ data: { companyId: c.companyId, name: `${number} voice note ${before + i + 1}.${v.ext}`, type: "OTHER", entityType: "PURCHASE_REQUEST", entityId: prId, storageKey: v.key, mimeType: v.mime, size: v.size, uploadedById: c.userId } });
+  }
+};
 
 export async function createPurchaseRequest(fd: FormData) {
   return run(async () => {
@@ -239,7 +247,7 @@ export async function createPurchaseRequest(fd: FormData) {
       revalidatePath("/procurement/requests");
       return sendNow(fd, pr.id, `Request ${pr.number}`);
     } catch (e) {
-      if (voice) await deleteFile(voice.key); // no orphan file if saving failed
+      for (const v of voice) await deleteFile(v.key); // no orphan file if saving failed
       throw e;
     }
   });
@@ -266,7 +274,7 @@ export async function updatePurchaseRequest(id: string, fd: FormData) {
         await audit(c, { action: "UPDATE", entityType: "PurchaseRequest", entityId: id, summary: `Updated purchase request ${pr.number}` }, tx);
       });
     } catch (e) {
-      if (voice) await deleteFile(voice.key);
+      for (const v of voice) await deleteFile(v.key);
       throw e;
     }
     revalidatePath("/procurement/requests");
@@ -320,7 +328,7 @@ export async function deletePurchaseRequest(id: string) {
   });
 }
 
-// ───────────────────────── PURCHASE ORDERS ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PURCHASE ORDERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const poItem = z.object({
   materialId: z.string().optional().nullable(),
   description: zReqStr("Describe each item"),
@@ -366,7 +374,7 @@ export async function createPurchaseOrder(fd: FormData) {
         data: { companyId: c.companyId, number, vendorId: d.vendorId, projectId: d.projectId ?? null, requestId: d.requestId ?? null, deliveryDate: d.deliveryDate, paymentTerms: d.paymentTerms, notes: d.notes, createdById: c.userId, subtotal: t.subtotal, discountAmount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } },
       });
       if (d.requestId) await tx.purchaseRequest.update({ where: { id: d.requestId }, data: { status: "ORDERED" } });
-      await audit(c, { action: "CREATE", entityType: "PurchaseOrder", entityId: x.id, summary: `Created ${number} for ${vendor.name} – ₹${t.total.toLocaleString("en-IN")}` }, tx);
+      await audit(c, { action: "CREATE", entityType: "PurchaseOrder", entityId: x.id, summary: `Created ${number} for ${vendor.name} â€“ â‚¹${t.total.toLocaleString("en-IN")}` }, tx);
       return x;
     });
     revalidatePath("/procurement/orders");
@@ -389,7 +397,7 @@ export async function updatePurchaseOrder(id: string, fd: FormData) {
     await db.$transaction(async (tx) => {
       await tx.purchaseOrderItem.deleteMany({ where: { poId: id } });
       await tx.purchaseOrder.update({ where: { id }, data: { vendorId: d.vendorId, projectId: d.projectId ?? null, deliveryDate: d.deliveryDate, paymentTerms: d.paymentTerms, notes: d.notes, subtotal: t.subtotal, discountAmount: t.discount, taxAmount: t.tax, total: t.total, items: { create: rows } } });
-      await audit(c, { action: "UPDATE", entityType: "PurchaseOrder", entityId: id, summary: num(po.total) !== t.total ? `${c.name} changed ${po.number} from ₹${num(po.total).toLocaleString("en-IN")} to ₹${t.total.toLocaleString("en-IN")}` : `Updated ${po.number}`, oldValue: { total: num(po.total) }, newValue: { total: t.total } }, tx);
+      await audit(c, { action: "UPDATE", entityType: "PurchaseOrder", entityId: id, summary: num(po.total) !== t.total ? `${c.name} changed ${po.number} from â‚¹${num(po.total).toLocaleString("en-IN")} to â‚¹${t.total.toLocaleString("en-IN")}` : `Updated ${po.number}`, oldValue: { total: num(po.total) }, newValue: { total: t.total } }, tx);
     });
     revalidatePath("/procurement/orders");
     revalidatePath(`/procurement/orders/${id}`);
@@ -406,7 +414,7 @@ export async function submitPurchaseOrder(id: string) {
     if (!po.items.length || num(po.total) <= 0) throw new UserError("Add items with a value first.");
     const r = await db.$transaction(async (tx) => {
       await tx.purchaseOrder.update({ where: { id }, data: { status: "PENDING_APPROVAL" } });
-      return requestApproval(tx, c, { type: "PURCHASE_ORDER", entityType: "PurchaseOrder", entityId: id, title: `${po.number} – ${po.vendor.name}`, amount: num(po.total) });
+      return requestApproval(tx, c, { type: "PURCHASE_ORDER", entityType: "PurchaseOrder", entityId: id, title: `${po.number} â€“ ${po.vendor.name}`, amount: num(po.total) });
     });
     revalidatePath("/procurement/orders");
     revalidatePath(`/procurement/orders/${id}`);
@@ -443,7 +451,7 @@ export async function cancelPurchaseOrder(id: string, fd?: FormData) {
       await tx.purchaseOrder.update({ where: { id }, data: { status: "CANCELLED", notes: reason ? `${po.notes ? po.notes + "\n" : ""}Cancelled: ${reason}` : po.notes } });
       await tx.approval.updateMany({ where: { entityType: "PurchaseOrder", entityId: id, status: "PENDING" }, data: { status: "CANCELLED", decidedAt: new Date(), remarks: "Order cancelled" } });
       if (po.requestId) await tx.purchaseRequest.update({ where: { id: po.requestId }, data: { status: "APPROVED" } });
-      await audit(c, { action: "UPDATE", entityType: "PurchaseOrder", entityId: id, summary: `Cancelled ${po.number}${reason ? ` – ${reason}` : ""}` }, tx);
+      await audit(c, { action: "UPDATE", entityType: "PurchaseOrder", entityId: id, summary: `Cancelled ${po.number}${reason ? ` â€“ ${reason}` : ""}` }, tx);
     });
     revalidatePath("/procurement/orders");
     revalidatePath(`/procurement/orders/${id}`);

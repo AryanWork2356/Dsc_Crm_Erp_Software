@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Globe } from "lucide-react";
 import { LANGS, cookieFor, langFromCookie, type LangCode } from "@/lib/lang";
+import { cn } from "@/lib/utils";
 
 declare global {
   interface Window {
@@ -135,7 +136,7 @@ export function LanguageSwitcher({ className = "", tone = "light", fullWidth = f
   }
 
   return (
-    <label className={`notranslate relative inline-flex items-center ${fullWidth ? "w-full" : ""} ${className}`} translate="no" title="Language">
+    <label className={cn("notranslate relative inline-flex items-center", fullWidth && "w-full", className)} translate="no" title="Language">
       <Globe className={`pointer-events-none absolute left-2.5 h-4 w-4 ${TONES[tone].icon}`} aria-hidden />
       <select value={code} onChange={(e) => choose(e.target.value as LangCode)} aria-label="Language" className={`h-9 cursor-pointer appearance-none rounded-lg border pl-8 pr-3 text-sm focus:outline-none focus:ring-2 ${fullWidth ? "w-full" : ""} ${TONES[tone].box}`}>
         {LANGS.map((l) => <option key={l.code} value={l.code} className="text-slate-900">{l.label}</option>)}

@@ -72,7 +72,7 @@ export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTask
   const [material, setMaterial] = React.useState<(typeof MATERIAL)[number]["value"]>(initial.materialStatus);
   const [selfie, setSelfie] = React.useState<{ file: File; url: string }[]>([]);
   const [photos, setPhotos] = React.useState<{ file: File; url: string }[]>([]);
-  const [voice, setVoice] = React.useState<File | null>(null);
+  const [voices, setVoices] = React.useState<File[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const listId = React.useId();
   const changed = day.tasks.filter((t) => done[t.id] !== t.progress);
@@ -101,7 +101,7 @@ export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTask
     for (const key of ["workDone", "planNext", "issues"]) if (f.get(key)) fd.set(key, String(f.get(key)));
     if (selfie[0]) fd.set("selfie", selfie[0].file);
     photos.forEach((p) => fd.append("photos", p.file));
-    if (voice) fd.set("voice", voice);
+    for (const v of voices) fd.append("voice", v);
     setError(null);
     start(async () => {
       const r = await submitSiteReport(fd);
@@ -221,7 +221,7 @@ export function ReportForm({ kind, sites, projectId, initial, day, canUpdateTask
       <Field label={morning ? "Notes, problems or help needed (optional)" : "Notes or problems (optional)"} hint="Shortage, delay, client instruction, safety – the project manager is told at once.">
         <Textarea name="issues" rows={2} className="text-base" defaultValue={initial.issues} />
       </Field>
-      <VoiceNote value={voice} onChange={setVoice} />
+      <VoiceNote value={voices} onChange={setVoices} />
 
       {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
       <Button type="submit" size="lg" className="h-14 w-full text-lg" loading={pending}>{pending ? "Sending…" : morning ? "Send morning update" : "Send evening report"}</Button>
