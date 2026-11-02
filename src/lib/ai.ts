@@ -1,5 +1,5 @@
 import "server-only";
-import { GoogleGenAI, ApiError } from "@google/genai";
+import { GoogleGenAI, ApiError, ThinkingLevel } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
 
 /**
@@ -37,28 +37,38 @@ const BUSY = "The AI helper is busy right now. Please try again in a minute, or 
 const SETUP = "The AI helper is not set up correctly. Please tell the Admin; you can still fill it in by hand.";
 const FAILED = "The AI helper did not work this time. You can fill it in by hand.";
 
+/** Longest we wait for an answer: a person is looking at a spinner, and the server stops the request at 60 seconds anyway. */
+const AI_TIMEOUT_MS = 40_000;
+const SLOW = "The AI helper took too long this time. Please try again, or fill it in by hand.";
+
 let gemini: GoogleGenAI | null = null;
 async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; quality: AiQuality }): Promise<string> {
-  gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const input = o.parts.map((p) =>
-    "text" in p ? { type: "text" as const, text: p.text }
-    : "image" in p ? { type: "image" as const, data: p.image.toString("base64"), mime_type: p.mime }
-    : { type: "document" as const, data: p.pdf.toString("base64"), mime_type: "application/pdf" });
+  // the standard generateContent call (the newer "interactions" call waited without answering on the live site)
+  gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: AI_TIMEOUT_MS } });
+  const parts = o.parts.map((p) =>
+    "text" in p ? { text: p.text }
+    : "image" in p ? { inlineData: { mimeType: p.mime, data: p.image.toString("base64") } }
+    : { inlineData: { mimeType: "application/pdf", data: p.pdf.toString("base64") } });
+  const model = aiModel(o.quality);
+  const started = Date.now();
   try {
-    const r = await gemini.interactions.create({
-      model: aiModel(o.quality),
-      input: input as never,
-      system_instruction: o.system,
-      store: false, // do not keep our company's data on Google's side
-      generation_config: { thinking_level: o.quality === "careful" ? "low" : "minimal" },
-      ...(o.schema ? { response_format: { type: "text", mime_type: "application/json", schema: o.schema as Record<string, unknown> } } : {}),
-    } as never);
-    const text = (r as { output_text?: string }).output_text;
+    const call = gemini.models.generateContent({
+      model,
+      contents: [{ role: "user", parts }],
+      config: {
+        systemInstruction: o.system,
+        thinkingConfig: { thinkingLevel: o.quality === "careful" ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL },
+        ...(o.schema ? { responseMimeType: "application/json", responseJsonSchema: o.schema } : {}),
+      },
+    });
+    const r = await Promise.race([call, new Promise<never>((_, no) => setTimeout(() => no(new AiError(SLOW)), AI_TIMEOUT_MS + 2000))]);
+    const text = r.text;
+    console.log("[ai] gemini answered:", model, `${Date.now() - started} ms`);
     if (!text) throw new AiError(FAILED);
     return text;
   } catch (e) {
+    console.error("[ai] gemini call failed:", model, `${Date.now() - started} ms`, e instanceof ApiError ? `${e.status} ${e.message}`.slice(0, 600) : String(e).slice(0, 600));
     if (e instanceof AiError) throw e;
-    console.error("[ai] gemini call failed:", aiModel(o.quality), e instanceof ApiError ? `${e.status} ${e.message}`.slice(0, 600) : String(e).slice(0, 600));
     if (e instanceof ApiError) {
       if (e.status === 429) throw new AiError(BUSY);
       if (e.status === 401 || e.status === 403) throw new AiError(SETUP);
@@ -70,7 +80,7 @@ async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; 
 
 let claude: Anthropic | null = null;
 async function askClaude(o: { system: string; parts: AiPart[]; schema?: object; quality: AiQuality }): Promise<string> {
-  claude ??= new Anthropic({ timeout: 90_000, maxRetries: 1 });
+  claude ??= new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 });
   const content = o.parts.map((p) =>
     "text" in p ? ({ type: "text", text: p.text } as const)
     : "image" in p ? ({ type: "image", source: { type: "base64", media_type: p.mime as "image/jpeg" | "image/png" | "image/webp", data: p.image.toString("base64") } } as const)
