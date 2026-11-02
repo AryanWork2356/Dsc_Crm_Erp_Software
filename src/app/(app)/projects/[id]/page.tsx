@@ -30,6 +30,8 @@ import { invoiceFromMilestone } from "@/app/(app)/finance/actions";
 import { ScheduleTab } from "./schedule-tab";
 import { MaterialNeedsCard } from "./material-needs-card";
 import { addTaskComment, changeProjectStatus, setEstimateToComplete, createMilestone, createTask, deleteMilestone, deleteProject, deleteTask, setTaskStatus, syncBudgetFromBoq, toggleMilestone, updateMilestone, updateProject, updateTask } from "../actions";
+import { projectTradeVendors, tradeVendorOptions } from "@/lib/project-vendors";
+import { DIRECTOR_ROLES } from "@/lib/permissions";
 
 const ACTIVE = ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT", "EXECUTION", "QUALITY_CHECK", "SNAGGING", "HANDOVER"];
 
@@ -63,6 +65,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
   ];
   const tab = tabs.some((t) => t.key === tabParam) ? tabParam! : "overview";
 
+  const director = DIRECTOR_ROLES.includes(c.role);
+  const [tradeVendors, vendorOpts] = await Promise.all([projectTradeVendors(id), director && c.can("projects:edit") ? tradeVendorOptions(c.companyId) : null]);
   const [staff, pms, designers, site, clients, fin] = await Promise.all([
     userOptions(c.companyId, undefined, true), // everyone, for showing names
     userOptions(c.companyId, PM_ROLES),
@@ -114,7 +118,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             {canEdit ? (
               <StageSelect current={p.status} options={PROJECT_STATUS_OPTS} action={async (s) => { "use server"; return changeProjectStatus(id, s); }} />
             ) : <StatusBadge status={p.status} />}
-            {canEdit && <FormDialog title="Edit project" wide trigger={<Button variant="secondary">Edit</Button>} fields={projectFields({ clients, pms, designers, site, names: new Map(staff.map((s) => [s.value, s.label])), showMoney: money, project: p as unknown as Record<string, unknown> })} action={updateProject.bind(null, id)} />}
+            {canEdit && <FormDialog title="Edit project" wide trigger={<Button variant="secondary">Edit</Button>} fields={projectFields({ clients, pms, designers, site, names: new Map(staff.map((s) => [s.value, s.label])), showMoney: money, project: p as unknown as Record<string, unknown>, ...(vendorOpts ? { tradeVendors: { options: vendorOpts, chosen: Object.fromEntries(tradeVendors.filter((t) => t.vendor).map((t) => [t.trade, t.vendor!.id])) } } : {}) })} action={updateProject.bind(null, id)} />}
           </>
         }
       />
@@ -141,6 +145,26 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                   ...(p.siteEngineerId ? [{ label: "Site engineer", value: name.get(p.siteEngineerId) }] : []), { label: "Project coordinator", value: p.supervisorId ? name.get(p.supervisorId) : null },
                 ]} />
               </CardBody>
+            </Card>
+            <Card className="lg:col-span-3">
+              <CardHeader><CardTitle>Vendors on this project</CardTitle>{director && canEdit && <span className="text-xs text-slate-500">Change them with Edit</span>}</CardHeader>
+              {tradeVendors.every((t) => !t.vendor) ? (
+                <CardBody><p className="text-sm text-slate-500">No vendors chosen yet.{director ? " Press Edit to choose the vendor for each trade." : " The directors choose them."}</p></CardBody>
+              ) : (
+                <ul className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3">
+                  {tradeVendors.map((t) => (
+                    <li key={t.trade} className="flex items-center gap-3 px-5 py-3 text-sm">
+                      <span className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500">{t.label}</span>
+                      {t.vendor ? (
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-slate-900">{t.vendor.name}</span>
+                          {(t.vendor.contactPerson || t.vendor.phone) && <span className="block text-xs text-slate-500">{t.vendor.contactPerson}{t.vendor.contactPerson && t.vendor.phone ? " · " : ""}{t.vendor.phone && <a href={`tel:${t.vendor.phone}`} className="font-medium text-brand-700">{t.vendor.phone}</a>}</span>}
+                        </span>
+                      ) : <span className="text-slate-400">—</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Card>
             <Card>
               <CardHeader><CardTitle>Upcoming</CardTitle></CardHeader>

@@ -62,7 +62,8 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     modules: {
       dashboard: R, clients: R, boq: R, projects: ["view", "edit", "export"],
       tasks: ["view", "edit"], purchase_requests: RW, purchase_orders: R, vendors: R, materials: R, inventory: R,
-      workers: R, contractors: R, attendance: RW, transfers: ["view", "create", "approve"], // DSC: site reports are for directors and admins bill_certification: ["view", "approve"], extra_work: RWX, closure: ["view", "edit"], scorecards: ["view", "edit"], actions: RW, resources: RW, feasibility: RW, exceptions: R, expenses: RW, documents: RW, approvals: ["view", "approve"],
+      // DSC: no site_reports here – the morning and evening reports are for directors and admins
+      workers: R, contractors: R, attendance: RW, transfers: ["view", "create", "approve"], bill_certification: ["view", "approve"], extra_work: RWX, closure: ["view", "edit"], scorecards: ["view", "edit"], actions: RW, resources: RW, feasibility: RW, exceptions: R, expenses: RW, documents: RW, approvals: ["view", "approve"],
       whatsapp: R, reports: R, notifications: R, leaves: ["view", "create"],
     },
     special: [], // DSC: managers see the BOQ without rates, and no costs or profit (directors only)

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCtx } from "@/lib/auth";
 import { loginAs, logout } from "./setup";
 import { kpiReport } from "@/lib/kpis";
+import { USE_MILESTONES } from "@/lib/features";
 
 beforeEach(() => logout());
 
@@ -25,7 +26,7 @@ describe("key numbers", () => {
   it("every number carries its definition and what it is based on", async () => {
     const { ctx } = await isolated();
     const r = await kpiReport(ctx);
-    expect(r.kpis.length).toBeGreaterThanOrEqual(5);
+    expect(r.kpis.length).toBeGreaterThanOrEqual(USE_MILESTONES ? 5 : 4); // milestones are switched off at DSC
     for (const k of r.kpis) {
       expect(k.definition.length, k.key).toBeGreaterThan(30);
       expect(k.basis.length, k.key).toBeGreaterThan(0);
@@ -33,13 +34,13 @@ describe("key numbers", () => {
     expect(r.notYet.some((n) => /EBITDA/.test(n.label))).toBe(false); // EBITDA now has its own page: Company profit
   });
 
-  it("shows a dash, not a percentage, when there are too few records", async () => {
+  it.skipIf(!USE_MILESTONES)("shows a dash, not a percentage, when there are too few records", async () => {
     const { ctx, project, company } = await isolated();
     await db.projectMilestone.create({ data: { companyId: company.id, projectId: project.id, name: "Only one", dueDate: new Date(Date.now() - 5 * DAY), completedAt: new Date(Date.now() - 6 * DAY) } });
     expect(find(await kpiReport(ctx), "milestones").value).toBe("—");
   });
 
-  it("counts milestones on time against their date; a late or unfinished one does not count", async () => {
+  it.skipIf(!USE_MILESTONES)("counts milestones on time against their date; a late or unfinished one does not count", async () => {
     const { ctx, project, company } = await isolated();
     const mk = (name: string, due: number, done: number | null) => db.projectMilestone.create({ data: { companyId: company.id, projectId: project.id, name, dueDate: new Date(Date.now() + due * DAY), completedAt: done == null ? null : new Date(Date.now() + done * DAY) } });
     await mk("A", -20, -22); // on time

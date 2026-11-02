@@ -10,6 +10,7 @@ import { decideFeasibility, updateChecklistItem } from "@/app/(app)/feasibility/
 import { feasibilityForProject, feasibilityForQuotation, launchDue, OUTSTATION_EXTRA_DAYS } from "@/lib/readiness";
 import { getTimeLimitItems } from "@/lib/time-limits";
 import { createVendor, updateVendor } from "@/app/(app)/procurement/actions";
+import { USE_READINESS } from "@/lib/features";
 
 beforeEach(() => logout());
 
@@ -225,7 +226,7 @@ describe("feasibility check and launch checklist", () => {
     expect((await db.feasibility.findUniqueOrThrow({ where: { id: f.id } })).exceptionNote).toBeNull(); // declining is not an exception
   });
 
-  it("a launch step that passes its date without confirmation reaches the owner through the time-limit board", async () => {
+  it.skipIf(!USE_READINESS)("a launch step that passes its date without confirmation reaches the owner through the time-limit board", async () => {
     const company = await db.company.findFirstOrThrow();
     const { p } = await liveProject();
     const f = await feasibilityForProject(company.id, p.id);

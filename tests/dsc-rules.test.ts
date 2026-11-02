@@ -48,6 +48,8 @@ describe("DSC roles", () => {
     for (const r of ["OWNER", "MANAGEMENT", "ADMIN", "SITE_SUPERVISOR"] as const) expect(can(r, "site_reports:view"), r).toBe(true);
     for (const r of ["PROJECT_MANAGER", "PROCUREMENT", "STORE", "ACCOUNTS", "DESIGNER", "HR"] as const) expect(can(r, "site_reports:view"), r).toBe(false);
     for (const r of ["OWNER", "MANAGEMENT"] as const) expect(can(r, "projects:create"), r).toBe(true);
+    // the project manager keeps their daily work (these were lost once by a comment in the wrong place)
+    for (const p of ["expenses:create", "resources:edit", "approvals:approve", "bill_certification:approve", "extra_work:create", "actions:create", "documents:create", "closure:edit"] as const) expect(can("PROJECT_MANAGER", p), p).toBe(true);
   });
 
   it("staff logins: directors, admins, HR, designer, accounts by name; everyone else Project Coordinator; directors with full access keep it", () => {

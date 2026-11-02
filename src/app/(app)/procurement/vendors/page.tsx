@@ -12,6 +12,7 @@ import { ListFilters } from "@/components/list/list-filters";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { createVendor } from "../actions";
 import { vendorFields } from "./vendor-fields";
+import { TRADES, TRADE_WORD, tradeLabel, vendorTrades, type TradeKey } from "@/lib/trades";
 
 export const metadata = { title: "Vendors" };
 
@@ -22,6 +23,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Prom
   const where: Prisma.VendorWhereInput = {
     companyId: c.companyId,
     deletedAt: null,
+    ...(sp.trade && sp.trade in TRADE_WORD ? { trades: { contains: TRADE_WORD[sp.trade as TradeKey], mode: "insensitive" as const } } : {}),
     ...(lp.q ? { OR: [{ name: { contains: lp.q, mode: "insensitive" } }, { code: { contains: lp.q, mode: "insensitive" } }, { categories: { contains: lp.q, mode: "insensitive" } }, { phone: { contains: lp.q } }, { gstin: { contains: lp.q, mode: "insensitive" } }] } : {}),
   };
   const showMoney = c.can("vendor_bills:view");
@@ -37,11 +39,11 @@ export default async function VendorsPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader
         title="Vendors"
-        subtitle="Suppliers and sub-contractors you buy from."
+        subtitle="Suppliers and sub-contractors. Pick a trade to see every vendor for that work."
         actions={c.can("vendors:create") && <FormDialog title="New vendor" wide trigger={<Button>Add vendor</Button>} fields={vendorFields(null, c.can("vendor_bills:view"))} action={createVendor} successMessage="Vendor created" />}
       />
       <Card>
-        <ListFilters placeholder="Search name, category, GSTIN…" />
+        <ListFilters filters={[{ key: "trade", label: "Trade", options: TRADES.map((t) => ({ value: t.key, label: t.label })) }]} placeholder="Search name, category, GSTIN…" />
         {rows.length === 0 ? (
           <EmptyState title="No vendors found" />
         ) : (
@@ -50,7 +52,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Prom
               <THead>
                 <tr>
                   <SortTh label="Vendor" field="name" sp={sp} basePath="/procurement/vendors" />
-                  <Th>Supplies</Th><Th>Contact</Th><Th right>Orders</Th>
+                  <Th>Trades</Th><Th>Supplies</Th><Th>Contact</Th><Th right>Orders</Th>
                   {showMoney && <><Th right>Total purchased</Th><Th right>Payable</Th></>}
                   <SortTh label="Rating" field="rating" sp={sp} basePath="/procurement/vendors" right />
                 </tr>
@@ -62,6 +64,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Prom
                   return (
                     <Tr key={v.id}>
                       <Td><Link href={`/procurement/vendors/${v.id}`} className="font-medium text-slate-900 hover:text-brand-700">{v.name}</Link><p className="text-xs text-slate-500">{v.code}</p></Td>
+                      <Td className="max-w-[220px]">{vendorTrades(v.trades).map(tradeLabel).join(", ") || "—"}</Td>
                       <Td className="max-w-[200px] truncate">{v.categories ?? "—"}</Td>
                       <Td>{v.contactPerson ?? "—"}<p className="text-xs text-slate-500">{v.phone}</p></Td>
                       <Td right>{v._count.purchaseOrders}</Td>

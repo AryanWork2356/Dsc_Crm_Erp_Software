@@ -985,6 +985,8 @@ model Project {
   @@unique([companyId, code])
   @@index([companyId, status])
   @@index([companyId, clientId])
+  tradeVendors ProjectVendor[]
+  remarks      Remark[]
 }
 
 model ProjectMember {
@@ -1089,6 +1091,8 @@ model Vendor {
 
   @@unique([companyId, code])
   @@index([companyId, name])
+  projectTrades ProjectVendor[]
+  remarks       Remark[]
 }
 
 model Material {
@@ -2241,4 +2245,58 @@ model SiteLabour {
 
   @@unique([projectId, date, name])
   @@index([companyId, date])
+}
+
+/// DSC: the vendor chosen for each trade (electrical, gypsum, painting …) on a project. Directors choose; everyone on the project can see it.
+model ProjectVendor {
+  id        String   @id @default(cuid())
+  companyId String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trade     String // one of TRADES in lib/trades.ts
+  vendorId  String
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, trade])
+  @@index([companyId, vendorId])
+}
+
+enum RemarkStatus {
+  OPEN
+  RESOLVED
+}
+
+/// DSC: a remark from a coordinator ("the painter is not coming / not answering"), answered by the admins in a short chat.
+model Remark {
+  id          String       @id @default(cuid())
+  companyId   String
+  projectId   String?
+  project     Project?     @relation(fields: [projectId], references: [id])
+  vendorId    String?
+  vendor      Vendor?      @relation(fields: [vendorId], references: [id])
+  trade       String?
+  subject     String
+  status      RemarkStatus @default(OPEN)
+  createdById String
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  messages RemarkMessage[]
+
+  @@index([companyId, status])
+  @@index([companyId, createdById])
+}
+
+model RemarkMessage {
+  id        String   @id @default(cuid())
+  remarkId  String
+  remark    Remark   @relation(fields: [remarkId], references: [id], onDelete: Cascade)
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([remarkId, createdAt])
 }

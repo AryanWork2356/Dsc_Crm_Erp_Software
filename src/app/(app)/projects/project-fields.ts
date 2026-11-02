@@ -1,8 +1,11 @@
 import type { FieldDef } from "@/components/forms/form-dialog";
 import { SEGMENT_OPTS, type Opt } from "@/lib/enums";
 import { toDateInput } from "@/lib/utils";
+import { TRADES } from "@/lib/trades";
 
-export function projectFields(o: { clients: Opt[]; pms: Opt[]; designers: Opt[]; site: Opt[]; names?: Map<string, string>; showMoney: boolean; project?: Record<string, unknown> | null }): FieldDef[] {
+export function projectFields(o: { clients: Opt[]; pms: Opt[]; designers: Opt[]; site: Opt[]; names?: Map<string, string>; showMoney: boolean; project?: Record<string, unknown> | null;
+  /** directors only: the vendors to offer for each trade, and the ones already chosen on this project */
+  tradeVendors?: { options: Record<string, Opt[]>; chosen?: Record<string, string> } }): FieldDef[] {
   const p = o.project ?? null;
   const v = (k: string) => (p?.[k] ?? null) as string | number | null;
   // a person already on the project who is no longer in the list (changed role, or an old test login) is kept visible so saving does not drop them
@@ -23,6 +26,12 @@ export function projectFields(o: { clients: Opt[]; pms: Opt[]; designers: Opt[];
     ...(p ? [{ name: "dateChangeReason", label: "Why is the completion date changing?", type: "textarea" as const, full: true, hint: "Needed only if you change a date that was already set. It is recorded.", defaultValue: null }] : []),
     { name: "outstation", label: "Outstation site", type: "checkbox", defaultValue: !!p?.outstation, hint: "Outstation sites send their morning update earlier (9:30 instead of 10:00)" },
   ];
+  if (o.tradeVendors) {
+    TRADES.forEach((t, i) => f.push({
+      name: `vendor_${t.key}`, label: `${t.label} vendor`, type: "select", options: o.tradeVendors!.options[t.key] ?? [],
+      defaultValue: o.tradeVendors!.chosen?.[t.key] ?? null, ...(i === 0 ? { hint: "Choose the vendor for each trade on this project. Everyone on the project will see them." } : {}),
+    }));
+  }
   if (o.showMoney) {
     f.push(
       { name: "contractValue", label: "Contract value (₹, excl. GST)", type: "number", defaultValue: p ? Number(p.contractValue) : 0 },

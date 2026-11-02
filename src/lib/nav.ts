@@ -49,6 +49,7 @@ export const NAV: NavGroup[] = [
       { label: "All Projects", href: "/projects", perm: "projects:view" },
       { label: "Tasks", href: "/projects/tasks", perm: "tasks:view" },
       { label: "Daily Site Reports", href: "/site-reports", perm: "site_reports:view" },
+      { label: "Remarks", href: "/remarks", perm: "projects:view" },
       { label: "Extra Work", href: "/extra-work", perm: "extra_work:view" },
     ],
   },
@@ -182,12 +183,12 @@ export const NAV: NavGroup[] = [
 /**
  * Lean menus. Roles are allowed to open more screens than they need day to day, but their MENU shows only the jobs
  * they actually do, and each job in ONE place: notifications are the bell, the day's work is Today's Plan, the crew count is in the
- * morning update, and the directors' boards (Exceptions, Key numbers, Time Limits) are for directors; everyone else works from Actions. This hides menu entries only –
+ * morning update, and the directors' boards (Exceptions, Key numbers, Time Limits) are for directors; everyone else works from Actions. This hides menu entries only â€“
  * what a role may open is still decided by the permission matrix and row scope. Add a role here to simplify its menu;
  * leave it out to show everything its permissions allow.
  */
 const STAFF_COMMON = ["/actions", "/hr/leaves", "/hr/payslips", "/hr/announcements"];
-const SITE_CORE = ["/today", "/site-reports", "/inventory/waste", "/projects", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work", "/finance/expenses", ...STAFF_COMMON];
+const SITE_CORE = ["/today", "/remarks", "/site-reports", "/inventory/waste", "/projects", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work", "/finance/expenses", ...STAFF_COMMON];
 export const SIMPLE_MENU: Partial<Record<RoleKey, string[]>> = {
   SITE_SUPERVISOR: SITE_CORE,
   SITE_ENGINEER: [...SITE_CORE, "/crm/site-visits", "/sales/boq", "/inventory/stock", "/inventory/issues", "/support"],
@@ -198,9 +199,9 @@ export const SIMPLE_MENU: Partial<Record<RoleKey, string[]>> = {
   STORE: ["/dashboard", "/inventory/waste", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/inventory/issues", "/inventory/movements", "/inventory/locations", "/procurement/orders", "/procurement/deliveries", "/transfers", "/site-reports", "/projects", ...STAFF_COMMON],
   ACCOUNTS: ["/dashboard", "/actions", "/approvals", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/crm/clients", "/sales/quotations", "/projects", "/extra-work", "/closure", "/procurement/orders", "/procurement/vendors", "/documents", "/reports", ...STAFF_COMMON],
   HR: ["/dashboard", "/actions", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/workforce/attendance", "/workforce/workers", "/workforce/contractors", "/workforce/labour", "/closure", "/scorecards", "/documents"],
-  MANAGEMENT: ["/dashboard", "/ask", "/actions", "/exceptions", "/kpis", "/resources", "/time-limits", "/approvals", "/crm/leads", "/crm/clients", "/sales/quotations", "/sales/boq", "/sales/rates", "/projects", "/site-reports", "/transfers", "/extra-work", "/closure", "/scorecards", "/bills-to-certify", "/procurement/needs", "/procurement/orders", "/procurement/vendors", "/inventory/stock", "/workforce/attendance", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/documents", "/reports", "/settings/company", "/settings/time-limits", "/settings/attendance", "/settings/audit"],
-  ADMIN: ["/dashboard", "/ask", "/actions", "/exceptions", "/kpis", "/resources", "/approvals", "/projects", "/closure", "/hr/employees", "/hr/leaves", "/hr/announcements", "/hr/payslips", "/documents", "/support", "/reports", "/settings/team", "/settings/company", "/settings/roles", "/settings/import", "/settings/terms", "/settings/time-limits", "/settings/attendance", "/settings/automation", "/settings/audit"],
-  // OWNER: no list on purpose – the owner sees everything
+  MANAGEMENT: ["/dashboard", "/ask", "/remarks", "/actions", "/exceptions", "/kpis", "/resources", "/time-limits", "/approvals", "/crm/leads", "/crm/clients", "/sales/quotations", "/sales/boq", "/sales/rates", "/projects", "/site-reports", "/transfers", "/extra-work", "/closure", "/scorecards", "/bills-to-certify", "/procurement/needs", "/procurement/orders", "/procurement/vendors", "/inventory/stock", "/workforce/attendance", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/documents", "/reports", "/settings/company", "/settings/time-limits", "/settings/attendance", "/settings/audit"],
+  ADMIN: ["/dashboard", "/ask", "/remarks", "/actions", "/exceptions", "/kpis", "/resources", "/approvals", "/projects", "/closure", "/hr/employees", "/hr/leaves", "/hr/announcements", "/hr/payslips", "/documents", "/support", "/reports", "/settings/team", "/settings/company", "/settings/roles", "/settings/import", "/settings/terms", "/settings/time-limits", "/settings/attendance", "/settings/automation", "/settings/audit"],
+  // OWNER: no list on purpose â€“ the owner sees everything
 };
 
 export type MenuGroup = { label?: string; icon: string; href?: string; items: NavItem[] };

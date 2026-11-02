@@ -18,6 +18,7 @@ import { ListFilters } from "@/components/list/list-filters";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { createProject } from "./actions";
 import { projectFields } from "./project-fields";
+import { tradeVendorOptions } from "@/lib/project-vendors";
 
 export const metadata = { title: "Projects" };
 
@@ -57,7 +58,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
     db.project.count({ where: { AND: [scope, { status: { in: ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT"] }, startDate: { gte: today, lt: new Date(today.getTime() + 15 * 86400000) } }] } }),
   ]);
   const fin = showMoney ? await projectFinancials(c.companyId, rows.map((r) => r.id)) : new Map();
-  const [designers, site, everyone] = await Promise.all([userOptions(c.companyId, DESIGNER_ROLES), userOptions(c.companyId, SITE_ROLES), userOptions(c.companyId, undefined, true)]);
+  const [designers, site, everyone, vendorOpts] = await Promise.all([userOptions(c.companyId, DESIGNER_ROLES), userOptions(c.companyId, SITE_ROLES), userOptions(c.companyId, undefined, true), c.can("projects:create") ? tradeVendorOptions(c.companyId) : null]);
   const pmName = new Map(everyone.map((p) => [p.value, p.label])); // names for every project, even if the manager has since changed role
 
   return (
@@ -65,7 +66,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Projects"
         subtitle="Every job from approval to handover."
-        actions={c.can("projects:create") && <FormDialog title="New project" wide trigger={<Button>New project</Button>} fields={projectFields({ clients, pms, designers, site, names: pmName, showMoney })} action={createProject} successMessage="Project created" />}
+        actions={c.can("projects:create") && <FormDialog title="New project" wide trigger={<Button>New project</Button>} fields={projectFields({ clients, pms, designers, site, names: pmName, showMoney, ...(vendorOpts ? { tradeVendors: { options: vendorOpts } } : {}) })} action={createProject} successMessage="Project created" />}
       />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Active projects" value={kActive} href="/projects?status=active" />

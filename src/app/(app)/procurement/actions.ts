@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { BoqCategory, Priority, type Prisma } from "@prisma/client";
 import { putFile, deleteFile, validateUpload, UploadError } from "@/lib/storage";
+import { TRADES } from "@/lib/trades";
 import { db } from "@/lib/db";
 import { assertPerm, type Ctx } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -35,10 +36,18 @@ const vendorSchema = z.object({
   notes: zOptStr,
 });
 
+/** The trade tick boxes (trade_ELECTRICAL …) become the vendor's trades, written as "Electrical, Painting". */
+function withTrades(fd: FormData) {
+  const raw = formToObject(fd);
+  const ticked = TRADES.filter((t) => fd.has(`trade_${t.key}`));
+  if (!ticked.length && !TRADES.some((t) => fd.has(`trade_${t.key}`))) return raw; // an older form with a typed list
+  return { ...raw, trades: TRADES.filter((t) => fd.get(`trade_${t.key}`) === "on").map((t) => t.label).join(", ") || undefined };
+}
+
 export async function createVendor(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("vendors:create");
-    const d = vendorSchema.parse(formToObject(fd));
+    const d = vendorSchema.parse(withTrades(fd));
     if (!c.can("vendor_bills:view")) delete d.bankDetails; // bank details are finance-sensitive
     const dup = d.gstin ? await db.vendor.findFirst({ where: { companyId: c.companyId, gstin: d.gstin, deletedAt: null } }) : null;
     if (dup) throw new UserError(`A vendor with this GSTIN already exists (${dup.name}).`);
@@ -56,7 +65,7 @@ export async function createVendor(fd: FormData) {
 export async function updateVendor(id: string, fd: FormData) {
   return run(async () => {
     const c = await assertPerm("vendors:edit");
-    const d = vendorSchema.parse(formToObject(fd));
+    const d = vendorSchema.parse(withTrades(fd));
     const old = await db.vendor.findFirst({ where: { id, companyId: c.companyId, deletedAt: null } });
     if (!old) throw new UserError("Vendor not found.");
     if (d.gstin && d.gstin !== old.gstin) {

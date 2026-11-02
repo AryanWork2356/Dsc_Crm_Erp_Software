@@ -19,6 +19,8 @@ import { applyDateChange } from "@/lib/baseline";
 import { dueIn, raiseAction, resolveActionsFor } from "@/lib/action-items";
 import { readScheduleFile } from "@/lib/schedule-file";
 import { parseMaterialNeeds, parseSchedule, pastedRows, type Raw } from "@/lib/schedule-import";
+import { TRADES } from "@/lib/trades";
+import { DIRECTOR_ROLES } from "@/lib/permissions";
 
 async function getProject(c: Ctx, id: string, tx: Tx | typeof db = db) {
   const p = await tx.project.findFirst({ where: { id, ...projectScope(c) } });
@@ -55,6 +57,23 @@ async function syncMembers(tx: Tx, projectId: string, d: z.infer<typeof projectS
   }
 }
 
+/**
+ * The vendor chosen for each trade (form fields vendor_ELECTRICAL …). Only directors choose them; a blank choice removes the trade's vendor.
+ * Forms without these fields (an admin's edit) leave the project's vendors as they are.
+ */
+async function syncTradeVendors(tx: Tx, c: { companyId: string; role: string }, projectId: string, fd: FormData) {
+  if (!DIRECTOR_ROLES.includes(c.role as never)) return;
+  if (!TRADES.some((t) => fd.has(`vendor_${t.key}`))) return;
+  const picked = TRADES.map((t) => ({ trade: t.key, vendorId: String(fd.get(`vendor_${t.key}`) ?? "").trim() }));
+  const ids = picked.map((p) => p.vendorId).filter(Boolean);
+  const ok = new Set((await tx.vendor.findMany({ where: { id: { in: ids }, companyId: c.companyId, deletedAt: null }, select: { id: true } })).map((v) => v.id));
+  for (const p of picked) {
+    if (p.vendorId && !ok.has(p.vendorId)) throw new UserError("A chosen vendor was not found. Reload the page and choose again.");
+    if (p.vendorId) await tx.projectVendor.upsert({ where: { projectId_trade: { projectId, trade: p.trade } }, update: { vendorId: p.vendorId }, create: { companyId: c.companyId, projectId, trade: p.trade, vendorId: p.vendorId } });
+    else await tx.projectVendor.deleteMany({ where: { projectId, trade: p.trade } });
+  }
+}
+
 export async function createProject(fd: FormData) {
   return run(async () => {
     const c = await assertPerm("projects:create");
@@ -67,6 +86,7 @@ export async function createProject(fd: FormData) {
       const { dateChangeReason: _why, ...rest } = d;
       const x = await tx.project.create({ data: { ...rest, baselineEndDate: d.plannedEndDate ?? null, companyId: c.companyId, code, status: "PLANNING" } });
       await syncMembers(tx, x.id, d);
+      await syncTradeVendors(tx, c, x.id, fd);
       await audit(c, { action: "CREATE", entityType: "Project", entityId: x.id, summary: `Created project ${code} – ${d.name}`, newValue: d }, tx);
       await notifyUsers([d.projectManagerId, d.siteEngineerId, d.supervisorId, d.designerId].filter((u): u is string => !!u && u !== c.userId), { companyId: c.companyId, type: "GENERAL", title: `You're on project ${d.name}`, link: `/projects/${x.id}` }, tx);
       return x;
@@ -88,6 +108,7 @@ export async function updateProject(id: string, fd: FormData) {
       const end = await applyDateChange(tx, c, { entityType: "Project", entityId: id, projectId: id, field: "plannedEndDate", label: "Planned completion", oldDate: old.plannedEndDate, newDate: d.plannedEndDate ?? old.plannedEndDate, baseline: old.baselineEndDate, reason: d.dateChangeReason });
       await tx.project.update({ where: { id }, data: { name: d.name, clientId: d.clientId, segment: d.segment, siteAddress: d.siteAddress, startDate: d.startDate, plannedEndDate: d.plannedEndDate, baselineEndDate: end.baseline, projectManagerId: d.projectManagerId ?? null, designerId: d.designerId ?? null, siteEngineerId: d.siteEngineerId ?? old.siteEngineerId ?? null, supervisorId: d.supervisorId ?? null, outstation: d.outstation, ...money } });
       await syncMembers(tx, id, d);
+      await syncTradeVendors(tx, c, id, fd);
       const changed = "contractValue" in money && num(old.contractValue) !== d.contractValue;
       await audit(c, { action: "UPDATE", entityType: "Project", entityId: id, summary: changed ? `${c.name} changed contract value of ${old.code} from ₹${num(old.contractValue).toLocaleString("en-IN")} to ₹${d.contractValue.toLocaleString("en-IN")}` : `Updated project ${old.code}`, oldValue: { contractValue: num(old.contractValue), budget: num(old.budget) }, newValue: money }, tx);
       const newPeople = [d.projectManagerId, d.siteEngineerId, d.supervisorId, d.designerId].filter((u): u is string => !!u && ![old.projectManagerId, old.siteEngineerId, old.supervisorId, old.designerId].includes(u) && u !== c.userId);

@@ -1,7 +1,9 @@
 import type { FieldDef } from "@/components/forms/form-dialog";
+import { TRADES, vendorTrades } from "@/lib/trades";
 
 export function vendorFields(v: Record<string, unknown> | null = null, showBank = false): FieldDef[] {
   const d = (k: string) => (v?.[k] ?? null) as string | number | null;
+  const has = vendorTrades(v?.trades as string | null);
   return [
     { name: "name", label: "Vendor / company name", required: true, full: true, defaultValue: d("name") },
     { name: "contactPerson", label: "Contact person", defaultValue: d("contactPerson") },
@@ -12,7 +14,8 @@ export function vendorFields(v: Record<string, unknown> | null = null, showBank 
     { name: "pan", label: "PAN", defaultValue: d("pan") },
     { name: "categories", label: "What they supply", placeholder: "e.g. Plywood, laminates, hardware", defaultValue: d("categories") },
     { name: "tier", label: "First choice, backup or emergency?", type: "select", options: [{ value: "PRIMARY", label: "First choice" }, { value: "BACKUP", label: "Backup" }, { value: "EMERGENCY", label: "Emergency only" }], defaultValue: (d("tier") as string) ?? "PRIMARY", hint: "Used when a labour or trade vendor is short of people" },
-    { name: "trades", label: "Trades they provide", placeholder: "e.g. Carpenter, Electrician", defaultValue: d("trades") },
+    // one tick box per DSC trade: a project then offers this vendor for those trades
+    ...TRADES.map((t): FieldDef => ({ name: `trade_${t.key}`, label: t.label, type: "checkbox", defaultValue: has.includes(t.key), hint: t.key === TRADES[0].key ? "Tick every trade this vendor does" : undefined })),
     { name: "crewSize", label: "People they can field at once", type: "number", step: "1", defaultValue: d("crewSize"), hint: "Lets the app warn when one vendor is promised to two sites at once" },
     { name: "rating", label: "Quality rating (1–5)", type: "number", step: "1", defaultValue: d("rating") },
     { name: "address", label: "Address", type: "textarea", defaultValue: d("address") },
