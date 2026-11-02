@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
-import { Mic, Square } from "lucide-react";
+import { Loader2, Mic, Sparkles, Square } from "lucide-react";
+import { fixSpelling } from "@/app/(app)/ai-actions";
 import { langFromCookie } from "@/lib/lang";
 import { cn } from "@/lib/utils";
 
@@ -33,11 +34,15 @@ export function speakLang(): string {
 /** Adds text to a box the same way typing does, so forms that keep their own copy of the text see it too. */
 export function appendText(el: HTMLTextAreaElement | HTMLInputElement, text: string) {
   const cur = el.value;
-  const next = cur && !/\s$/.test(cur) ? `${cur} ${text}` : `${cur}${text}`;
+  setText(el, cur && !/\s$/.test(cur) ? `${cur} ${text}` : `${cur}${text}`);
+}
+export function setText(el: HTMLTextAreaElement | HTMLInputElement, next: string) {
   const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
   setter ? setter.call(el, next) : (el.value = next);
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
+/** The app layout marks the page when the AI helper is switched on (an element with id "ai-on"). */
+const aiIsOn = () => typeof document !== "undefined" && !!document.getElementById("ai-on");
 
 /**
  * Microphone on a notes box: speak, and the words are written into the box (the phone's own speech-to-text, free, nothing is
@@ -49,6 +54,8 @@ export function SpeakButton({ className }: { className?: string }) {
   const [on, setOn] = React.useState(false);
   const [lang, setLang] = React.useState("en-IN");
   const [err, setErr] = React.useState<string | null>(null);
+  const [ai, setAi] = React.useState(false);
+  const [fixing, setFixing] = React.useState(false);
   const rec = React.useRef<Recognition | null>(null);
   const box = React.useRef<HTMLSpanElement>(null);
 
@@ -56,9 +63,11 @@ export function SpeakButton({ className }: { className?: string }) {
     const w = window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor };
     setOk(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
     setLang(speakLang());
+    setAi(aiIsOn());
     return () => rec.current?.stop();
   }, []);
-  if (!ok) return null;
+  const isNotes = () => target()?.tagName === "TEXTAREA";
+  if (!ok && !ai) return null;
 
   const target = () => box.current?.parentElement?.querySelector("textarea, input:not([type=hidden])") as HTMLTextAreaElement | HTMLInputElement | null;
 
@@ -91,6 +100,17 @@ export function SpeakButton({ className }: { className?: string }) {
     try { r.start(); setOn(true); } catch { setOn(false); }
   }
 
+  /** ✨ on a notes box: spelling fixed by the AI helper, same language; the person can still change it. */
+  async function fix() {
+    const el = target();
+    if (!el || !el.value.trim()) return setErr("Write something first.");
+    setErr(null); setFixing(true);
+    const r = await fixSpelling(el.value);
+    setFixing(false);
+    if (r.ok) setText(el, (r.data as { text: string }).text);
+    else setErr(r.error);
+  }
+
   function nextLang() {
     const i = SPEAK_LANGS.findIndex((l) => l.code === lang);
     const n = SPEAK_LANGS[(i + 1) % SPEAK_LANGS.length].code;
@@ -102,11 +122,18 @@ export function SpeakButton({ className }: { className?: string }) {
   return (
     <span ref={box} className={cn("notranslate absolute bottom-1.5 right-1.5 flex items-center gap-1", className)} translate="no">
       {err && <span className="max-w-[12rem] rounded bg-white/95 px-1.5 py-0.5 text-[11px] leading-tight text-red-600 shadow-sm">{err}</span>}
+      {ai && isNotes() && (
+        <button type="button" onClick={() => void fix()} disabled={fixing} title="Fix spelling" aria-label="Fix spelling" className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-brand-700 hover:bg-slate-50">
+          {fixing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+        </button>
+      )}
+      {ok && <>
       <button type="button" onClick={nextLang} title={`Writes in ${cur.label}. Tap to change.`} aria-label={`Speech language: ${cur.label}. Tap to change.`} className="h-7 min-w-7 rounded-md border border-slate-200 bg-white px-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{cur.short}</button>
       <button type="button" onClick={() => (on ? rec.current?.stop() : void start())} title={on ? "Stop" : "Speak instead of typing"} aria-label={on ? "Stop listening" : "Speak instead of typing"}
         className={cn("flex h-7 w-7 items-center justify-center rounded-md text-white", on ? "animate-pulse bg-red-600" : "bg-brand-700 hover:bg-brand-800")}>
         {on ? <Square className="h-3.5 w-3.5" /> : <Mic className="h-4 w-4" />}
       </button>
+      </>}
     </span>
   );
 }

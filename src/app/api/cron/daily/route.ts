@@ -9,6 +9,7 @@ import { syncDeliveryRisks } from "@/lib/delivery-risk";
 import { syncMaterialNeeds } from "@/lib/material-needs";
 import { sendMorningPlans } from "@/lib/morning-plan";
 import { runWeeklyDigest } from "@/lib/director-reports";
+import { runEveningSummary } from "@/lib/site-summary";
 
 /**
  * Scheduler hook – called by Vercel Cron (see vercel.json): at 7:00 IST for everything (the morning message, reminders, checks),
@@ -23,8 +24,13 @@ async function handle(req: NextRequest) {
   if (!ok) return new Response("Unauthorized", { status: 401 });
   const companies = await db.company.findMany({ select: { id: true } });
   const results: Record<string, unknown> = {};
-  if (req.nextUrl.searchParams.get("slot")?.endsWith("-reports")) {
-    for (const c of companies) results[c.id] = { siteReportReminders: (await runReportReminders(c.id)).sent };
+  const slot = req.nextUrl.searchParams.get("slot");
+  if (slot?.endsWith("-reports")) {
+    for (const c of companies) {
+      results[c.id] = { siteReportReminders: (await runReportReminders(c.id)).sent };
+      // evening: the AI summary of all sites for the directors (only if the AI helper is on; a failure never stops the reminders)
+      if (slot === "evening-reports") results[c.id] = { ...(results[c.id] as object), eveningSummary: (await runEveningSummary(c.id).catch(() => ({ sent: false }))).sent };
+    }
     return Response.json({ ok: true, results });
   }
   for (const c of companies) results[c.id] = { morningPlans: (await sendMorningPlans(c.id)).sent, ...(await runDailyAutomations(c.id)), siteReportReminders: (await runReportReminders(c.id)).sent, crewShortages: (await syncResourceShortages(c.id)).raised, lateDeliveries: (await syncDeliveryRisks(c.id)).raised, materialNeeds: (await syncMaterialNeeds(c.id)).raised, overdueItems: (await runTimeLimitReminders(c.id)).overdue, weeklyDigestSent: (await runWeeklyDigest(c.id)).sent };

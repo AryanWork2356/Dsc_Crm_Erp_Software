@@ -7,6 +7,8 @@ import { MATERIAL_STATUS_LABEL } from "@/lib/site-reports";
 import { PageHeader, DetailGrid } from "@/components/ui/page";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ShowInEnglish } from "@/components/forms/show-in-english";
+import { aiOn } from "@/lib/ai";
 
 export const metadata = { title: "Site report" };
 
@@ -39,6 +41,7 @@ export default async function SiteReportPage({ params }: { params: Promise<{ id:
             <p className="whitespace-pre-wrap text-base text-slate-900">{(morning ? r.planNext : r.workDone) || "—"}</p>
             {!morning && r.planNext && <div><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Plan for tomorrow</p><p className="whitespace-pre-wrap">{r.planNext}</p></div>}
             {r.issues && <div className="rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800">Problem reported</p><p className="whitespace-pre-wrap text-amber-900">{r.issues}</p></div>}
+            {aiOn() && <ShowInEnglish items={[{ label: morning ? "Today's plan" : "Work done", text: morning ? r.planNext : r.workDone }, ...(!morning ? [{ label: "Plan for tomorrow", text: r.planNext }] : []), { label: "Problem reported", text: r.issues }]} />}
           </CardBody>
         </Card>
         <Card>
