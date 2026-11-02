@@ -44,12 +44,12 @@ describe("people lists on the project form", () => {
     expect((await userOptions(company.id, undefined, true)).map((o) => o.value)).toContain(t.id);
   });
 
-  it("the form has ONE site supervisor / engineer box, and keeps someone already on the project in view", () => {
+  it("the form has ONE project coordinator box (DSC has no site engineers), and keeps someone already on the project in view", () => {
     const f = projectFields({ clients: [], pms: [], designers: [], site: [{ value: "u1", label: "Anurag" }], names: new Map([["old", "Old Manager"]]), showMoney: false, project: { projectManagerId: "old", supervisorId: "u1" } });
     const names = f.map((x) => x.name);
     expect(names).toContain("supervisorId");
     expect(names).not.toContain("siteEngineerId");
-    expect(f.find((x) => x.name === "supervisorId")?.label).toMatch(/supervisor \/ engineer/);
+    expect(f.find((x) => x.name === "supervisorId")?.label).toBe("Project coordinator");
     const pm = f.find((x) => x.name === "projectManagerId");
     expect(pm?.options?.some((o) => o.value === "old" && /Old Manager/.test(o.label))).toBe(true);
   });

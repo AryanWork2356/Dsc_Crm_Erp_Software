@@ -2,12 +2,14 @@
 import * as React from "react";
 import { Camera, CheckCircle2, Loader2, ScanText } from "lucide-react";
 import { compressImage } from "@/lib/image-compress";
+import { photoProblem } from "@/lib/photo-quality";
+import { aiIsOn } from "@/lib/ai-flag";
 import { scanBill } from "@/app/(app)/finance/scan-actions";
 
 const FLAG = ["ring-2", "ring-amber-400", "bg-amber-50"];
 
 /**
- * "Bill photo or PDF" box at the top of the Expense and Vendor bill forms. The file is saved with the record when the form is saved.
+ * "Bill photo, PDF or Excel" box at the top of the Expense and Vendor bill forms. The file is saved with the record when the form is saved.
  * When reading is switched on, choosing the file also fills the boxes below it; the person checks them, and the boxes the reader was
  * unsure about are shown in amber. Nothing is saved until the person presses Save.
  */
@@ -16,6 +18,7 @@ export function BillAttach({ kind, canRead, formRef }: { kind: "expense" | "vend
   const [name, setName] = React.useState<string | null>(null);
   const [state, setState] = React.useState<"idle" | "reading" | "done" | "failed">("idle");
   const [msg, setMsg] = React.useState<string | null>(null);
+  const [warn, setWarn] = React.useState<string | null>(null);
 
   function field(n: string) { return formRef.current?.elements.namedItem(n) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null; }
   function clearFlags() { formRef.current?.querySelectorAll(".ring-amber-400").forEach((e) => e.classList.remove(...FLAG)); }
@@ -54,6 +57,7 @@ export function BillAttach({ kind, canRead, formRef }: { kind: "expense" | "vend
     const f = e.target.files?.[0];
     if (!f) { setName(null); setState("idle"); return; }
     setName(f.name);
+    setWarn(aiIsOn() ? await photoProblem(f) : null);
     const small = await compressImage(f); // phone photos shrink to about 300 KB: faster upload, cheaper reading
     if (small !== f && input.current) { const dt = new DataTransfer(); dt.items.add(small); input.current.files = dt.files; }
     if (canRead) await read(); else setState("idle");
@@ -69,9 +73,10 @@ export function BillAttach({ kind, canRead, formRef }: { kind: "expense" | "vend
             {state === "reading" ? "Reading the bill… about 10 seconds" : canRead ? "Take a photo or choose the bill. The boxes below fill in by themselves; you check them." : "Take a photo or choose the bill. It is saved with this record."}
           </span>
         </span>
-        <input ref={input} name="billFile" type="file" accept="image/*,application/pdf" className="sr-only" onChange={(e) => void chosen(e)} />
+        <input ref={input} name="billFile" type="file" accept="image/*,application/pdf,.xlsx,.csv" className="sr-only" onChange={(e) => void chosen(e)} />
         <span className="shrink-0 rounded-lg bg-brand-800 px-3 py-1.5 text-xs font-semibold text-white">{name ? "Change" : "Add"}</span>
       </label>
+      {warn && <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">{warn}</p>}
       {state === "done" && <p className="mt-2 flex items-start gap-2 text-sm text-emerald-800"><ScanText className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Filled in from the bill. Please check every box before saving.</b> Boxes in amber were unclear or could not be read.{msg ? ` ${msg}` : ""}</span></p>}
       {state === "failed" && <p className="mt-2 text-sm font-medium text-amber-700">{msg} <span className="font-normal text-slate-600">You can still type the details and save: the photo is kept with the bill.</span></p>}
       {canRead && name && state !== "reading" && <button type="button" onClick={() => void read()} className="mt-2 text-xs font-semibold text-brand-700 hover:underline">Read the bill again</button>}

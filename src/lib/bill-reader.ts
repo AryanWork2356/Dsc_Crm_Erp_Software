@@ -1,6 +1,8 @@
 import "server-only";
 import { z } from "zod";
-import { AiError, aiJson, aiModel, aiOn, aiProvider } from "./ai";
+import { AiError, aiActive, aiJson, aiModel, aiOn, aiProvider } from "./ai";
+import { db } from "./db";
+import { isSheetMime, sheetToText } from "./sheet-text";
 
 /**
  * Reads a photo or PDF of a bill (printed or handwritten) and returns what is on it, so the form can be filled in for a person to CHECK.
@@ -9,7 +11,7 @@ import { AiError, aiJson, aiModel, aiOn, aiProvider } from "./ai";
  * Switched on when an AI key is set (Gemini or Claude, see lib/ai.ts) or the Google text reader's credentials are set.
  * The AI reader (careful model) is used first; BILL_ENGINE="google" forces the plain Google text reader.
  */
-export const billReadingOn = () => aiOn() || googleReadingOn();
+export const billReadingOn = async (companyId: string) => (await aiActive(companyId)) || (googleReadingOn() && (await db.companySettings.findUnique({ where: { companyId }, select: { aiEnabled: true } }))?.aiEnabled !== false);
 export const billEngine = (): "google" | "ai" => (process.env.BILL_ENGINE === "google" && googleReadingOn() ? "google" : aiOn() ? "ai" : "google");
 export const billModel = () => (billEngine() === "ai" ? `${aiProvider()} ${aiModel("careful")}` : "Google text reader");
 
@@ -104,7 +106,8 @@ export function cleanBill(r: RawBill, now = new Date()): CleanBill {
 export type BillResult = CleanBill & { text?: string };
 
 async function readBillAi(bytes: Buffer, mime: string): Promise<CleanBill> {
-  const part = mime === "application/pdf" ? { pdf: bytes } : { image: bytes, mime };
+  // an Excel or CSV bill is turned into text first; photos and PDFs go as they are
+  const part = isSheetMime(mime) ? { text: `The bill is a spreadsheet. Its rows, cell by cell:\n${await sheetToText(bytes, mime)}` } : mime === "application/pdf" ? { pdf: bytes } : { image: bytes, mime };
   let parsed: unknown;
   try {
     parsed = await aiJson({ system: SYSTEM, parts: [part, { text: "Read this bill." }], schema: SCHEMA, quality: "careful" });
@@ -118,6 +121,7 @@ async function readBillAi(bytes: Buffer, mime: string): Promise<CleanBill> {
 }
 
 export async function readBill(bytes: Buffer, mime: string): Promise<BillResult> {
+  if (isSheetMime(mime) && billEngine() === "google") throw new BillReadError("Reading Excel bills needs the AI helper. Please type the details; the file is still saved with the bill.");
   if (billEngine() === "google") {
     const { text, confidence } = await readTextGoogle(bytes, mime);
     return { ...cleanBill(parseBillText(text, confidence)), text };

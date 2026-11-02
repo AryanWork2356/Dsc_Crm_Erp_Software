@@ -8,7 +8,8 @@ import { PageHeader, DetailGrid } from "@/components/ui/page";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShowInEnglish } from "@/components/forms/show-in-english";
-import { aiOn } from "@/lib/ai";
+import { aiActive } from "@/lib/ai";
+import { VoicePlayer } from "@/components/forms/voice-player";
 
 export const metadata = { title: "Site report" };
 
@@ -25,6 +26,7 @@ export default async function SiteReportPage({ params }: { params: Promise<{ id:
   const photos = files.filter((f) => f.mimeType.startsWith("image/"));
   const voices = files.filter((f) => f.mimeType.startsWith("audio/"));
   const morning = r.kind === "MORNING";
+  const ai = await aiActive(c.companyId);
 
   return (
     <div>
@@ -41,7 +43,7 @@ export default async function SiteReportPage({ params }: { params: Promise<{ id:
             <p className="whitespace-pre-wrap text-base text-slate-900">{(morning ? r.planNext : r.workDone) || "—"}</p>
             {!morning && r.planNext && <div><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Plan for tomorrow</p><p className="whitespace-pre-wrap">{r.planNext}</p></div>}
             {r.issues && <div className="rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200"><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800">Problem reported</p><p className="whitespace-pre-wrap text-amber-900">{r.issues}</p></div>}
-            {aiOn() && <ShowInEnglish items={[{ label: morning ? "Today's plan" : "Work done", text: morning ? r.planNext : r.workDone }, ...(!morning ? [{ label: "Plan for tomorrow", text: r.planNext }] : []), { label: "Problem reported", text: r.issues }]} />}
+            {ai && <ShowInEnglish items={[{ label: morning ? "Today's plan" : "Work done", text: morning ? r.planNext : r.workDone }, ...(!morning ? [{ label: "Plan for tomorrow", text: r.planNext }] : []), { label: "Problem reported", text: r.issues }]} />}
           </CardBody>
         </Card>
         <Card>
@@ -79,7 +81,7 @@ export default async function SiteReportPage({ params }: { params: Promise<{ id:
       {voices.length > 0 && (
         <Card className="mt-6">
           <CardHeader><CardTitle>Voice note{voices.length > 1 ? "s" : ""}</CardTitle></CardHeader>
-          <CardBody className="space-y-2">{voices.map((v) => <audio key={v.id} controls preload="none" src={`/documents/${v.id}/download?inline=1`} className="w-full" />)}</CardBody>
+          <CardBody className="space-y-4">{voices.map((v) => <VoicePlayer key={v.id} id={v.id} ai={ai} />)}</CardBody>
         </Card>
       )}
 

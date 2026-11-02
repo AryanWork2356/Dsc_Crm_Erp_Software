@@ -365,6 +365,7 @@ model CompanySettings {
   notificationPrefs          Json?
   whatsappConfig             Json?
   updatedAt                  DateTime @updatedAt
+  aiEnabled                  Boolean  @default(true) // the master switch for every AI feature (Aryan Shetty and Rupesh Sharma only)
 }
 
 model Sequence {
@@ -981,12 +982,12 @@ model Project {
   manpowerLogs     ManpowerLog[]
   feasibility      Feasibility?
   materialNeeds    MaterialNeed[]
+  tradeVendors     ProjectVendor[]
+  remarks          Remark[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
   @@index([companyId, clientId])
-  tradeVendors ProjectVendor[]
-  remarks      Remark[]
 }
 
 model ProjectMember {
@@ -1088,11 +1089,11 @@ model Vendor {
   bills          VendorBill[]
   payments       VendorPayment[]
   materials      Material[]
+  projectTrades  ProjectVendor[]
+  remarks        Remark[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
-  projectTrades ProjectVendor[]
-  remarks       Remark[]
 }
 
 model Material {
@@ -2230,18 +2231,18 @@ model AppSecret {
 /// Site attendance: each worker on a site that day, the work they did, coming and going time. Filled by the project coordinator
 /// in the morning update (who came, on which work) and the evening report (going time).
 model SiteLabour {
-  id          String   @id @default(cuid())
-  companyId   String
-  projectId   String
-  date        DateTime @db.Date
-  name        String
-  work        String? // the job of the day (from the schedule) or a few words
-  taskId      String?
-  inTime      String? // "09:15", IST
-  outTime     String?
-  markedById  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  companyId  String
+  projectId  String
+  date       DateTime @db.Date
+  name       String
+  work       String? // the job of the day (from the schedule) or a few words
+  taskId     String?
+  inTime     String? // "09:15", IST
+  outTime    String?
+  markedById String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([projectId, date, name])
   @@index([companyId, date])

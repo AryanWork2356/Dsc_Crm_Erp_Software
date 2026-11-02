@@ -50,7 +50,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader title="Vendor bills" subtitle="Bills received from vendors and payments made against them." actions={c.can("vendor_bills:create") && (
-        <FormDialog title="Record vendor bill" wide bill={{ kind: "vendor_bill", read: billReadingOn() }} trigger={<Button>Add bill</Button>} fields={[
+        <FormDialog title="Record vendor bill" wide bill={{ kind: "vendor_bill", read: await billReadingOn(c.companyId) }} trigger={<Button>Add bill</Button>} fields={[
           { name: "vendorId", label: "Vendor", type: "select", required: true, options: vendors },
           { name: "number", label: "Vendor's bill number", required: true },
           { name: "poId", label: "Against purchase order", type: "select", options: pos.map((p) => ({ value: p.id, label: `${p.number} · ${p.vendor.name}` })), hint: "Optional. Material bills should be linked to their PO" },

@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { ReceiptForm } from "../receipt-form";
 import { createReceipt } from "../../actions";
+import { aiActive } from "@/lib/ai";
 
 export const metadata = { title: "Receive Material" };
 
@@ -41,6 +42,7 @@ export default async function NewReceipt({ searchParams }: { searchParams: Promi
     <>
       <PageHeader back={{ href: `/procurement/orders/${poId}`, label: po.number }} title={`Receive material – ${po.number}`} subtitle={`${po.vendor.name}. Accepted quantities are added to stock; damaged and rejected ones are not.`} />
       <ReceiptForm
+        ai={await aiActive(c.companyId)}
         poId={po.id} poNumber={po.number} today={toDateInput(new Date())} action={createReceipt}
         locations={locations.map((l) => ({ value: l.id, label: `${l.name}${l.type === "SITE" ? " (site)" : ""}` }))}
         defaultLocation={projectSite?.id ?? locations.find((l) => l.type === "WAREHOUSE")?.id}

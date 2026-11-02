@@ -47,7 +47,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Expenses" subtitle="Site, travel, petty cash and other spending. Larger amounts need approval." actions={c.can("expenses:create") && (
-        <FormDialog title="Log an expense" wide bill={{ kind: "expense", read: billReadingOn() }} trigger={<Button>Add expense</Button>} fields={[
+        <FormDialog title="Log an expense" wide bill={{ kind: "expense", read: await billReadingOn(c.companyId) }} trigger={<Button>Add expense</Button>} fields={[
           { name: "description", label: "What was it for?", required: true, full: true },
           { name: "amount", label: "Amount (₹)", type: "number", required: true },
           { name: "date", label: "Date", type: "date", required: true, defaultValue: toDateInput(new Date()) },

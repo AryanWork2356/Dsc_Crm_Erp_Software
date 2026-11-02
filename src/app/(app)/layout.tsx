@@ -7,7 +7,7 @@ import { homeFor } from "@/lib/home";
 import { Sidebar, type SidebarGroup } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { logout } from "../login/actions";
-import { aiOn } from "@/lib/ai";
+import { aiActive, canControlAi } from "@/lib/ai";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const c = await requireCtx();
@@ -21,11 +21,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   // "Ask the app" appears only once the AI helper is switched on (an AI key is set)
-  const groups: SidebarGroup[] = menuFor(c.role, c.can).map((g) => (aiOn() ? g : { ...g, items: g.items.filter((i) => i.href !== "/ask") }));
+  const ai = await aiActive(c.companyId);
+  const groups: SidebarGroup[] = menuFor(c.role, c.can).map((g) => ({ ...g, items: g.items.filter((i) => (i.href !== "/ask" || ai) && (i.href !== "/settings/ai" || canControlAi(c))) }));
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {aiOn() && <span id="ai-on" hidden />}{/* tells the notes boxes to show the ✨ spelling button */}
+      {ai && <span id="ai-on" hidden />}{/* tells the notes boxes to show the ✨ spelling button */}
       <Sidebar groups={groups} companyName={company?.legalName ?? company?.company.name ?? "DSC Interior"} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar name={c.name} roleLabel={ROLE_LABELS[c.role]} unread={unread} logout={logout} />

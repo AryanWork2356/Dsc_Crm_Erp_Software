@@ -3,7 +3,7 @@ import { z } from "zod";
 import { assertPerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { run, UserError } from "@/lib/action";
-import { AiError, aiJson, aiOn } from "@/lib/ai";
+import { AiError, aiActive, aiJson } from "@/lib/ai";
 import { UNIT_OPTS } from "@/lib/enums";
 
 const SCHEMA = {
@@ -45,7 +45,7 @@ const today = () => new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 
 export async function materialsFromSpeech(said: string) {
   return run(async () => {
     const c = await assertPerm("purchase_requests:create");
-    if (!aiOn()) throw new UserError("The AI helper is not switched on yet. Please fill the items by hand.");
+    if (!(await aiActive(c.companyId))) throw new UserError("The AI helper is not switched on. Please fill the items by hand.");
     const text = said.trim().slice(0, 2000);
     if (text.length < 3) throw new UserError("Say or type what material is needed first.");
     const catalog = await db.material.findMany({ where: { companyId: c.companyId, deletedAt: null }, select: { id: true, name: true, unit: true }, orderBy: { name: "asc" }, take: 1500 });

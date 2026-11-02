@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { getCtx } from "@/lib/auth";
 import { run, UserError } from "@/lib/action";
-import { AiError, aiOn } from "@/lib/ai";
+import { AiError, aiActive } from "@/lib/ai";
 import { ASK_ROLES, askApp } from "@/lib/ask";
 
 const turns = z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(6000) })).min(1).max(30);
@@ -12,7 +12,7 @@ export async function ask(history: unknown) {
   return run(async () => {
     const c = await getCtx();
     if (!c || !ASK_ROLES.includes(c.role)) throw new UserError("Ask the app is for directors and admins.");
-    if (!aiOn()) throw new UserError("The AI helper is not switched on yet.");
+    if (!(await aiActive(c.companyId))) throw new UserError("The AI helper is not switched on.");
     const h = turns.safeParse(history);
     if (!h.success || h.data.at(-1)?.role !== "user" || !h.data.at(-1)?.text.trim()) throw new UserError("Type or say a question first.");
     try {

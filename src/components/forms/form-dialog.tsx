@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import type { ActionResult } from "@/lib/action";
 import { readGstin } from "@/lib/gst";
 import { BillAttach } from "./bill-attach";
+import { PaperReader } from "./paper-reader";
 
 export type FieldDef = {
   name: string;
@@ -35,12 +36,14 @@ type Props = {
   gstHelper?: boolean;
   /** Adds the 'Bill photo or PDF' box (kept with the saved record). `read` also fills the boxes from the bill; a person still checks and saves. */
   bill?: { kind: "expense" | "vendor_bill"; read: boolean };
+  /** AI reader for a file box of this form (a client PO, a BOQ …): `action` gets the chosen file and returns the values for the other boxes. Pass only while the AI switch is ON. */
+  reader?: { fileField: string; action: (fd: FormData) => Promise<ActionResult>; label?: string };
   /** Called after a successful save with returned data (e.g. to navigate to the new record) */
   onSuccess?: (r: Extract<ActionResult, { ok: true }>) => void;
 };
 
 /** Config-driven create/edit dialog. Every field maps 1:1 to a server-side zod schema. */
-export function FormDialog({ title, description, trigger, fields, action, submitLabel = "Save", successMessage, wide, gstHelper, bill, onSuccess }: Props) {
+export function FormDialog({ title, description, trigger, fields, action, submitLabel = "Save", successMessage, wide, gstHelper, bill, reader, onSuccess }: Props) {
   const formRef = React.useRef<HTMLFormElement>(null);
   const [open, setOpen] = React.useState(false);
   const [gstNote, setGstNote] = React.useState<{ ok: boolean; text: string } | null>(null);
@@ -130,9 +133,12 @@ export function FormDialog({ title, description, trigger, fields, action, submit
                 );
               }
               return (
-                <Field key={f.name} label={f.label} error={err} hint={f.hint} required={f.required} className={f.full || f.type === "textarea" ? "sm:col-span-2" : undefined}>
-                  {control}
-                </Field>
+                <React.Fragment key={f.name}>
+                  <Field label={f.label} error={err} hint={f.hint} required={f.required} className={f.full || f.type === "textarea" ? "sm:col-span-2" : undefined}>
+                    {control}
+                  </Field>
+                  {reader && reader.fileField === f.name && <PaperReader formRef={formRef} fileField={f.name} action={reader.action} label={reader.label} />}
+                </React.Fragment>
               );
             })}
           </div>

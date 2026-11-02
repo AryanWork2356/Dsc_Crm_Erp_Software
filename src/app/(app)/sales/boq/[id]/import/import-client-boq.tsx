@@ -8,13 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { humanize } from "@/lib/utils";
 import { importClientBoq, previewClientBoq } from "../../actions";
+import { readBoqPaper } from "../../ai-actions";
+import { aiIsOn } from "@/lib/ai-flag";
 
 type Sheet = {
   name: string; measurement: boolean; hidden: boolean; headerRow: number; columns: Record<string, string>; count: number; skipped: number; sections: string[]; warnings: string[]; flagged: number; withRates: number; repeats: string | null;
   categories: Record<string, number>; sample: { row: number; sl: string; category: string; item: string; unit: string; quantity: number; rate: number | null; flags: string[] }[];
 };
 
-export function ImportClientBoq({ boqId, hasItems, canKeepRates }: { boqId: string; hasItems: boolean; canKeepRates: boolean }) {
+export function ImportClientBoq({ boqId, hasItems, canKeepRates, ai = false }: { boqId: string; hasItems: boolean; canKeepRates: boolean; ai?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [file, setFile] = React.useState<File | null>(null);
@@ -24,13 +26,29 @@ export function ImportClientBoq({ boqId, hasItems, canKeepRates }: { boqId: stri
   const [keepRates, setKeepRates] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
+  const [aiOn, setAiOn] = React.useState(false);
+  React.useEffect(() => { setAiOn(ai && aiIsOn()); }, [ai]);
+  const [fromPaper, setFromPaper] = React.useState<string | null>(null);
 
   function read() {
     if (!file) return;
-    const fd = new FormData();
-    fd.set("file", file);
     setError(null);
     start(async () => {
+      let sheet = file;
+      // a PDF or a photo: the AI copies its table into an Excel sheet first; from here on it is like any client's Excel
+      if (!/\.xlsx$/i.test(file.name)) {
+        const p = new FormData();
+        p.set("file", file);
+        const t = await readBoqPaper(p);
+        if (!t.ok) return void setError(t.error);
+        const d = t.data as { xlsx: string; count: number; note: string | null };
+        const bytes = Uint8Array.from(atob(d.xlsx), (ch) => ch.charCodeAt(0));
+        sheet = new File([bytes], `${file.name.replace(/\.[^.]+$/, "")} (read by AI).xlsx`, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        setFile(sheet);
+        setFromPaper(`${t.message}${d.note ? ` ${d.note}` : ""} A PDF or scan can be misread: compare the rows with the client's file before importing.`);
+      }
+      const fd = new FormData();
+      fd.set("file", sheet);
       const r = await previewClientBoq(fd);
       if (r.ok) {
         const found = (r.data as { sheets: Sheet[] }).sheets;
@@ -64,14 +82,16 @@ export function ImportClientBoq({ boqId, hasItems, canKeepRates }: { boqId: stri
   return (
     <div className="space-y-5">
       <Card>
-        <CardHeader><CardTitle>1. Choose the client&apos;s Excel file</CardTitle></CardHeader>
+        <CardHeader><CardTitle>1. Choose the client&apos;s {aiOn ? "Excel, PDF or scanned" : "Excel"} file</CardTitle></CardHeader>
         <CardBody className="space-y-3">
           <p className="text-sm text-slate-600">Any layout works. The app finds the table, the columns (description, unit, quantity, rate) and the section headings by itself, and shows you what it found <b>before anything is saved</b>.</p>
-          <input type="file" accept=".xlsx" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setSheets(null); setError(null); }} className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-800 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white" />
+          {aiOn && <p className="text-sm text-slate-600">Only a <b>PDF or a photo</b>? Choose it anyway: the AI helper copies its table into an Excel sheet, which then shows here for checking (PDF up to about 4 MB, takes up to 2 minutes).</p>}
+          <input type="file" accept={aiOn ? ".xlsx,.pdf,image/*" : ".xlsx"} onChange={(e) => { setFile(e.target.files?.[0] ?? null); setSheets(null); setError(null); setFromPaper(null); }} className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-800 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white" />
           <Button onClick={read} loading={pending && !sheets} disabled={!file}>Read the file</Button>
         </CardBody>
       </Card>
 
+      {fromPaper && <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">{fromPaper}</p>}
       {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
 
       {sheets && (

@@ -3,7 +3,10 @@ import { requirePerm } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page";
 import { ImportClientBoq } from "./import-client-boq";
+import { aiActive } from "@/lib/ai";
 
+/** reading a PDF or scanned BOQ with the AI helper can take up to two minutes */
+export const maxDuration = 150;
 export const metadata = { title: "Import the client's BOQ" };
 
 export default async function ImportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +18,7 @@ export default async function ImportPage({ params }: { params: Promise<{ id: str
   return (
     <div>
       <PageHeader back={{ href: `/sales/boq/${id}`, label: `${b.number} · ${b.title}` }} title="Import the client's BOQ" subtitle="Upload the Excel the client sent. DSC then adds its rates and makes the quotation." />
-      <ImportClientBoq boqId={id} hasItems={b._count.items > 0} canKeepRates={c.can("quotations:view")} />
+      <ImportClientBoq boqId={id} hasItems={b._count.items > 0} canKeepRates={c.can("quotations:view")} ai={await aiActive(c.companyId)} />
     </div>
   );
 }

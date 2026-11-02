@@ -8,12 +8,12 @@ import { deleteFile, putFile, UploadError, validateUpload, type ValidatedFile } 
  * The picture or PDF of a bill, kept with the expense or vendor bill it belongs to (in the same private document store as every other file).
  * `readBillFile` checks the upload BEFORE anything is saved; `keepBill` stores it and links it to the record inside the same transaction.
  */
-export const BILL_EXTENSIONS = /\.(jpe?g|png|webp|pdf)$/i;
+export const BILL_EXTENSIONS = /\.(jpe?g|png|webp|pdf|xlsx|csv)$/i;
 
 export async function readBillFile(fd: FormData): Promise<ValidatedFile | null> {
   const f = fd.get("billFile");
   if (!(f instanceof File) || f.size === 0) return null;
-  if (!BILL_EXTENSIONS.test(f.name)) throw new UserError("The bill must be a photo (JPG, PNG, WebP) or a PDF.");
+  if (!BILL_EXTENSIONS.test(f.name)) throw new UserError("The bill must be a photo (JPG, PNG, WebP), a PDF or an Excel file (.xlsx, .csv).");
   try {
     return await validateUpload(f);
   } catch (e) {

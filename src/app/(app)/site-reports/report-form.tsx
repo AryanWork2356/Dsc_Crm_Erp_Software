@@ -7,6 +7,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { compressImage } from "@/lib/image-compress";
+import { photoProblem } from "@/lib/photo-quality";
+import { aiIsOn } from "@/lib/ai-flag";
 import { VoiceNote } from "@/components/forms/voice-note";
 import { submitSiteReport } from "./actions";
 
@@ -29,8 +31,11 @@ let k = 0;
 const nowHHMM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
 function PhotoPicker({ label, hint, required, photos, setPhotos, front, max = 10 }: { label: string; hint?: string; required?: boolean; photos: { file: File; url: string }[]; setPhotos: React.Dispatch<React.SetStateAction<{ file: File; url: string }[]>>; front?: boolean; max?: number }) {
+  const [warn, setWarn] = React.useState<string | null>(null);
   async function add(list: FileList | null) {
     if (!list) return;
+    // AI helper ON: warn (only warn) when a photo is too dark or blurry, checked on the phone itself
+    if (aiIsOn()) setWarn((await Promise.all([...list].map((f) => photoProblem(f)))).find(Boolean) ?? null);
     const small = await Promise.all([...list].map((f) => compressImage(f)));
     setPhotos((cur) => [...cur, ...small.map((file) => ({ file, url: URL.createObjectURL(file) }))].slice(-max));
   }
@@ -42,6 +47,7 @@ function PhotoPicker({ label, hint, required, photos, setPhotos, front, max = 10
         <input type="file" accept="image/*" {...(front ? { capture: "user" as const } : {})} multiple={max > 1} className="sr-only" onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
       </label>
       {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {warn && <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">{warn}</p>}
       {photos.length > 0 && (
         <ul className="mt-3 grid grid-cols-3 gap-2">
           {photos.map((p, i) => (

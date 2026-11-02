@@ -173,6 +173,7 @@ export const NAV: NavGroup[] = [
     icon: "timer",
     items: [
       { label: "Time Limit Rules", href: "/settings/time-limits", perm: "settings:manage" },
+      { label: "AI helper", href: "/settings/ai", perm: "settings:manage" },
       { label: "Attendance Location", href: "/settings/attendance", perm: "settings:manage" },
       { label: "Automation", href: "/settings/automation", perm: "settings:manage" },
       { label: "WhatsApp Connection", href: "/settings/whatsapp", perm: "settings:manage" },

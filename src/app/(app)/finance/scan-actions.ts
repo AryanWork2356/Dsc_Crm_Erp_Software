@@ -17,7 +17,7 @@ export async function scanBill(fd: FormData) {
   return run(async () => {
     const kind = fd.get("kind") === "vendor_bill" ? "vendor_bill" : "expense";
     const c = await assertPerm(kind === "vendor_bill" ? "vendor_bills:create" : "expenses:create");
-    if (!billReadingOn()) throw new UserError("Reading bills is not switched on yet. Please type the details; the photo is still saved with the bill.");
+    if (!(await billReadingOn(c.companyId))) throw new UserError("Reading bills is not switched on yet. Please type the details; the photo is still saved with the bill.");
     if (!rateLimit(`scan:${c.userId}`, 40, 60 * 60 * 1000)) throw new UserError("You have scanned many bills in the last hour. Please wait a little, or type this one.");
     const file = await readBillFile(fd);
     if (!file) throw new UserError("Choose a photo or PDF of the bill first.");

@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleGenAI, ApiError, ThinkingLevel } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
+import { db } from "./db";
 
 /**
  * One place where the app talks to an AI, so the provider can be changed with a setting:
@@ -14,7 +15,9 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export type AiProvider = "gemini" | "claude";
 export type AiQuality = "careful" | "fast";
-export type AiPart = { text: string } | { image: Buffer; mime: string } | { pdf: Buffer };
+export type AiPart = { text: string } | { image: Buffer; mime: string } | { pdf: Buffer } | { audio: Buffer; mime: string };
+/** Longer jobs (a whole BOQ, a recording) may ask for more time and a bigger answer; everything else keeps the short limits. */
+export type AiOpts = { tryMs?: number; totalMs?: number; maxTokens?: number; thinking?: "minimal" | "low" };
 
 export class AiError extends Error {}
 
@@ -26,7 +29,22 @@ export function aiProvider(): AiProvider | null {
   if (process.env.ANTHROPIC_API_KEY) return "claude";
   return null;
 }
+/** An AI key is set (the technical part). Use `aiActive(companyId)` to decide whether a feature shows: it also checks the master switch. */
 export const aiOn = () => aiProvider() !== null;
+
+/**
+ * Whether the AI helper is ON for this company: a key is set AND the master switch is on (Settings → AI helper).
+ * Every AI feature (buttons, boxes, menu entries, alerts) must check this; with it off the app is exactly as it was before AI.
+ */
+export async function aiActive(companyId: string): Promise<boolean> {
+  if (!aiOn()) return false;
+  const s = await db.companySettings.findUnique({ where: { companyId }, select: { aiEnabled: true } });
+  return s?.aiEnabled !== false;
+}
+
+/** The only people who may flip the master switch: the host and the managing director, by name. */
+const SWITCH_PEOPLE = ["aryan shetty", "rupesh sharma"];
+export const canControlAi = (c: { role: string; name: string }) => c.role === "OWNER" && SWITCH_PEOPLE.includes(c.name.replace(/\s+/g, " ").trim().toLowerCase());
 
 export function aiModel(q: AiQuality): string {
   if (aiProvider() === "gemini") return q === "careful" ? process.env.GEMINI_MODEL || "gemini-3.8-flash" : process.env.GEMINI_FAST_MODEL || "gemini-3.5-flash-lite";
@@ -54,17 +72,20 @@ export function geminiModels(q: AiQuality): string[] {
 const busyStatus = (e: unknown) => e instanceof ApiError && [429, 500, 502, 503, 504].includes(e.status);
 
 let gemini: GoogleGenAI | null = null;
-async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; quality: AiQuality }): Promise<string> {
+async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; quality: AiQuality } & AiOpts): Promise<string> {
+  const tryMs = o.tryMs ?? TRY_MS;
+  const totalMs = o.totalMs ?? AI_TIMEOUT_MS;
   // the standard generateContent call (the newer "interactions" call waited without answering on the live site)
   gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: TRY_MS } });
   const parts = o.parts.map((p) =>
     "text" in p ? { text: p.text }
     : "image" in p ? { inlineData: { mimeType: p.mime, data: p.image.toString("base64") } }
+    : "audio" in p ? { inlineData: { mimeType: p.mime, data: p.audio.toString("base64") } }
     : { inlineData: { mimeType: "application/pdf", data: p.pdf.toString("base64") } });
   const begun = Date.now();
   let last: unknown = null;
   for (const model of geminiModels(o.quality)) {
-    if (Date.now() - begun > AI_TIMEOUT_MS - 6_000) break; // no time left for another try
+    if (Date.now() - begun > totalMs - Math.min(6_000, tryMs / 2)) break; // no time left for another try
     const started = Date.now();
     try {
       const call = gemini.models.generateContent({
@@ -72,12 +93,14 @@ async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; 
         contents: [{ role: "user", parts }],
         config: {
           systemInstruction: o.system,
+          httpOptions: { timeout: tryMs },
+          ...(o.maxTokens ? { maxOutputTokens: o.maxTokens } : {}),
           // "thinking" is a setting of the newer models only; the older ones refuse it
-          ...(/gemini-3/.test(model) ? { thinkingConfig: { thinkingLevel: o.quality === "careful" ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL } } : {}),
+          ...(/gemini-3/.test(model) ? { thinkingConfig: { thinkingLevel: (o.thinking ?? (o.quality === "careful" ? "low" : "minimal")) === "low" ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL } } : {}),
           ...(o.schema ? { responseMimeType: "application/json", responseJsonSchema: o.schema } : {}),
         },
       });
-      const r = await Promise.race([call, new Promise<never>((_, no) => setTimeout(() => no(new AiError(SLOW)), TRY_MS + 1500))]);
+      const r = await Promise.race([call, new Promise<never>((_, no) => setTimeout(() => no(new AiError(SLOW)), tryMs + 1500))]);
       const text = r.text;
       console.log("[ai] gemini answered:", model, `${Date.now() - started} ms`);
       if (text) return text;
@@ -100,16 +123,18 @@ async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; 
 }
 
 let claude: Anthropic | null = null;
-async function askClaude(o: { system: string; parts: AiPart[]; schema?: object; quality: AiQuality }): Promise<string> {
-  claude ??= new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 });
+async function askClaude(o: { system: string; parts: AiPart[]; schema?: object; quality: AiQuality } & AiOpts): Promise<string> {
+  if (o.parts.some((p) => "audio" in p)) throw new AiError("Turning a recording into text needs Gemini. Please ask the Admin.");
+  claude ??= new Anthropic({ timeout: o.totalMs ?? AI_TIMEOUT_MS, maxRetries: 0 });
   const content = o.parts.map((p) =>
-    "text" in p ? ({ type: "text", text: p.text } as const)
+    "audio" in p ? ({ type: "text", text: "" } as const)
+    : "text" in p ? ({ type: "text", text: p.text } as const)
     : "image" in p ? ({ type: "image", source: { type: "base64", media_type: p.mime as "image/jpeg" | "image/png" | "image/webp", data: p.image.toString("base64") } } as const)
     : ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: p.pdf.toString("base64") } } as const));
   try {
     const res = await claude.messages.create({
       model: aiModel(o.quality),
-      max_tokens: 4000,
+      max_tokens: o.maxTokens ?? 4000,
       system: o.system,
       output_config: { effort: o.quality === "careful" ? "low" : "low", ...(o.schema ? { format: { type: "json_schema", schema: o.schema as Record<string, unknown> } } : {}) },
       messages: [{ role: "user", content }],
@@ -129,7 +154,7 @@ async function askClaude(o: { system: string; parts: AiPart[]; schema?: object; 
 }
 
 /** Plain text answer (summaries, translations, answers to questions). */
-export async function aiText(o: { system: string; parts: AiPart[]; quality?: AiQuality }): Promise<string> {
+export async function aiText(o: { system: string; parts: AiPart[]; quality?: AiQuality } & AiOpts): Promise<string> {
   const p = aiProvider();
   if (!p) throw new AiError("The AI helper is switched off.");
   const q = o.quality ?? "fast";
@@ -137,7 +162,7 @@ export async function aiText(o: { system: string; parts: AiPart[]; quality?: AiQ
 }
 
 /** An answer in a fixed JSON shape (filling a form). The caller still checks every value before showing it. */
-export async function aiJson(o: { system: string; parts: AiPart[]; schema: object; quality?: AiQuality }): Promise<unknown> {
+export async function aiJson(o: { system: string; parts: AiPart[]; schema: object; quality?: AiQuality } & AiOpts): Promise<unknown> {
   const p = aiProvider();
   if (!p) throw new AiError("The AI helper is switched off.");
   const q = o.quality ?? "fast";

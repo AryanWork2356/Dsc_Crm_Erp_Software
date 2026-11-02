@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { ActionButton } from "@/components/forms/action-button";
 import { PR_ALL } from "@/lib/doc-access";
 import { deletePurchaseRequest, submitPurchaseRequest } from "../../actions";
+import { VoicePlayer } from "@/components/forms/voice-player";
+import { aiActive } from "@/lib/ai";
 
 export default async function RequestDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,6 +30,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
     db.document.findMany({ where: { companyId: c.companyId, entityType: "PURCHASE_REQUEST", entityId: id, deletedAt: null }, select: { id: true, createdAt: true }, orderBy: { createdAt: "asc" } }),
   ]);
   const own = pr.requestedById === c.userId;
+  const ai = await aiActive(c.companyId);
   const editable = ["DRAFT", "REJECTED"].includes(pr.status) && (own || c.can("purchase_requests:approve"));
 
   return (
@@ -65,7 +68,7 @@ export default async function RequestDetail({ params }: { params: Promise<{ id: 
               { label: "Reason", value: pr.reason },
             ]} />
           </CardBody></Card>
-          {voices.length > 0 && <Card><CardHeader><CardTitle>Voice note{voices.length > 1 ? "s" : ""}</CardTitle></CardHeader><CardBody className="space-y-2">{voices.map((v) => <audio key={v.id} controls preload="none" src={`/documents/${v.id}/download?inline=1`} className="w-full" />)}</CardBody></Card>}
+          {voices.length > 0 && <Card><CardHeader><CardTitle>Voice note{voices.length > 1 ? "s" : ""}</CardTitle></CardHeader><CardBody className="space-y-4">{voices.map((v) => <VoicePlayer key={v.id} id={v.id} ai={ai} />)}</CardBody></Card>}
           {pos.length > 0 && <Card><CardHeader><CardTitle>Purchase orders</CardTitle></CardHeader><CardBody className="space-y-2 py-3">{pos.map((p) => <div key={p.id} className="flex items-center justify-between text-sm"><Link className="font-medium text-brand-700 hover:underline" href={`/procurement/orders/${p.id}`}>{p.number}</Link><StatusBadge status={p.status} /></div>)}</CardBody></Card>}
         </div>
       </div>

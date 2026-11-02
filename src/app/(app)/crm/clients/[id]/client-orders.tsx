@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ActionButton } from "@/components/forms/action-button";
 import { EmptyState } from "@/components/ui/page";
-import { createClientPO, setClientPoStatus, updateClientPO } from "../po-actions";
+import { createClientPO, readClientPO, setClientPoStatus, updateClientPO } from "../po-actions";
+import { aiActive } from "@/lib/ai";
 
 /** One company's orders and money in one place: what they ordered (POs), what we billed against each, what is received, what is left. */
 export async function ClientOrders({ c, clientId }: { c: Ctx; clientId: string }) {
+  const ai = await aiActive(c.companyId);
   const canRecord = c.can("invoices:create") || c.can("quotations:edit");
   const money = c.can("finance:view");
   const acc = await clientAccount(c.companyId, clientId);
@@ -31,7 +33,7 @@ export async function ClientOrders({ c, clientId }: { c: Ctx; clientId: string }
     { name: "scopes", label: "What it covers", hint: "e.g. Civil and interiors, FAS, HVAC", full: true },
     { name: "projectId", label: "Project", type: "select" as const, options: projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` })) },
     { name: "quotationId", label: "Our quotation", type: "select" as const, options: quotes.map((q) => ({ value: q.id, label: q.number })) },
-    { name: "file", label: "PO file (PDF or photo)", type: "file" as const, full: true },
+    { name: "file", label: "PO file (PDF or photo)", type: "file" as const, full: true, hint: ai ? "Choose the file, then press Read the PO: the boxes above fill in by themselves." : undefined },
     { name: "note", label: "Note", type: "textarea" as const, full: true },
   ];
 
@@ -39,7 +41,7 @@ export async function ClientOrders({ c, clientId }: { c: Ctx; clientId: string }
     <Card>
       <CardHeader>
         <CardTitle>Client purchase orders &amp; account</CardTitle>
-        {canRecord && <FormDialog title="Record the client's PO" description="Keep the client's order here so billing and receivables stay tied to it." wide trigger={<Button size="sm">Add PO</Button>} fields={addFields} action={createClientPO} submitLabel="Save PO" />}
+        {canRecord && <FormDialog title="Record the client's PO" description="Keep the client's order here so billing and receivables stay tied to it." wide trigger={<Button size="sm">Add PO</Button>} fields={addFields} action={createClientPO} submitLabel="Save PO" reader={ai ? { fileField: "file", action: readClientPO.bind(null, clientId), label: "Read the PO" } : undefined} />}
       </CardHeader>
       {money && acc.pos.length > 0 && (
         <CardBody className="grid grid-cols-2 gap-3 border-b border-slate-100 text-sm sm:grid-cols-5">

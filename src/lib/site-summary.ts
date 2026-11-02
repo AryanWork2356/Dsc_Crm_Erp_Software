@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { aiOn, aiText } from "./ai";
+import { aiActive, aiText } from "./ai";
 import { reportDay, MATERIAL_STATUS_LABEL } from "./site-reports";
 import { notifyRoles } from "./notify";
 
@@ -32,7 +32,7 @@ export async function todayOnSites(companyId: string, projectIds?: string[]): Pr
 
 /** The 8 pm message to the directors: one short summary of all sites (only when the AI helper is switched on). Sent once a day. */
 export async function runEveningSummary(companyId: string): Promise<{ sent: boolean }> {
-  if (!aiOn()) return { sent: false };
+  if (!(await aiActive(companyId))) return { sent: false };
   const day = reportDay();
   const title = `Today on all sites – ${day.toISOString().slice(0, 10)}`;
   if (await db.notification.findFirst({ where: { companyId, title }, select: { id: true } })) return { sent: false };
