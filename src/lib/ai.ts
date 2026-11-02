@@ -37,45 +37,66 @@ const BUSY = "The AI helper is busy right now. Please try again in a minute, or 
 const SETUP = "The AI helper is not set up correctly. Please tell the Admin; you can still fill it in by hand.";
 const FAILED = "The AI helper did not work this time. You can fill it in by hand.";
 
-/** Longest we wait for an answer: a person is looking at a spinner, and the server stops the request at 60 seconds anyway. */
+/** Longest we wait in all: a person is looking at a spinner, and the server stops the request at 60 seconds anyway. */
 const AI_TIMEOUT_MS = 40_000;
+/** One try with one model gets this long; if that model is busy or slow, the next one is tried. */
+const TRY_MS = 17_000;
 const SLOW = "The AI helper took too long this time. Please try again, or fill it in by hand.";
+
+/** Google's models take turns being overloaded ("high demand", 503) – so each job has a list to fall back through, best first. */
+export function geminiModels(q: AiQuality): string[] {
+  const own = aiModel(q);
+  const chain = q === "careful"
+    ? [own, "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
+    : [own, "gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"];
+  return [...new Set(chain)];
+}
+const busyStatus = (e: unknown) => e instanceof ApiError && [429, 500, 502, 503, 504].includes(e.status);
 
 let gemini: GoogleGenAI | null = null;
 async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; quality: AiQuality }): Promise<string> {
   // the standard generateContent call (the newer "interactions" call waited without answering on the live site)
-  gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: AI_TIMEOUT_MS } });
+  gemini ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: TRY_MS } });
   const parts = o.parts.map((p) =>
     "text" in p ? { text: p.text }
     : "image" in p ? { inlineData: { mimeType: p.mime, data: p.image.toString("base64") } }
     : { inlineData: { mimeType: "application/pdf", data: p.pdf.toString("base64") } });
-  const model = aiModel(o.quality);
-  const started = Date.now();
-  try {
-    const call = gemini.models.generateContent({
-      model,
-      contents: [{ role: "user", parts }],
-      config: {
-        systemInstruction: o.system,
-        thinkingConfig: { thinkingLevel: o.quality === "careful" ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL },
-        ...(o.schema ? { responseMimeType: "application/json", responseJsonSchema: o.schema } : {}),
-      },
-    });
-    const r = await Promise.race([call, new Promise<never>((_, no) => setTimeout(() => no(new AiError(SLOW)), AI_TIMEOUT_MS + 2000))]);
-    const text = r.text;
-    console.log("[ai] gemini answered:", model, `${Date.now() - started} ms`);
-    if (!text) throw new AiError(FAILED);
-    return text;
-  } catch (e) {
-    console.error("[ai] gemini call failed:", model, `${Date.now() - started} ms`, e instanceof ApiError ? `${e.status} ${e.message}`.slice(0, 600) : String(e).slice(0, 600));
-    if (e instanceof AiError) throw e;
-    if (e instanceof ApiError) {
-      if (e.status === 429) throw new AiError(BUSY);
-      if (e.status === 401 || e.status === 403) throw new AiError(SETUP);
-      if (e.status === 400) throw new AiError("This could not be read. Try a clearer photo or a smaller file.");
+  const begun = Date.now();
+  let last: unknown = null;
+  for (const model of geminiModels(o.quality)) {
+    if (Date.now() - begun > AI_TIMEOUT_MS - 6_000) break; // no time left for another try
+    const started = Date.now();
+    try {
+      const call = gemini.models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+        config: {
+          systemInstruction: o.system,
+          // "thinking" is a setting of the newer models only; the older ones refuse it
+          ...(/gemini-3/.test(model) ? { thinkingConfig: { thinkingLevel: o.quality === "careful" ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL } } : {}),
+          ...(o.schema ? { responseMimeType: "application/json", responseJsonSchema: o.schema } : {}),
+        },
+      });
+      const r = await Promise.race([call, new Promise<never>((_, no) => setTimeout(() => no(new AiError(SLOW)), TRY_MS + 1500))]);
+      const text = r.text;
+      console.log("[ai] gemini answered:", model, `${Date.now() - started} ms`);
+      if (text) return text;
+      last = new AiError(FAILED);
+    } catch (e) {
+      console.error("[ai] gemini call failed:", model, `${Date.now() - started} ms`, e instanceof ApiError ? `${e.status} ${e.message}`.slice(0, 300) : String(e).slice(0, 300));
+      last = e;
+      if (e instanceof AiError || busyStatus(e)) continue; // slow or busy: try the next model
+      break; // a real refusal (bad key, unreadable file): another model will not help
     }
-    throw new AiError(FAILED);
   }
+  const e = last;
+  if (e instanceof AiError) throw e;
+  if (e instanceof ApiError) {
+    if (busyStatus(e)) throw new AiError(BUSY);
+    if (e.status === 401 || e.status === 403) throw new AiError(SETUP);
+    if (e.status === 400) throw new AiError("This could not be read. Try a clearer photo or a smaller file.");
+  }
+  throw new AiError(FAILED);
 }
 
 let claude: Anthropic | null = null;
