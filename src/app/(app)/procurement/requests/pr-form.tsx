@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { VoiceNote } from "@/components/forms/voice-note";
 import { SpeakButton } from "@/components/forms/speak-button";
 import type { ActionResult } from "@/lib/action";
+import { materialsFromSpeech } from "../ai-actions";
 import { daysNotice } from "@/lib/material-notice";
 import { PRIORITY_OPTS, UNIT_OPTS, type Opt } from "@/lib/enums";
 
@@ -18,7 +19,7 @@ let n = 0;
 const mk = (p: Partial<Row> = {}): Row => ({ key: `p${Date.now()}_${n++}`, description: "", unit: "nos", quantity: 1, ...p });
 
 export function PrForm({
-  action, projects, catalog, initial, cancelHref, noticeDays = 2,
+  action, projects, catalog, initial, cancelHref, noticeDays = 2, ai = false,
 }: {
   action: (fd: FormData) => Promise<ActionResult<{ id: string }>>;
   projects: Opt[];
@@ -26,6 +27,7 @@ export function PrForm({
   initial: { projectId?: string; requiredDate?: string; reason?: string; priority?: string; items: Omit<Row, "key">[] };
   cancelHref: string;
   noticeDays?: number;
+  ai?: boolean; // the AI helper is switched on: "say what you need" fills the items
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -37,6 +39,32 @@ export function PrForm({
   const [req, setReq] = React.useState(initial.requiredDate ?? "");
   const left = req ? daysNotice(req) : null;
   const set = (key: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const [said, setSaid] = React.useState("");
+  const [filling, setFilling] = React.useState(false);
+  const [unclear, setUnclear] = React.useState<string | null>(null);
+
+  /** Sets a box the form does not keep in state (date, reason) the same way typing does. */
+  function put(name: string, value: string) {
+    const el = formRef.current?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
+    if (!el || el.value.trim()) return; // never overwrite what the person already wrote
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    if (name === "requiredDate") setReq(value);
+  }
+
+  async function fillFromSpeech() {
+    setFilling(true); setUnclear(null);
+    const r = await materialsFromSpeech(said);
+    setFilling(false);
+    if (!r.ok) { toast.error(r.error); return; }
+    const d = r.data as { items: { description: string; quantity: number; unit: string; materialId: string | null }[]; neededBy: string | null; reason: string | null; unclear: string | null };
+    setRows((rs) => [...rs.filter((x) => x.description.trim()), ...d.items.map((i) => mk({ ...i, ownUnit: !UNIT_OPTS.some((u) => u.value === i.unit) }))]);
+    if (d.neededBy) put("requiredDate", d.neededBy);
+    if (d.reason) put("reason", d.reason);
+    setUnclear(d.unclear);
+    toast.success(`${d.items.length} item(s) filled in. Check them before sending.`);
+  }
 
   function onDesc(r: Row, value: string) {
     const hit = catalog.find((c) => c.name.toLowerCase() === value.toLowerCase());
@@ -65,7 +93,18 @@ export function PrForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5" noValidate>
+    <form ref={formRef} onSubmit={submit} className="space-y-5" noValidate>
+      {ai && (
+        <Card className="border-brand-200 bg-brand-50/40">
+          <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-700" /> Say what you need</CardTitle></CardHeader>
+          <CardBody className="space-y-3">
+            <p className="text-sm text-slate-600">Press the mic and speak in any language, or type it. For example: <i>&ldquo;Kal ke liye 20 sheet 18mm plywood aur 5 dabba Fevicol chahiye&rdquo;</i>. The items below fill in by themselves; you check them.</p>
+            <Textarea value={said} onChange={(e) => setSaid(e.target.value)} rows={2} placeholder="What material is needed, how much, and by when" className="text-base" />
+            <Button type="button" onClick={() => void fillFromSpeech()} loading={filling} disabled={!said.trim()}><Sparkles className="h-4 w-4" /> Fill the items</Button>
+            {unclear && <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">Please check: {unclear}</p>}
+          </CardBody>
+        </Card>
+      )}
       <Card>
         <CardHeader><CardTitle>Request details</CardTitle></CardHeader>
         <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

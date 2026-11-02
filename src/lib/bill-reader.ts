@@ -1,17 +1,17 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { AiError, aiJson, aiModel, aiOn, aiProvider } from "./ai";
 
 /**
  * Reads a photo or PDF of a bill (printed or handwritten) and returns what is on it, so the form can be filled in for a person to CHECK.
  * Nothing from here is ever saved by itself: a person reads the filled boxes and presses Save.
  *
- * Switched on only when ANTHROPIC_API_KEY is set. BILL_MODEL (optional) picks another, cheaper model; the default is the most accurate.
+ * Switched on when an AI key is set (Gemini or Claude, see lib/ai.ts) or the Google text reader's credentials are set.
+ * The AI reader (careful model) is used first; BILL_ENGINE="google" forces the plain Google text reader.
  */
-export const billReadingOn = () => !!process.env.ANTHROPIC_API_KEY || googleReadingOn();
-/** The free Google text reader is used when its credentials are set; otherwise the AI reader. BILL_ENGINE ("google" or "claude") forces one. */
-export const billEngine = (): "google" | "claude" => (process.env.BILL_ENGINE === "claude" || process.env.BILL_ENGINE === "google" ? process.env.BILL_ENGINE : googleReadingOn() ? "google" : "claude");
-export const billModel = () => process.env.BILL_MODEL || "claude-opus-5-5";
+export const billReadingOn = () => aiOn() || googleReadingOn();
+export const billEngine = (): "google" | "ai" => (process.env.BILL_ENGINE === "google" && googleReadingOn() ? "google" : aiOn() ? "ai" : "google");
+export const billModel = () => (billEngine() === "ai" ? `${aiProvider()} ${aiModel("careful")}` : "Google text reader");
 
 import { BillReadError, CATEGORIES, type RawBill } from "./bill-reader-shared";
 import { googleReadingOn, readTextGoogle } from "./bill-google";
@@ -103,32 +103,15 @@ export function cleanBill(r: RawBill, now = new Date()): CleanBill {
 /** What a reader returns: the cleaned boxes, plus the plain text it saw (only the free text reader has it; used to find the vendor). Never saved. */
 export type BillResult = CleanBill & { text?: string };
 
-async function readBillClaude(bytes: Buffer, mime: string): Promise<CleanBill> {
-  const client = new Anthropic({ timeout: 90_000, maxRetries: 1 });
-  const data = bytes.toString("base64");
-  const block = mime === "application/pdf"
-    ? ({ type: "document", source: { type: "base64", media_type: "application/pdf", data } } as const)
-    : ({ type: "image", source: { type: "base64", media_type: mime as "image/jpeg" | "image/png" | "image/webp", data } } as const);
-  let res;
-  try {
-    res = await client.messages.create({
-      model: billModel(),
-      max_tokens: 3000,
-      system: SYSTEM,
-      output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA as unknown as Record<string, unknown> } },
-      messages: [{ role: "user", content: [block, { type: "text", text: "Read this bill." }] }],
-    });
-  } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) throw new BillReadError("Bill reading is not set up correctly. Please tell the Admin; you can still type the details.");
-    if (e instanceof Anthropic.RateLimitError) throw new BillReadError("Bill reading is busy right now. Please try again in a minute, or type the details.");
-    if (e instanceof Anthropic.BadRequestError) throw new BillReadError("This file could not be read. Try a clearer photo, or a smaller PDF.");
-    throw new BillReadError("Bill reading did not work this time. You can type the details; the photo is still saved with the bill.");
-  }
-  if (res.stop_reason === "refusal") throw new BillReadError("This file could not be read. Please type the details.");
-  const t = res.content.find((b) => b.type === "text");
-  if (!t || t.type !== "text") throw new BillReadError("Nothing could be read from this file. Please type the details.");
+async function readBillAi(bytes: Buffer, mime: string): Promise<CleanBill> {
+  const part = mime === "application/pdf" ? { pdf: bytes } : { image: bytes, mime };
   let parsed: unknown;
-  try { parsed = JSON.parse(t.text); } catch { throw new BillReadError("The bill could not be understood. Please type the details."); }
+  try {
+    parsed = await aiJson({ system: SYSTEM, parts: [part, { text: "Read this bill." }], schema: SCHEMA, quality: "careful" });
+  } catch (e) {
+    if (e instanceof AiError) throw new BillReadError(e.message.replace("fill it in by hand", "type the details"));
+    throw e;
+  }
   const ok = raw.safeParse(parsed);
   if (!ok.success) throw new BillReadError("The bill could not be understood. Please type the details.");
   return cleanBill(ok.data);
@@ -139,5 +122,5 @@ export async function readBill(bytes: Buffer, mime: string): Promise<BillResult>
     const { text, confidence } = await readTextGoogle(bytes, mime);
     return { ...cleanBill(parseBillText(text, confidence)), text };
   }
-  return readBillClaude(bytes, mime);
+  return readBillAi(bytes, mime);
 }
