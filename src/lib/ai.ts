@@ -58,6 +58,7 @@ async function askGemini(o: { system: string; parts: AiPart[]; schema?: object; 
     return text;
   } catch (e) {
     if (e instanceof AiError) throw e;
+    console.error("[ai] gemini call failed:", aiModel(o.quality), e instanceof ApiError ? `${e.status} ${e.message}`.slice(0, 600) : String(e).slice(0, 600));
     if (e instanceof ApiError) {
       if (e.status === 429) throw new AiError(BUSY);
       if (e.status === 401 || e.status === 403) throw new AiError(SETUP);
@@ -88,6 +89,7 @@ async function askClaude(o: { system: string; parts: AiPart[]; schema?: object; 
     return t.text;
   } catch (e) {
     if (e instanceof AiError) throw e;
+    console.error("[ai] claude call failed:", aiModel(o.quality), String(e).slice(0, 600));
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) throw new AiError(SETUP);
     if (e instanceof Anthropic.RateLimitError) throw new AiError(BUSY);
     if (e instanceof Anthropic.BadRequestError) throw new AiError("This could not be read. Try a clearer photo or a smaller file.");
