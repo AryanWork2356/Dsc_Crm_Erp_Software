@@ -171,9 +171,9 @@ describe("sending a site report", () => {
     expect((await submitSiteReport(fake)).ok).toBe(false); // contents are not a JPEG
   });
 
-  it("work-stopped / shortage alerts the project manager and procurement", async () => {
+  it("work-stopped / shortage alerts the admins and procurement (DSC: site reports are read by directors and admins)", async () => {
     const p = await proj("PRJ-00001");
-    const pm = await db.user.findFirstOrThrow({ where: { id: p.projectManagerId! } });
+    const pm = await db.user.findFirstOrThrow({ where: { email: "admin@dsc.demo" } }); // the admin now gets the alert
     const buyer = await db.user.findFirstOrThrow({ where: { email: "procurement@dsc.demo" } });
     const before = await db.notification.count({ where: { userId: { in: [pm.id, buyer.id] }, title: { contains: "PRJ-00001" } } });
     await loginAs("supervisor@dsc.demo");

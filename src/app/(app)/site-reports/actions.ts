@@ -117,16 +117,17 @@ export async function submitSiteReport(fd: FormData) {
           });
       await audit(c, { action: existing ? "UPDATE" : "CREATE", entityType: "DailyReport", entityId: report.id, summary: `${existing ? "Updated" : "Sent"} ${d.kind.toLowerCase()} site report for ${project.code}` });
 
-      // Tell the people who must act: PM on any problem; procurement/store when material is short.
+      // Tell the people who must act: the admins on any problem (DSC: site reports are read by directors and admins);
+      // procurement when material is short (they cannot open the report, so the message carries the problem and links to purchase requests).
       const trouble = d.materialStatus !== "OK" || !!d.issues;
-      if (trouble && project.projectManagerId && !(existing && existing.materialStatus === d.materialStatus && existing.issues === (d.issues ?? null))) {
+      if (trouble && !(existing && existing.materialStatus === d.materialStatus && existing.issues === (d.issues ?? null))) {
         const stopped = d.materialStatus === "WORK_STOPPED";
-        await notifyUsers([project.projectManagerId], {
-          companyId: c.companyId, type: "GENERAL", title: `${project.code}: ${stopped ? "WORK STOPPED – no material" : d.materialStatus === "SHORT_SOON" ? "material shortage coming" : "site issue reported"}`,
+        await notifyRoles(c.companyId, ["ADMIN"], {
+          type: "GENERAL", title: `${project.code}: ${stopped ? "WORK STOPPED – no material" : d.materialStatus === "SHORT_SOON" ? "material shortage coming" : "site issue reported"}`,
           body: d.issues ?? "See today's report.", link: `/site-reports/${report.id}`,
         });
         if (d.materialStatus !== "OK") {
-          await notifyRoles(c.companyId, ["PROCUREMENT"], { type: "GENERAL", title: `${project.code}: site reports ${stopped ? "work stopped for material" : "material shortage soon"}`, body: d.issues ?? undefined, link: `/site-reports/${report.id}` });
+          await notifyRoles(c.companyId, ["PROCUREMENT"], { type: "GENERAL", title: `${project.code}: site reports ${stopped ? "work stopped for material" : "material shortage soon"}`, body: d.issues ?? undefined, link: `/procurement/requests?project=${project.id}` });
         }
       }
       revalidatePath("/site-reports");

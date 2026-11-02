@@ -39,6 +39,17 @@ describe("DSC roles", () => {
     expect(can("MANAGEMENT", "margins:view")).toBe(true);
   });
 
+  it("admins see no quotations or amounts and cannot add projects; site reports are for directors, admins and the coordinator", () => {
+    expect(can("ADMIN", "quotations:view")).toBe(false);
+    expect(can("ADMIN", "margins:view")).toBe(false);
+    expect(can("ADMIN", "projects:create")).toBe(false);
+    expect(can("ADMIN", "projects:delete")).toBe(false);
+    expect(can("ADMIN", "projects:view")).toBe(true);
+    for (const r of ["OWNER", "MANAGEMENT", "ADMIN", "SITE_SUPERVISOR"] as const) expect(can(r, "site_reports:view"), r).toBe(true);
+    for (const r of ["PROJECT_MANAGER", "PROCUREMENT", "STORE", "ACCOUNTS", "DESIGNER", "HR"] as const) expect(can(r, "site_reports:view"), r).toBe(false);
+    for (const r of ["OWNER", "MANAGEMENT"] as const) expect(can(r, "projects:create"), r).toBe(true);
+  });
+
   it("staff logins: directors, admins, HR, designer, accounts by name; everyone else Project Coordinator; directors with full access keep it", () => {
     expect(roleFor("Harendra Shukla", "MANAGEMENT")).toBe("MANAGEMENT");
     expect(roleFor("Rupesh Sharma", "OWNER")).toBe("OWNER");

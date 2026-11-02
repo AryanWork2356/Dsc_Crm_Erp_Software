@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Check, Circle } from "lucide-react";
 import { requirePerm } from "@/lib/auth";
-import { USE_SITE_MATERIAL } from "@/lib/features";
+import { USE_MILESTONES, USE_READINESS, USE_SITE_MATERIAL } from "@/lib/features";
 import { SITE_LOCATION_ROLES } from "@/lib/permissions";
 import { PR_ALL } from "@/lib/doc-access";
 import { db } from "@/lib/db";
@@ -54,8 +54,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     { key: "overview", label: "Overview", href: `/projects/${id}` },
     { key: "schedule", label: "Schedule", href: `/projects/${id}?tab=schedule` },
     { key: "tasks", label: "Tasks", href: `/projects/${id}?tab=tasks`, count: p.tasks.length },
-    { key: "timeline", label: "Timeline", href: `/projects/${id}?tab=timeline` },
-    { key: "milestones", label: "Milestones", href: `/projects/${id}?tab=milestones`, count: p.milestones.length },
+    ...(USE_MILESTONES ? [{ key: "timeline", label: "Timeline", href: `/projects/${id}?tab=timeline` }, { key: "milestones", label: "Milestones", href: `/projects/${id}?tab=milestones`, count: p.milestones.length }] : []),
     { key: "boq", label: "BOQ", href: `/projects/${id}?tab=boq`, count: p.boqs.length },
     ...(c.can("inventory:view") ? [{ key: "materials", label: "Materials", href: `/projects/${id}?tab=materials` }] : []),
     ...(docAccess ? [{ key: "downloads", label: "Downloadables", href: `/projects/${id}?tab=downloads` }] : []),
@@ -111,7 +110,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         subtitle={<>{p.code} · <Link className="text-brand-700 hover:underline" href={`/crm/clients/${p.clientId}`}>{p.client.name}</Link> · {humanize(p.segment)}</>}
         actions={
           <>
-            {c.can("feasibility:view") && <Link href={`/feasibility/project/${id}`}><Button variant="secondary" size="sm">Readiness</Button></Link>}
+            {USE_READINESS && c.can("feasibility:view") && <Link href={`/feasibility/project/${id}`}><Button variant="secondary" size="sm">Readiness</Button></Link>}
             {canEdit ? (
               <StageSelect current={p.status} options={PROJECT_STATUS_OPTS} action={async (s) => { "use server"; return changeProjectStatus(id, s); }} />
             ) : <StatusBadge status={p.status} />}
@@ -146,13 +145,13 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             <Card>
               <CardHeader><CardTitle>Upcoming</CardTitle></CardHeader>
               <CardBody className="space-y-3 py-3 text-sm">
-                {p.milestones.filter((m) => !m.completedAt).slice(0, 3).map((m) => (
+                {USE_MILESTONES && p.milestones.filter((m) => !m.completedAt).slice(0, 3).map((m) => (
                   <div key={m.id} className="flex justify-between"><span>{m.name}</span><span className={cn("text-slate-500", m.dueDate && m.dueDate < today && "font-medium text-red-600")}>{formatDate(m.dueDate)}</span></div>
                 ))}
                 {p.tasks.filter((t) => t.status !== "COMPLETED" && t.dueDate).sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime()).slice(0, 4).map((t) => (
                   <div key={t.id} className="flex justify-between"><span className="truncate pr-2">{t.name}</span><span className={cn("shrink-0 text-slate-500", t.dueDate! < today && "font-medium text-red-600")}>{formatDate(t.dueDate)}</span></div>
                 ))}
-                {p.milestones.length + p.tasks.length === 0 && <p className="text-slate-500">Add tasks and milestones to plan this project.</p>}
+                {(USE_MILESTONES ? p.milestones.length : 0) + p.tasks.length === 0 && <p className="text-slate-500">Add the schedule or tasks to plan this project.</p>}
               </CardBody>
             </Card>
           </div>

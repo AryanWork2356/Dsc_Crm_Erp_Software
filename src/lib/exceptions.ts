@@ -6,6 +6,7 @@ import { projectFinancials } from "./project-finance";
 import { getTimeLimitItems } from "./time-limits";
 import { slippedDays } from "./baseline";
 import { num, startOfDay } from "./utils";
+import { USE_MILESTONES } from "./features";
 
 /**
  * What management needs to look at today. Every list is computed from the real records on request (nothing is stored,
@@ -74,9 +75,9 @@ export async function exceptionReport(c: Ctx, now: Date = new Date()): Promise<E
     key: "moved_end", title: "Projects whose completion date was moved", hint: "The first committed date is kept. Check the reason with the project manager.", tone: "warn",
     rows: projects.filter((p) => slippedDays(p.baselineEndDate, p.plannedEndDate) > 0 && !(p.plannedEndDate && p.plannedEndDate < today)).map((p) => ({ ...proj(p), detail: `first date ${dayLabel(p.baselineEndDate!)} → now ${dayLabel(p.plannedEndDate!)} (+${slippedDays(p.baselineEndDate, p.plannedEndDate)} days)` })),
   });
-  const milestones = await db.projectMilestone.findMany({ where: { projectId: { in: ids }, completedAt: null, dueDate: { lt: today } }, select: { id: true, name: true, dueDate: true, projectId: true }, orderBy: { dueDate: "asc" }, take: 200 });
+  const milestones = !USE_MILESTONES ? [] : await db.projectMilestone.findMany({ where: { projectId: { in: ids }, completedAt: null, dueDate: { lt: today } }, select: { id: true, name: true, dueDate: true, projectId: true }, orderBy: { dueDate: "asc" }, take: 200 });
   const code = new Map(projects.map((p) => [p.id, p.code]));
-  add({ key: "late_milestone", title: "Milestones past their date", hint: "A milestone is not marked done and its date has passed.", tone: "bad", rows: milestones.map((m) => ({ id: m.id, title: `${code.get(m.projectId)} · ${m.name}`, detail: `due ${dayLabel(m.dueDate!)}`, link: `/projects/${m.projectId}?tab=milestones` })) });
+  if (USE_MILESTONES) add({ key: "late_milestone", title: "Milestones past their date", hint: "A milestone is not marked done and its date has passed.", tone: "bad", rows: milestones.map((m) => ({ id: m.id, title: `${code.get(m.projectId)} · ${m.name}`, detail: `due ${dayLabel(m.dueDate!)}`, link: `/projects/${m.projectId}?tab=milestones` })) });
   const tasks = await db.projectTask.findMany({ where: { projectId: { in: ids }, status: { not: "COMPLETED" }, baselineDue: { not: null }, dueDate: { not: null } }, select: { id: true, code: true, name: true, dueDate: true, baselineDue: true, projectId: true }, take: 1000 });
   add({
     key: "moved_task", title: "Tasks whose due date was moved", hint: "Compare the first date with the new one.", tone: "warn",

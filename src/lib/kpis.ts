@@ -5,6 +5,7 @@ import { projectScope } from "./scope";
 import { projectFinancials } from "./project-finance";
 import { ACTIVE } from "./exceptions";
 import { num, startOfDay } from "./utils";
+import { USE_MILESTONES } from "./features";
 
 /**
  * Management numbers. Every figure is computed from real records when the page is opened (nothing is stored or typed in),
@@ -44,10 +45,10 @@ export async function kpiReport(c: Ctx, now: Date = new Date()): Promise<{ gener
   const kpis: Kpi[] = [];
 
   // 1. milestones on time
-  const ms = await db.projectMilestone.findMany({ where: { projectId: { in: ids }, dueDate: { gte: from, lt: new Date(today.getTime() + DAY) } }, select: { dueDate: true, completedAt: true } });
+  const ms = !USE_MILESTONES ? [] : await db.projectMilestone.findMany({ where: { projectId: { in: ids }, dueDate: { gte: from, lt: new Date(today.getTime() + DAY) } }, select: { dueDate: true, completedAt: true } });
   const msOnTime = ms.filter((m) => m.completedAt && m.completedAt.getTime() <= m.dueDate!.getTime() + DAY - 1).length;
   const msV = pct(msOnTime, ms.length);
-  kpis.push({ key: "milestones", label: "Milestones finished on time", value: fmtPct(msV, ms.length), basis: `${msOnTime} of ${ms.length} milestones that fell due in the last ${WINDOW_DAYS} days`, definition: "Milestones whose date fell in the last 90 days and that were completed on or before that date, divided by all milestones whose date fell in the period. A milestone finished late, or not finished, counts as not on time.", target: "Suggested: 80 % or more", tone: toneHigh(msV, ms.length, 80, 60), link: "/exceptions" });
+  if (USE_MILESTONES) kpis.push({ key: "milestones", label: "Milestones finished on time", value: fmtPct(msV, ms.length), basis: `${msOnTime} of ${ms.length} milestones that fell due in the last ${WINDOW_DAYS} days`, definition: "Milestones whose date fell in the last 90 days and that were completed on or before that date, divided by all milestones whose date fell in the period. A milestone finished late, or not finished, counts as not on time.", target: "Suggested: 80 % or more", tone: toneHigh(msV, ms.length, 80, 60), link: "/exceptions" });
 
   // 2. plan reliability: finished tasks against the FIRST committed date
   const tasks = await db.projectTask.findMany({ where: { projectId: { in: ids }, status: "COMPLETED", updatedAt: { gte: from }, OR: [{ baselineDue: { not: null } }, { dueDate: { not: null } }] }, select: { updatedAt: true, dueDate: true, baselineDue: true } });

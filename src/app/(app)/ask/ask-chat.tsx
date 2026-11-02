@@ -20,7 +20,8 @@ export function AskChat() {
   const [err, setErr] = React.useState<string | null>(null);
   const [speaking, setSpeaking] = React.useState<number | null>(null);
   const end = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [turns, busy]);
+  // braces on purpose: newer Chrome returns a Promise from scrollIntoView, and an effect must not return one (the screen crashes)
+  React.useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [turns, busy]);
   React.useEffect(() => () => { if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel(); }, []);
 
   async function send(text: string) {

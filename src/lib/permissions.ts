@@ -46,7 +46,8 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     special: ["margins:view", "finance:view", "audit:view", "salary:view"],
   },
   ADMIN: {
-    modules: { ...everything, payroll: R },
+    // DSC: admins do not see quotations or their amounts, and only directors add or delete projects
+    modules: (({ quotations: _q, ...rest }) => ({ ...rest, payroll: R, projects: ["view", "edit", "export"] }))(everything) as Grant,
     special: ["audit:view", "users:manage"],
   },
   SALES: {
@@ -61,7 +62,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     modules: {
       dashboard: R, clients: R, boq: R, projects: ["view", "edit", "export"],
       tasks: ["view", "edit"], purchase_requests: RW, purchase_orders: R, vendors: R, materials: R, inventory: R,
-      workers: R, contractors: R, attendance: RW, site_reports: RWX, transfers: ["view", "create", "approve"], bill_certification: ["view", "approve"], extra_work: RWX, closure: ["view", "edit"], scorecards: ["view", "edit"], actions: RW, resources: RW, feasibility: RW, exceptions: R, expenses: RW, documents: RW, approvals: ["view", "approve"],
+      workers: R, contractors: R, attendance: RW, transfers: ["view", "create", "approve"], // DSC: site reports are for directors and admins bill_certification: ["view", "approve"], extra_work: RWX, closure: ["view", "edit"], scorecards: ["view", "edit"], actions: RW, resources: RW, feasibility: RW, exceptions: R, expenses: RW, documents: RW, approvals: ["view", "approve"],
       whatsapp: R, reports: R, notifications: R, leaves: ["view", "create"],
     },
     special: [], // DSC: managers see the BOQ without rates, and no costs or profit (directors only)
@@ -78,7 +79,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
       dashboard: R, projects: R, boq: R, purchase_requests: ALL.filter((a) => a !== "delete"),
       purchase_orders: ALL.filter((a) => a !== "delete"), vendors: ["view", "create", "edit", "export"],
       materials: RWX, inventory: ["view", "create", "export"], vendor_bills: RW, documents: RW,
-      approvals: R, site_reports: R, transfers: R, reports: R, notifications: R, whatsapp: R, actions: RW, resources: R, feasibility: R,
+      approvals: R, transfers: R, reports: R, notifications: R, whatsapp: R, actions: RW, resources: R, feasibility: R,
     },
     special: [],
   },
@@ -102,7 +103,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
   },
   STORE: {
     modules: { leaves: ["view", "create"],
-      dashboard: R, materials: RWX, inventory: ALL.filter((a) => a !== "delete"), purchase_orders: R, site_reports: R, transfers: ["view", "create"],
+      dashboard: R, materials: RWX, inventory: ALL.filter((a) => a !== "delete"), purchase_orders: R, transfers: ["view", "create"],
       projects: R, documents: R, notifications: R, reports: R, actions: RW,
     },
     special: [],

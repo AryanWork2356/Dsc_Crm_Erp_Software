@@ -4,6 +4,7 @@ import { db } from "./db";
 import type { PermissionKey } from "./permissions";
 import { notifyRoles, notifyUsers } from "./notify";
 import { formatINR, humanize, num } from "./utils";
+import { USE_READINESS } from "./features";
 
 /**
  * Time limits (TAT) from the DSC SOPs. Each rule finds records that are waiting for someone to act and measures
@@ -126,7 +127,7 @@ export const RULES: Rule[] = [
   },
   {
     key: "launch_overdue", title: "Project launch step not confirmed by its date", sop: "A new project is made ready in its first three days: vendors, stock, factory and site confirmed, each with an owner and a date.", defaultHours: 12, perm: "feasibility:view", managerRoles: ["MANAGEMENT", "OWNER"] as RoleKey[],
-    find: async (companyId, cutoff) => (await db.checklistItem.findMany({
+    find: async (companyId, cutoff) => (!USE_READINESS ? [] : await db.checklistItem.findMany({
       where: { kind: "LAUNCH", status: { in: ["PENDING", "AT_RISK"] }, dueDate: { lt: cutoff }, feasibility: { companyId, projectId: { not: null }, project: { status: { in: ["PLANNING", "DESIGN", "QUOTATION", "APPROVED", "PROCUREMENT", "EXECUTION"] } } } },
       include: { feasibility: { select: { projectId: true } } }, take: MAX,
     })).map((i) => ({ id: i.id, title: i.label, link: `/feasibility/project/${i.feasibility.projectId}`, startedAt: i.dueDate!, ownerIds: ids(i.ownerId), ownerRoles: i.ownerId ? ([] as RoleKey[]) : (["PROJECT_MANAGER"] as RoleKey[]), projectId: i.feasibility.projectId })),

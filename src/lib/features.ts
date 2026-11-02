@@ -28,9 +28,16 @@ export const USE_SUPPORT = false;
 export const USE_SITE_MATERIAL = false;
 const SITE_MATERIAL = ["/inventory/receipts", "/inventory/issues", "/inventory/waste", "/transfers"];
 
+/** Project milestones (and stage billing from them) and the Timeline chart. Off at DSC: the schedule and tasks are used instead. */
+export const USE_MILESTONES = false;
+
+/** Project readiness (feasibility) checks. Off at DSC. */
+export const USE_READINESS = false;
+
 /** Menu entries that belong to a feature that is switched off. */
 export function featureOff(href: string): boolean {
   return (!USE_CONTRACTORS && href.startsWith("/workforce/contractors")) || (!USE_LEADS && ["/crm/leads", "/crm/follow-ups"].includes(href))
     || (!USE_ACTIONS && href.startsWith("/actions")) || (!USE_SITE_VISITS && href.startsWith("/crm/site-visits")) || (!USE_SUPPORT && href.startsWith("/support"))
+    || (!USE_READINESS && href.startsWith("/feasibility"))
     || (!USE_SITE_MATERIAL && SITE_MATERIAL.some((p) => href === p || href.startsWith(`${p}/`) || href.startsWith(`${p}?`)));
 }
