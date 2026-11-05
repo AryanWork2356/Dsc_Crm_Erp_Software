@@ -26,12 +26,7 @@ export function projectFields(o: { clients: Opt[]; pms: Opt[]; designers: Opt[];
     ...(p ? [{ name: "dateChangeReason", label: "Why is the completion date changing?", type: "textarea" as const, full: true, hint: "Needed only if you change a date that was already set. It is recorded.", defaultValue: null }] : []),
     { name: "outstation", label: "Outstation site", type: "checkbox", defaultValue: !!p?.outstation, hint: "Outstation sites send their morning update earlier (9:30 instead of 10:00)" },
   ];
-  if (o.tradeVendors) {
-    TRADES.forEach((t, i) => f.push({
-      name: `vendor_${t.key}`, label: `${t.label} vendor`, type: "select", options: o.tradeVendors!.options[t.key] ?? [],
-      defaultValue: o.tradeVendors!.chosen?.[t.key] ?? null, ...(i === 0 ? { hint: "Choose the vendor for each trade on this project. Everyone on the project will see them." } : {}),
-    }));
-  }
+  if (o.tradeVendors) f.push({ name: "trades", label: "Work and vendors", type: "tradevendors", full: true, tradeData: { trades: TRADES.map((t) => ({ key: t.key, label: t.label })), options: o.tradeVendors.options, chosen: o.tradeVendors.chosen } });
   if (o.showMoney) {
     f.push(
       { name: "contractValue", label: "Contract value (₹, excl. GST)", type: "number", defaultValue: p ? Number(p.contractValue) : 0 },

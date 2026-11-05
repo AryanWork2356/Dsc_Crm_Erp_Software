@@ -2301,3 +2301,41 @@ model RemarkMessage {
 
   @@index([remarkId, createdAt])
 }
+
+enum DailyWorkStatus {
+  PENDING
+  DONE
+}
+
+/// DSC: work a director gives an office employee for the day. createdAt is when it was given; doneAt is when the employee marked it finished.
+model DailyWork {
+  id           String          @id @default(cuid())
+  companyId    String
+  assignedToId String
+  assignedById String
+  title        String
+  details      String?
+  dueAt        DateTime?
+  status       DailyWorkStatus @default(PENDING)
+  doneAt       DateTime?
+  doneNote     String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([companyId, assignedToId, status])
+  @@index([companyId, status, createdAt])
+}
+
+/// DSC: what an office employee did today, written by them. One entry per person per day (writing again the same day replaces it).
+model DailyLog {
+  id        String   @id @default(cuid())
+  companyId String
+  userId    String
+  day       DateTime @db.Date
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, day])
+  @@index([companyId, day])
+}

@@ -16,7 +16,7 @@ export const MODULES = [
   "contractors", "attendance", "employees", "leaves", "payroll", "invoices", "payments",
   "expenses", "vendor_bills", "approvals", "documents", "whatsapp", "support", "marketing",
   "reports", "settings", "team", "notifications", "site_reports", "transfers", "bill_certification", "extra_work", "closure", "scorecards",
-  "actions", "resources", "feasibility", "exceptions",
+  "actions", "resources", "feasibility", "exceptions", "daily_work",
 ] as const;
 export type Module = (typeof MODULES)[number];
 
@@ -33,6 +33,8 @@ const ALL: Action[] = [...ACTIONS];
 const RW: Action[] = ["view", "create", "edit"];
 const RWX: Action[] = ["view", "create", "edit", "export"];
 const R: Action[] = ["view"];
+/** Daily work: office staff see the work given to them, mark it done and write what they did today. Giving work is for directors (checked in the action). */
+const R_DW: Action[] = ["view", "create"];
 
 const everything: Grant = Object.fromEntries(MODULES.map((m) => [m, "*"])) as Grant;
 
@@ -51,7 +53,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     special: ["audit:view", "users:manage"],
   },
   SALES: {
-    modules: { leaves: ["view", "create"],
+    modules: { daily_work: R_DW, leaves: ["view", "create"],
       dashboard: R, leads: ALL.filter((a) => a !== "delete"), clients: RWX, sitevisits: RW,
       quotations: RWX, boq: R, projects: R, whatsapp: RW, documents: RW, support: R,
       marketing: R, approvals: R, notifications: R, reports: R, actions: ["view", "create"],
@@ -60,7 +62,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
   },
   PROJECT_MANAGER: {
     modules: {
-      dashboard: R, clients: R, boq: R, projects: ["view", "edit", "export"],
+      daily_work: R_DW, dashboard: R, clients: R, boq: R, projects: ["view", "edit", "export"],
       tasks: ["view", "edit"], purchase_requests: RW, purchase_orders: R, vendors: R, materials: R, inventory: R,
       // DSC: no site_reports here – the morning and evening reports are for directors and admins
       workers: R, contractors: R, attendance: RW, transfers: ["view", "create", "approve"], bill_certification: ["view", "approve"], extra_work: RWX, closure: ["view", "edit"], scorecards: ["view", "edit"], actions: RW, resources: RW, feasibility: RW, exceptions: R, expenses: RW, documents: RW, approvals: ["view", "approve"],
@@ -69,14 +71,14 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     special: [], // DSC: managers see the BOQ without rates, and no costs or profit (directors only)
   },
   DESIGNER: {
-    modules: { leaves: ["view", "create"],
+    modules: { daily_work: R_DW, leaves: ["view", "create"],
       dashboard: R, clients: R, quotations: RW, boq: RW, projects: R, tasks: ["view", "edit"], actions: RW, feasibility: R,
       documents: RW, approvals: R, notifications: R,
     },
     special: [],
   },
   PROCUREMENT: {
-    modules: { leaves: ["view", "create"],
+    modules: { daily_work: R_DW, leaves: ["view", "create"],
       dashboard: R, projects: R, boq: R, purchase_requests: ALL.filter((a) => a !== "delete"),
       purchase_orders: ALL.filter((a) => a !== "delete"), vendors: ["view", "create", "edit", "export"],
       materials: RWX, inventory: ["view", "create", "export"], vendor_bills: RW, documents: RW,
@@ -85,7 +87,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     special: [],
   },
   ACCOUNTS: {
-    modules: { leaves: ["view", "create"],
+    modules: { daily_work: R_DW, leaves: ["view", "create"],
       dashboard: R, clients: R, projects: R, quotations: R, boq: R, invoices: ALL, payments: ALL,
       expenses: ALL, vendor_bills: ALL, vendors: R, purchase_orders: R, workers: R, attendance: R, transfers: R, extra_work: R, closure: R,
       payroll: R, documents: RW, approvals: ["view", "approve"], reports: ["view", "export"],
@@ -95,7 +97,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
   },
   HR: {
     modules: {
-      dashboard: R, employees: ALL, leaves: ALL, payroll: ALL, attendance: ALL, workers: ALL,
+      daily_work: R_DW, dashboard: R, employees: ALL, leaves: ALL, payroll: ALL, attendance: ALL, workers: ALL,
       closure: ["view", "create", "edit"], scorecards: R,
       contractors: RW, documents: RW, approvals: ["view", "approve"], team: ["view", "manage"],
       notifications: R, reports: ["view", "export"], actions: RW, resources: R,
@@ -103,7 +105,7 @@ const GRANTS: Record<RoleKey, { modules: Grant; special: string[] }> = {
     special: ["salary:view"],
   },
   STORE: {
-    modules: { leaves: ["view", "create"],
+    modules: { daily_work: R_DW, leaves: ["view", "create"],
       dashboard: R, materials: RWX, inventory: ALL.filter((a) => a !== "delete"), purchase_orders: R, transfers: ["view", "create"],
       projects: R, documents: R, notifications: R, reports: R, actions: RW,
     },
@@ -170,6 +172,8 @@ export const OFFERED_ROLES: RoleKey[] = ["SITE_SUPERVISOR", "PROJECT_MANAGER", "
 export const SITE_LOCATION_ROLES: RoleKey[] = ["OWNER", "MANAGEMENT", "ADMIN"];
 /** Directors: they plan (schedule, materials), see every project document, prices and profit. */
 export const DIRECTOR_ROLES: RoleKey[] = ["OWNER", "MANAGEMENT"];
+/** Office employees: everyone except the directors, the project coordinators / site engineers and the portal logins. They get daily work from the directors and write a daily report. */
+export const OFFICE_ROLES: RoleKey[] = ["ADMIN", "PROJECT_MANAGER", "DESIGNER", "HR", "ACCOUNTS", "SALES", "PROCUREMENT", "STORE"];
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
   OWNER: "Director (full access)",

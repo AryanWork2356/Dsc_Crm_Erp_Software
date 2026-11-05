@@ -16,6 +16,7 @@ export const NAV: NavGroup[] = [
     icon: "check-square",
     items: [
       { label: "Ask the app", href: "/ask", perm: "dashboard:view" },
+      { label: "Daily Work", href: "/daily-work", perm: "daily_work:view" },
       { label: "Today's Plan", href: "/today", perm: "tasks:view" },
       { label: "Actions & Blockers", href: "/actions", perm: "actions:view" },
       { label: "Approvals", href: "/approvals", perm: "approvals:view" },
@@ -188,7 +189,7 @@ export const NAV: NavGroup[] = [
  * what a role may open is still decided by the permission matrix and row scope. Add a role here to simplify its menu;
  * leave it out to show everything its permissions allow.
  */
-const STAFF_COMMON = ["/actions", "/hr/leaves", "/hr/payslips", "/hr/announcements"];
+const STAFF_COMMON = ["/daily-work", "/actions", "/hr/leaves", "/hr/payslips", "/hr/announcements"];
 const SITE_CORE = ["/today", "/remarks", "/site-reports", "/inventory/waste", "/projects", "/procurement/requests", "/inventory/receipts", "/workforce/attendance", "/transfers", "/extra-work", "/finance/expenses", ...STAFF_COMMON];
 export const SIMPLE_MENU: Partial<Record<RoleKey, string[]>> = {
   SITE_SUPERVISOR: SITE_CORE,
@@ -199,9 +200,9 @@ export const SIMPLE_MENU: Partial<Record<RoleKey, string[]>> = {
   PROCUREMENT: ["/dashboard", "/inventory/waste", "/approvals", "/procurement/needs", "/procurement/requests", "/procurement/orders", "/procurement/vendors", "/procurement/deliveries", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/finance/bills", "/finance/payables", "/sales/boq", "/projects", "/site-reports", "/transfers", "/whatsapp", "/documents", "/reports", ...STAFF_COMMON],
   STORE: ["/dashboard", "/inventory/waste", "/inventory/stock", "/inventory/materials", "/inventory/receipts", "/inventory/issues", "/inventory/movements", "/inventory/locations", "/procurement/orders", "/procurement/deliveries", "/transfers", "/site-reports", "/projects", ...STAFF_COMMON],
   ACCOUNTS: ["/dashboard", "/actions", "/approvals", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/crm/clients", "/sales/quotations", "/projects", "/extra-work", "/closure", "/procurement/orders", "/procurement/vendors", "/documents", "/reports", ...STAFF_COMMON],
-  HR: ["/dashboard", "/actions", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/workforce/attendance", "/workforce/workers", "/workforce/contractors", "/workforce/labour", "/closure", "/scorecards", "/documents"],
-  MANAGEMENT: ["/dashboard", "/ask", "/remarks", "/actions", "/exceptions", "/kpis", "/resources", "/time-limits", "/approvals", "/crm/leads", "/crm/clients", "/sales/quotations", "/sales/boq", "/sales/rates", "/projects", "/site-reports", "/transfers", "/extra-work", "/closure", "/scorecards", "/bills-to-certify", "/procurement/needs", "/procurement/orders", "/procurement/vendors", "/inventory/stock", "/workforce/attendance", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/documents", "/reports", "/settings/company", "/settings/time-limits", "/settings/attendance", "/settings/audit"],
-  ADMIN: ["/dashboard", "/ask", "/remarks", "/actions", "/exceptions", "/kpis", "/resources", "/approvals", "/projects", "/closure", "/hr/employees", "/hr/leaves", "/hr/announcements", "/hr/payslips", "/documents", "/support", "/reports", "/settings/team", "/settings/company", "/settings/roles", "/settings/import", "/settings/terms", "/settings/time-limits", "/settings/attendance", "/settings/automation", "/settings/audit"],
+  HR: ["/dashboard", "/daily-work", "/actions", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/workforce/attendance", "/workforce/workers", "/workforce/contractors", "/workforce/labour", "/closure", "/scorecards", "/documents"],
+  MANAGEMENT: ["/dashboard", "/daily-work", "/ask", "/remarks", "/actions", "/exceptions", "/kpis", "/resources", "/time-limits", "/approvals", "/crm/leads", "/crm/clients", "/sales/quotations", "/sales/boq", "/sales/rates", "/projects", "/site-reports", "/transfers", "/extra-work", "/closure", "/scorecards", "/bills-to-certify", "/procurement/needs", "/procurement/orders", "/procurement/vendors", "/inventory/stock", "/workforce/attendance", "/hr/employees", "/hr/leaves", "/hr/payroll", "/hr/advances", "/hr/payslips", "/hr/announcements", "/finance", "/finance/profit", "/director-reports", "/finance/invoices", "/finance/payments", "/finance/receivables", "/finance/bills", "/finance/payables", "/finance/expenses", "/documents", "/reports", "/settings/company", "/settings/time-limits", "/settings/attendance", "/settings/audit"],
+  ADMIN: ["/dashboard", "/daily-work", "/ask", "/remarks", "/actions", "/exceptions", "/kpis", "/resources", "/approvals", "/projects", "/closure", "/hr/employees", "/hr/leaves", "/hr/announcements", "/hr/payslips", "/documents", "/support", "/reports", "/settings/team", "/settings/company", "/settings/roles", "/settings/import", "/settings/terms", "/settings/time-limits", "/settings/attendance", "/settings/automation", "/settings/audit"],
   // OWNER: no list on purpose â€“ the owner sees everything
 };
 

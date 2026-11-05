@@ -67,6 +67,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
 
   const director = DIRECTOR_ROLES.includes(c.role);
   const [tradeVendors, vendorOpts] = await Promise.all([projectTradeVendors(id), director && c.can("projects:edit") ? tradeVendorOptions(c.companyId) : null]);
+  // a vendor already on the project stays selectable even if their trades were changed later, so saving does not drop them
+  if (vendorOpts) for (const t of tradeVendors) if (t.vendor && !vendorOpts[t.trade]?.some((o) => o.value === t.vendor!.id)) vendorOpts[t.trade] = [...(vendorOpts[t.trade] ?? []), { value: t.vendor.id, label: `${t.vendor.name} (current)` }];
   const [staff, pms, designers, site, clients, fin] = await Promise.all([
     userOptions(c.companyId, undefined, true), // everyone, for showing names
     userOptions(c.companyId, PM_ROLES),
@@ -149,7 +151,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             <Card className="lg:col-span-3">
               <CardHeader><CardTitle>Vendors on this project</CardTitle>{director && canEdit && <span className="text-xs text-slate-500">Change them with Edit</span>}</CardHeader>
               {tradeVendors.every((t) => !t.vendor) ? (
-                <CardBody><p className="text-sm text-slate-500">No vendors chosen yet.{director ? " Press Edit to choose the vendor for each trade." : " The directors choose them."}</p></CardBody>
+                <CardBody><p className="text-sm text-slate-500">No vendors chosen yet.{director ? " Press Edit, tick the kinds of work, then choose a vendor for each." : " The directors choose them."}</p></CardBody>
               ) : (
                 <ul className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3">
                   {tradeVendors.map((t) => (

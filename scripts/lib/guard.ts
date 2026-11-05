@@ -7,7 +7,9 @@ import type { PrismaClient } from "@prisma/client";
  *   2. the database really is the DSC ERP: it has the Company and User tables, and one company.
  * Add --other-database to skip check 1 (for example after moving to a new Neon project).
  */
-export const DSC_ONLINE_HOST_PREFIX = "ep-dry-art-az17hrxz";
+export const DSC_ONLINE_HOST_PREFIX = "ep-lingering-dust-azs1xck2"; // the company Neon account (since 5 Nov 2026)
+/** The first online database, in the old personal Neon account. It is no longer used; the move tools refuse to write to it. */
+export const OLD_ONLINE_HOST_PREFIX = "ep-dry-art-az17hrxz";
 
 export async function assertDscDatabase(prisma: PrismaClient, host: string, hosted: boolean): Promise<void> {
   if (hosted && !process.argv.includes("--other-database") && !host.startsWith(DSC_ONLINE_HOST_PREFIX)) {

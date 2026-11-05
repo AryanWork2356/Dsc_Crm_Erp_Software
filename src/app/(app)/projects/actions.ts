@@ -63,7 +63,7 @@ async function syncMembers(tx: Tx, projectId: string, d: z.infer<typeof projectS
  */
 async function syncTradeVendors(tx: Tx, c: { companyId: string; role: string }, projectId: string, fd: FormData) {
   if (!DIRECTOR_ROLES.includes(c.role as never)) return;
-  if (!TRADES.some((t) => fd.has(`vendor_${t.key}`))) return;
+  if (!fd.has("trades_form") && !TRADES.some((t) => fd.has(`vendor_${t.key}`))) return;
   const picked = TRADES.map((t) => ({ trade: t.key, vendorId: String(fd.get(`vendor_${t.key}`) ?? "").trim() }));
   const ids = picked.map((p) => p.vendorId).filter(Boolean);
   const ok = new Set((await tx.vendor.findMany({ where: { id: { in: ids }, companyId: c.companyId, deletedAt: null }, select: { id: true } })).map((v) => v.id));

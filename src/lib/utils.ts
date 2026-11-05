@@ -47,7 +47,7 @@ export function formatINRCompact(v: Numeric) {
 
 export function formatDate(d: Date | string | null | undefined) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 export function formatDateTime(d: Date | string | null | undefined) {
@@ -57,6 +57,7 @@ export function formatDateTime(d: Date | string | null | undefined) {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Kolkata", // the company works in India; the server (UTC) must not show times 5½ hours early
   });
 }
 
@@ -96,4 +97,15 @@ export function initials(name: string) {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+/** "25 min", "1 h 40 min", "2 d 3 h": how long something took. */
+export function formatDuration(ms: number): string {
+  const min = Math.max(0, Math.round(ms / 60000));
+  if (min < 1) return "under 1 min";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h${min % 60 ? ` ${min % 60} min` : ""}`;
+  const d = Math.floor(h / 24);
+  return `${d} d${h % 24 ? ` ${h % 24} h` : ""}`;
 }

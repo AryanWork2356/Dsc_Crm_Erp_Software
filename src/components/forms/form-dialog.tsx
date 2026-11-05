@@ -9,11 +9,12 @@ import type { ActionResult } from "@/lib/action";
 import { readGstin } from "@/lib/gst";
 import { BillAttach } from "./bill-attach";
 import { PaperReader } from "./paper-reader";
+import { TradeVendors, type TradeVendorData } from "./trade-vendors";
 
 export type FieldDef = {
   name: string;
   label: string;
-  type?: "text" | "number" | "date" | "email" | "tel" | "select" | "textarea" | "checkbox" | "password" | "time" | "hidden" | "file";
+  type?: "text" | "number" | "date" | "email" | "tel" | "select" | "textarea" | "checkbox" | "password" | "time" | "hidden" | "file" | "tradevendors";
   required?: boolean;
   options?: { value: string; label: string }[];
   hint?: string;
@@ -21,6 +22,8 @@ export type FieldDef = {
   step?: string;
   placeholder?: string;
   defaultValue?: string | number | boolean | null;
+  /** for type "tradevendors": the kinds of work and the vendors to offer for each */
+  tradeData?: TradeVendorData;
 };
 
 type Props = {
@@ -98,6 +101,7 @@ export function FormDialog({ title, description, trigger, fields, action, submit
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {bill && <BillAttach kind={bill.kind} canRead={bill.read} formRef={formRef} />}
             {fields.map((f) => {
+              if (f.type === "tradevendors" && f.tradeData) return <TradeVendors key={f.name} data={f.tradeData} />;
               if (f.type === "hidden") return <input key={f.name} type="hidden" name={f.name} value={String(f.defaultValue ?? "")} />;
               const err = errors[f.name];
               const common = { name: f.name, id: f.name, required: f.required, placeholder: f.placeholder };
